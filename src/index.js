@@ -25,7 +25,12 @@ import adminLogsRoutes from './routes/adminLogs.js';
 import pushRoutes from './routes/push.js';
 import readingRoutes from './routes/reading.js';
 import broadcastRoutes from './routes/broadcast.js';
+import releasesRoutes from './routes/releases.js';
+import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
+
+const require = createRequire(import.meta.url);
+const { version: APP_VERSION } = require('../package.json');
 
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
@@ -108,9 +113,10 @@ app.use('/api/admin/logs', adminLogsRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/reading', readingRoutes);
 app.use('/api/admin/broadcast', broadcastRoutes);
+app.use('/api/admin/releases', releasesRoutes);
 
-// Route de santé (healthcheck Docker)
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+// Route de santé + version
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));
 
 // Servir le build React (production)
 const frontendBuild = path.join(__dirname, '../frontend/build');

@@ -1,0 +1,240 @@
+.wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+}
+
+.versionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.versionLabel {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.versionBadge {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+  font-family: monospace;
+}
+
+.updateBadge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+}
+
+.upToDate {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.release {
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  transition: border-color 0.15s;
+}
+
+.release.current {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.releaseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.releaseMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.releaseTag {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  font-family: monospace;
+}
+
+.latestBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.installedBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.preBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.releaseRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.releaseDate {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.githubLink {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.githubLink:hover {
+  color: var(--color-text, #f8fafc);
+}
+
+/* Notes de release */
+.releaseBody {
+  border-top: 1px solid var(--color-border, #2d3748);
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.releaseLine {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.releaseLine strong {
+  color: var(--color-text, #f8fafc);
+  font-size: 0.875rem;
+  display: block;
+  margin-top: 0.35rem;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.pageBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text, #f8fafc);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.pageBtn:hover:not(:disabled) {
+  border-color: #6366f1;
+}
+
+.pageBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Loader */
+.loader {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error {
+  text-align: center;
+  color: #ef4444;
+  padding: 2rem;
+  font-size: 0.9rem;
+}

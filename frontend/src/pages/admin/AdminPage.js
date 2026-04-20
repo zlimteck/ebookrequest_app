@@ -7,6 +7,7 @@ import UserManagement from '../../components/admin/UserManagement';
 import StatsDashboard from '../../components/admin/StatsDashboard';
 import BestsellerManagement from '../../components/admin/BestsellerManagement';
 import BroadcastMessage from '../../components/admin/BroadcastMessage';
+import UpdatesPanel from '../../components/admin/UpdatesPanel';
 import BookPreviewModal from '../../components/BookPreviewModal';
 
 const TrashIcon = () => (
@@ -302,6 +303,8 @@ function AdminPage() {
         return <BestsellerManagement />;
       case 'broadcast':
         return <BroadcastMessage />;
+      case 'updates':
+        return <UpdatesPanel />;
       case 'logs':
         return (
           <div className={styles.logsContainer}>
@@ -817,6 +820,17 @@ function AdminPage() {
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <line x1="22" y1="2" x2="11" y2="13"/>
           <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      )
+    },
+    {
+      id: 'updates',
+      label: 'Mises à jour',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <polyline points="23 4 23 10 17 10"/>
+          <polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
         </svg>
       )
     },
