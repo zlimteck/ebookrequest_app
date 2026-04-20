@@ -111,7 +111,25 @@ function App() {
   }
 
   if (isLoading) {
-    return <div className="loading">Chargement...</div>;
+    return (
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: '#0f172a',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: '1.25rem',
+      }}>
+        <img src="/img/logo.png" alt="EbookRequest" style={{ height: 56, opacity: 0.9 }} />
+        <div style={{
+          width: 32, height: 32,
+          border: '3px solid rgba(99,102,241,0.2)',
+          borderTopColor: '#6366f1',
+          borderRadius: '50%',
+          animation: 'spin 0.75s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   if (location.pathname.startsWith('/verify-email/')) {
