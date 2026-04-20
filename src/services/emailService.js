@@ -110,27 +110,52 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
 }
 
+// ─── Template helper ──────────────────────────────────────────────────────────
+const FRONTEND = () => process.env.FRONTEND_URL || '';
+const LOGO = () => `<img src="${FRONTEND()}/img/logo.png" alt="EbookRequest" style="height:48px;margin-bottom:0.75rem;" />`;
+const FOOTER = () => `
+  <div style="background:#0a0f1e;padding:1.25rem 2rem;text-align:center;border-top:1px solid #1e293b;">
+    <p style="color:#475569;font-size:0.78rem;margin:0;line-height:1.6;">
+      © EbookRequest • <a href="${FRONTEND()}" style="color:#6366f1;text-decoration:none;">Accéder au site</a><br>
+      Cet email a été envoyé automatiquement, merci de ne pas y répondre.
+    </p>
+  </div>`;
+
+function darkEmail({ gradient, title, subtitle, body }) {
+  return `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;">
+  <div style="background:${gradient};padding:2.5rem 2rem;text-align:center;">
+    ${LOGO()}
+    <h1 style="color:white;margin:0 0 0.5rem;font-size:1.4rem;font-weight:700;">${title}</h1>
+    ${subtitle ? `<p style="color:rgba(255,255,255,0.75);margin:0;font-size:0.9rem;">${subtitle}</p>` : ''}
+  </div>
+  <div style="padding:2rem;">${body}</div>
+  ${FOOTER()}
+</div>`;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const sendVerificationEmail = async (email, token, username = 'Utilisateur') => {
-  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2>Bonjour ${escapeHtml(username)},</h2>
-      <p>Merci d'avoir ajouté votre adresse email. Pour finaliser cet ajout, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous :</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${verificationUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
-          Vérifier mon email
+  const verificationUrl = `${FRONTEND()}/verify-email/${token}`;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#059669 0%,#0891b2 100%)',
+    title: 'Vérification de votre adresse email',
+    subtitle: 'Finalisez l\'ajout de votre email',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(username)}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">Merci d'avoir ajouté votre adresse email. Cliquez sur le bouton ci-dessous pour la vérifier.</p>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${verificationUrl}" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#059669,#0891b2);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+          ✉️ Vérifier mon email
         </a>
       </div>
-      <p>Si le bouton ne fonctionne pas, copiez ce lien : ${verificationUrl}</p>
-      <p>Ce lien expirera dans 24 heures.</p>
-      <p>À bientôt,<br>L'équipe EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-      </div>
-    </div>`;
-  return sendEmail({ to: email, subject: 'Vérifiez votre adresse email', html, type: 'verification' });
+      <div style="background:#1e293b;border-radius:10px;padding:1rem 1.25rem;margin:1.5rem 0;">
+        <p style="color:#f59e0b;font-size:0.82rem;margin:0 0 0.4rem;font-weight:600;">⏱ Ce lien expire dans 24 heures</p>
+        <p style="color:#64748b;font-size:0.8rem;margin:0;word-break:break-all;">${verificationUrl}</p>
+      </div>`,
+  });
+  return sendEmail({ to: email, subject: 'Vérifiez votre adresse email — EbookRequest', html, type: 'verification' });
 };
 
 export const sendPasswordResetEmail = async (email, username, token) => {
@@ -174,117 +199,125 @@ export const sendPasswordResetEmail = async (email, username, token) => {
 };
 
 export const sendPasswordChangedEmail = async (email, username = 'Utilisateur') => {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2 style="color: #4CAF50;">Mot de passe modifié avec succès</h2>
-      <p>Bonjour ${escapeHtml(username)},</p>
-      <p>Votre mot de passe a été modifié avec succès le ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.</p>
-      <p>Si vous n'êtes pas à l'origine de cette modification, veuillez nous contacter immédiatement.</p>
-      <p>Cordialement,<br>L'équipe EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-      </div>
-    </div>`;
-  return sendEmail({ to: email, subject: 'Votre mot de passe a été modifié', html, type: 'password_changed' });
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#059669 0%,#10b981 100%)',
+    title: 'Mot de passe modifié',
+    subtitle: 'Votre mot de passe a été mis à jour',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(username)}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">
+        Votre mot de passe a été modifié avec succès le ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+      </p>
+      <div style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;border-radius:6px;padding:1rem 1.25rem;margin:1.5rem 0;">
+        <p style="color:#ef4444;font-size:0.82rem;font-weight:600;margin:0 0 0.35rem;">Vous n'êtes pas à l'origine de cette action ?</p>
+        <p style="color:#94a3b8;font-size:0.82rem;margin:0;line-height:1.6;">Contactez l'administrateur immédiatement.</p>
+      </div>`,
+  });
+  return sendEmail({ to: email, subject: 'Votre mot de passe a été modifié — EbookRequest', html, type: 'password_changed' });
 };
 
 export const sendBookCompletedEmail = async (user, bookRequest) => {
   if (!user.notificationPreferences?.email?.enabled || !user.notificationPreferences?.email?.bookCompleted) return;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2>Bonjour ${escapeHtml(user.username)},</h2>
-      <p>Votre demande pour le livre <strong>${escapeHtml(bookRequest.title)}</strong> par ${escapeHtml(bookRequest.author)} est maintenant terminée !</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${process.env.FRONTEND_URL}/dashboard" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
-          Accéder au tableau de bord
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#059669 0%,#0891b2 100%)',
+    title: '📚 Votre livre est disponible !',
+    subtitle: 'Votre demande a été traitée',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(user.username)}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">Votre demande pour le livre ci-dessous est maintenant disponible au téléchargement.</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+        <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(bookRequest.title)}</p>
+        <p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(bookRequest.author)}</p>
+      </div>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${FRONTEND()}/dashboard" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#059669,#0891b2);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+          Télécharger mon livre
         </a>
-      </div>
-      <p>À bientôt,<br>L'équipe EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-      </div>
-    </div>`;
-  return sendEmail({ to: user.email, subject: `Votre demande de livre est prête : ${bookRequest.title}`, html, type: 'book_completed' });
+      </div>`,
+  });
+  return sendEmail({ to: user.email, subject: `📚 Votre livre est disponible : ${bookRequest.title}`, html, type: 'book_completed' });
 };
 
 export const sendRequestCanceledEmail = async (user, bookRequest) => {
   if (!user?.email || !bookRequest) throw new Error('Paramètres manquants');
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2 style="color: #ef4444;">Demande annulée</h2>
-      <p>Bonjour ${escapeHtml(user.username || 'Utilisateur')},</p>
-      <p>Nous vous informons que votre demande pour le livre <strong>${escapeHtml(bookRequest.title)}</strong> a été annulée.</p>
-      ${bookRequest.cancelReason ? `
-        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin: 16px 0; border-radius: 4px;">
-          <p style="margin: 0; font-weight: 500; color: #b91c1c;">Raison :</p>
-          <p style="margin: 8px 0 0 0;">${escapeHtml(bookRequest.cancelReason)}</p>
-        </div>` : ''}
-      <p>Cordialement,<br>L'équipe EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#dc2626 0%,#9f1239 100%)',
+    title: 'Demande annulée',
+    subtitle: 'Votre demande n\'a pas pu être traitée',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(user.username || 'Utilisateur')}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">Nous vous informons que votre demande a été annulée.</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+        <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(bookRequest.title)}</p>
+        <p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(bookRequest.author)}</p>
       </div>
-    </div>`;
-  return sendEmail({ to: user.email, subject: `Votre demande pour "${bookRequest.title}" a été annulée`, html, type: 'book_canceled' });
+      ${bookRequest.cancelReason ? `
+      <div style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;border-radius:6px;padding:1rem 1.25rem;margin:1.5rem 0;">
+        <p style="color:#ef4444;font-size:0.82rem;font-weight:600;margin:0 0 0.35rem;">Motif</p>
+        <p style="color:#94a3b8;font-size:0.87rem;margin:0;line-height:1.6;">${escapeHtml(bookRequest.cancelReason)}</p>
+      </div>` : ''}
+      <p style="color:#64748b;font-size:0.82rem;line-height:1.6;margin:1.5rem 0 0;">Vous pouvez soumettre une nouvelle demande depuis votre tableau de bord si vous le souhaitez.</p>`,
+  });
+  return sendEmail({ to: user.email, subject: `Demande annulée : ${bookRequest.title}`, html, type: 'book_canceled' });
 };
 
 export const sendAdminCommentEmail = async (user, bookRequest, comment) => {
   if (!user?.email || !user?.emailVerified) return;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2 style="color: #6366f1;">💬 Note de l'administrateur</h2>
-      <p>Bonjour ${escapeHtml(user.username || 'Utilisateur')},</p>
-      <p>Un administrateur a laissé une note sur votre demande pour le livre <strong>${escapeHtml(bookRequest.title)}</strong> par ${escapeHtml(bookRequest.author)}.</p>
-      <div style="background-color: #eef2ff; border-left: 4px solid #6366f1; padding: 12px; margin: 16px 0; border-radius: 4px;">
-        <p style="margin: 0; font-weight: 500; color: #4338ca;">Note :</p>
-        <p style="margin: 8px 0 0 0; color: #1e1b4b;">${escapeHtml(comment)}</p>
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)',
+    title: '💬 Note de l\'administrateur',
+    subtitle: `Concernant votre demande`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(user.username || 'Utilisateur')}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">Un administrateur a laissé une note sur votre demande.</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:0 0 1.25rem;">
+        <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(bookRequest.title)}</p>
+        <p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(bookRequest.author)}</p>
       </div>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${process.env.FRONTEND_URL}/dashboard" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
+      <div style="background:rgba(99,102,241,0.08);border-left:3px solid #6366f1;border-radius:6px;padding:1rem 1.25rem;margin:1.5rem 0;">
+        <p style="color:#6366f1;font-size:0.82rem;font-weight:600;margin:0 0 0.35rem;">Note</p>
+        <p style="color:#cbd5e1;font-size:0.9rem;margin:0;line-height:1.6;">${escapeHtml(comment)}</p>
+      </div>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${FRONTEND()}/dashboard" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
           Voir mes demandes
         </a>
-      </div>
-      <p>Cordialement,<br>L'équipe EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-      </div>
-    </div>`;
-  return sendEmail({ to: user.email, subject: `Note de l'administrateur sur votre demande : ${bookRequest.title}`, html, type: 'admin_comment' });
+      </div>`,
+  });
+  return sendEmail({ to: user.email, subject: `Note admin sur votre demande : ${bookRequest.title}`, html, type: 'admin_comment' });
 };
 
 export const sendNewRequestToAdminsEmail = async (admin, bookRequest, requesterUsername) => {
   if (!admin?.email || !admin?.emailVerified) return;
-  const adminPanelUrl = `${process.env.FRONTEND_URL}/admin`;
-  const requestDate = new Date(bookRequest.createdAt).toLocaleString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const safeTitle = escapeHtml(bookRequest.title);
-  const safeAuthor = escapeHtml(bookRequest.author);
-  const safeUsername = escapeHtml(requesterUsername);
+  const safeTitle       = escapeHtml(bookRequest.title);
+  const safeAuthor      = escapeHtml(bookRequest.author);
+  const safeUsername    = escapeHtml(requesterUsername);
   const safeDescription = bookRequest.description ? escapeHtml(bookRequest.description.substring(0, 300)) : '';
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-      <h2 style="color: #4CAF50;">📚 Nouvelle demande de livre</h2>
-      <p>Bonjour ${escapeHtml(admin.username)},</p>
-      <p>Une nouvelle demande de livre a été soumise par <strong>${safeUsername}</strong>.</p>
-      ${bookRequest.thumbnail ? `<div style="text-align: center; margin: 20px 0;"><img src="${escapeHtml(bookRequest.thumbnail)}" alt="${safeTitle}" style="max-width: 150px; border-radius: 4px;"></div>` : ''}
-      <div style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-        <p style="margin: 5px 0;"><strong>Titre :</strong> ${safeTitle}</p>
-        <p style="margin: 5px 0;"><strong>Auteur :</strong> ${safeAuthor}</p>
-        <p style="margin: 5px 0;"><strong>Demandé par :</strong> ${safeUsername}</p>
-        <p style="margin: 5px 0;"><strong>Date :</strong> ${requestDate}</p>
-        ${bookRequest.link ? `<p style="margin: 5px 0;"><strong>Lien :</strong> <a href="${escapeHtml(bookRequest.link)}">${escapeHtml(bookRequest.link)}</a></p>` : ''}
+  const requestDate     = new Date(bookRequest.createdAt).toLocaleString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#4f46e5 0%,#059669 100%)',
+    title: '📚 Nouvelle demande de livre',
+    subtitle: `Soumise par ${safeUsername}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.5rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      <div style="display:flex;gap:1rem;align-items:flex-start;background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:0 0 1.25rem;">
+        ${bookRequest.thumbnail ? `<img src="${escapeHtml(bookRequest.thumbnail)}" alt="${safeTitle}" style="width:64px;height:90px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : ''}
+        <div>
+          <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${safeTitle}</p>
+          <p style="color:#94a3b8;font-size:0.87rem;margin:0 0 0.75rem;">par ${safeAuthor}</p>
+          <p style="color:#64748b;font-size:0.78rem;margin:0;">Demandé par <strong style="color:#94a3b8;">${safeUsername}</strong> · ${requestDate}</p>
+          ${bookRequest.link ? `<a href="${escapeHtml(bookRequest.link)}" style="color:#6366f1;font-size:0.78rem;text-decoration:none;">Voir le lien →</a>` : ''}
+        </div>
       </div>
-      ${safeDescription ? `<p><strong>Description :</strong></p><p style="color: #666; font-size: 14px;">${safeDescription}${bookRequest.description.length > 300 ? '…' : ''}</p>` : ''}
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${adminPanelUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
-          Accéder au panneau admin
+      ${safeDescription ? `<p style="color:#64748b;font-size:0.82rem;line-height:1.6;margin:0 0 1.5rem;">${safeDescription}${bookRequest.description.length > 300 ? '…' : ''}</p>` : ''}
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${FRONTEND()}/admin" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#4f46e5,#059669);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+          Gérer les demandes
         </a>
-      </div>
-      <p>Cordialement,<br>Système EbookRequest</p>
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #757575;">
-        <p>Cet email a été envoyé automatiquement. Merci de ne pas y répondre.</p>
-      </div>
-    </div>`;
+      </div>`,
+  });
   try {
-    return await sendEmail({ to: admin.email, subject: `Nouvelle demande de livre : ${safeTitle}`, html, type: 'new_request' });
+    return await sendEmail({ to: admin.email, subject: `📚 Nouvelle demande : ${safeTitle}`, html, type: 'new_request' });
   } catch {
     // Ne pas bloquer la création de demande si l'email admin échoue
   }
