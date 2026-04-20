@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hors ligne – EbookRequest</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #121212;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 1.5rem;
+      text-align: center;
+      padding: 2rem;
+    }
+    img { width: 72px; height: 72px; object-fit: contain; opacity: 0.85; }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    p  { color: #888; font-size: 0.95rem; max-width: 320px; line-height: 1.6; }
+    button {
+      margin-top: 0.5rem;
+      padding: 0.65rem 1.5rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #4f46e5; }
+  </style>
+</head>
+<body>
+  <img src="/img/logo.png" alt="EbookRequest" />
+  <h1>Vous êtes hors ligne</h1>
+  <p>Vérifiez votre connexion internet et réessayez.</p>
+  <button onclick="location.reload()">Réessayer</button>
+</body>
+</html>

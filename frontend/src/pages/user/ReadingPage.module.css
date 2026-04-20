@@ -1,0 +1,415 @@
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* ── Titre ── */
+.pageTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-accent, #6366f1);
+  text-align: center;
+  margin: 0 0 1.5rem 0;
+}
+
+/* ── Stats ── */
+.stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1.5rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.statNum {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statDivider {
+  width: 1px;
+  height: 28px;
+  background: var(--color-border, #2d3748);
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+/* Filter pills */
+.filterBarWrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.filterBar {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterBar::-webkit-scrollbar { display: none; }
+
+.filterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.filterPill:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--color-text, #f8fafc);
+}
+
+.filterPillActive {
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+  font-weight: 600;
+}
+
+/* Right toolbar */
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
+  display: flex;
+  pointer-events: none;
+}
+
+.searchInput {
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--color-bg2, #1e293b);
+  color: var(--color-text, #f8fafc);
+  font-size: 0.85rem;
+  width: 160px;
+  transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-accent, #6366f1);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: var(--color-accent, #6366f1);
+  color: white;
+  border: none;
+  border-radius: var(--radius, 0.5rem);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.addBtn:hover {
+  background: var(--color-accent-hover, #4f46e5);
+  transform: translateY(-1px);
+}
+
+/* ── Search panel (Google Books) ── */
+.searchPanel {
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Empty / loading ── */
+.empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.95rem;
+}
+
+/* ── Book list ── */
+.bookList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ── Book card ── */
+.bookCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.bookCard:hover {
+  border-color: var(--color-bg3, #334155);
+  background: var(--color-bg3, #334155);
+}
+
+.bookCardRead {
+  opacity: 0.75;
+}
+
+.bookCardRead .bookTitle {
+  text-decoration: line-through;
+  text-decoration-color: var(--color-text-muted, #94a3b8);
+}
+
+/* Cover */
+.cover {
+  width: 46px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.coverPlaceholder {
+  width: 46px;
+  height: 66px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--color-bg3, #334155);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+/* Info */
+.bookInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookAuthor {
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 1rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  letter-spacing: 0.02em;
+}
+
+/* Étoiles */
+.starRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+}
+
+.starBtn {
+  background: none;
+  border: none;
+  padding: 0.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: transform 0.1s;
+  line-height: 1;
+}
+
+.starBtn:hover {
+  transform: scale(1.2);
+}
+
+/* Actions */
+.bookActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.statusBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius, 0.5rem);
+  border: 1px solid;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.statusBtnUnread {
+  border-color: var(--color-border, #2d3748);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.statusBtnUnread:hover {
+  border-color: #10b981;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.statusBtnRead {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.statusBtnRead:hover {
+  border-color: var(--color-border, #2d3748);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.deleteBtn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.deleteBtn:hover {
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .page {
+    padding: 1rem;
+  }
+
+  .pageTitle {
+    font-size: 1.5rem;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .filterBarWrapper {
+    width: 100%;
+    flex: none;
+  }
+
+  .toolbarRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .searchInput {
+    width: 100%;
+    flex: 1;
+  }
+
+  .searchWrap {
+    flex: 1;
+  }
+
+  .statusBtn span {
+    display: none;
+  }
+
+  .stats {
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+  }
+}

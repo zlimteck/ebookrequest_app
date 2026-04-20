@@ -1,0 +1,91 @@
+.banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem));
+  background: var(--color-bg2, #1e2227);
+  border-top: 1px solid var(--color-border, #2d3139);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.text strong {
+  font-size: 0.9rem;
+  color: var(--color-text, #e6e6e6);
+  font-weight: 600;
+}
+
+.text span {
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #8b949e);
+  line-height: 1.4;
+}
+
+.text em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--color-text, #e6e6e6);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.installBtn {
+  padding: 0.45rem 1rem;
+  background: var(--color-accent, #4f8cff);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius, 8px);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.installBtn:active {
+  opacity: 0.85;
+}
+
+.dismissBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #8b949e);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+  line-height: 1;
+}
+
+.dismissBtn:hover {
+  color: var(--color-text, #e6e6e6);
+}

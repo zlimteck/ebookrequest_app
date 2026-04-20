@@ -1,0 +1,36 @@
+{
+  "name": "ebookrequest",
+  "version": "1.0.0",
+  "description": "EbookRequest — gestion de demandes de livres numériques",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "build:frontend": "cd frontend && npm ci && npm run build",
+    "build": "npm run build:frontend",
+    "init-admin": "node src/scripts/initAdmin.js"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "axios": "^1.9.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.6.3",
+    "multer": "^2.0.0",
+    "node-fetch": "^3.3.2",
+    "node-pushover": "^1.0.0",
+    "nodemailer": "^7.0.3",
+    "openai": "^4.104.0",
+    "web-push": "^3.6.7",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.1.0"
+  }
+}
