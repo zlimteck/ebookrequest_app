@@ -89,15 +89,27 @@ export default function UpdatesPanel() {
 
               {r.body && (
                 <div className={styles.releaseBody}>
-                  {r.body.split('\n').filter(l => l.trim()).map((line, j) => (
-                    <p key={j} className={styles.releaseLine}>
-                      {line.startsWith('#') ? (
-                        <strong>{line.replace(/^#+\s*/, '')}</strong>
-                      ) : (
-                        line.replace(/^[-*]\s*/, '• ')
-                      )}
-                    </p>
-                  ))}
+                  {r.body.split('\n').filter(l => l.trim()).map((line, j) => {
+                    // Lien "Full Changelog" → affiché en bas en discret
+                    const changelogMatch = line.match(/\*{0,2}Full Changelog\*{0,2}.*?(https?:\/\/\S+)/);
+                    if (changelogMatch) {
+                      return (
+                        <a key={j} href={changelogMatch[1]} target="_blank" rel="noopener noreferrer" className={styles.changelogLink}>
+                          Voir le changelog complet
+                        </a>
+                      );
+                    }
+                    // Titres markdown
+                    if (line.startsWith('#')) {
+                      return <p key={j} className={styles.releaseLine}><strong>{line.replace(/^#+\s*/, '')}</strong></p>;
+                    }
+                    // Nettoyage : gras (**text**), puces, liens markdown [text](url)
+                    const cleaned = line
+                      .replace(/^[-*]\s+/, '• ')
+                      .replace(/\*\*(.+?)\*\*/g, '$1')
+                      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+                    return <p key={j} className={styles.releaseLine}>{cleaned}</p>;
+                  })}
                 </div>
               )}
             </div>
