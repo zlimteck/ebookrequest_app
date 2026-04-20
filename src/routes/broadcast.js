@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { channels, subject, htmlContent, pushTitle, pushBody } = req.body;
+    const { channels, subject, htmlContent, pushTitle, pushBody, targetEmail } = req.body;
 
     if (!channels || (!channels.email && !channels.push)) {
       return res.status(400).json({ error: 'Sélectionnez au moins un canal' });
@@ -20,24 +20,31 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Titre requis pour la notification push' });
     }
 
-    // Récupérer tous les users actifs
-    const users = await User.find({ isActive: { $ne: false } });
+    // Ciblage : un email spécifique ou tous les users actifs
+    const query = { isActive: { $ne: false } };
+    if (targetEmail?.trim()) {
+      query.email = targetEmail.trim().toLowerCase();
+    }
+    const users = await User.find(query);
 
     let emailSent = 0, pushSent = 0, errors = 0;
 
-    await Promise.all(users.map(async (user) => {
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (const user of users) {
       // Email — uniquement si l'user a un email
       if (channels.email && user.email) {
         try {
           await sendBroadcastEmail(user.email, subject.trim(), htmlContent);
           emailSent++;
+          await delay(250); // max ~4 emails/s pour rester sous la limite Resend (5/s)
         } catch (err) {
           console.error(`Broadcast email erreur pour ${user.email}:`, err.message);
           errors++;
         }
       }
 
-      // Push
+      // Push (pas de limite de débit côté push)
       if (channels.push) {
         try {
           await sendPushToUser(user._id, {
@@ -51,7 +58,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
           errors++;
         }
       }
-    }));
+    }
 
     console.log(`Broadcast envoyé — emails: ${emailSent}, push: ${pushSent}, erreurs: ${errors}`);
 

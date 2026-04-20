@@ -30,6 +30,7 @@ export default function BroadcastMessage() {
   const [preview, setPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(null);
+  const [targetEmail, setTargetEmail] = useState('');
 
   const toggleChannel = (ch) => setChannels(prev => ({ ...prev, [ch]: !prev[ch] }));
 
@@ -50,7 +51,11 @@ export default function BroadcastMessage() {
       toast.error('Titre de la notification requis');
       return;
     }
-    if (!window.confirm(`Envoyer ce message à tous les utilisateurs actifs ?`)) return;
+    const target = targetEmail.trim();
+    const confirmMsg = target
+      ? `Envoyer ce message uniquement à ${target} ?`
+      : `Envoyer ce message à tous les utilisateurs actifs ?`;
+    if (!window.confirm(confirmMsg)) return;
 
     try {
       setSending(true);
@@ -60,6 +65,7 @@ export default function BroadcastMessage() {
         htmlContent,
         pushTitle: pushTitle.trim(),
         pushBody: pushBody.trim(),
+        targetEmail: target || undefined,
       });
       setSent(res.data);
       toast.success('Message envoyé !');
@@ -105,6 +111,20 @@ export default function BroadcastMessage() {
           </button>
         </div>
       </div>
+
+      {/* Destinataire spécifique */}
+      {channels.email && (
+        <div className={styles.section}>
+          <label className={styles.sectionLabel}>Destinataire spécifique <span style={{ color: '#64748b', fontWeight: 400 }}>(optionnel — laisser vide pour envoyer à tous)</span></label>
+          <input
+            className={styles.input}
+            placeholder="email@exemple.com"
+            type="email"
+            value={targetEmail}
+            onChange={e => setTargetEmail(e.target.value)}
+          />
+        </div>
+      )}
 
       {/* Champs email */}
       {channels.email && (
@@ -196,7 +216,7 @@ export default function BroadcastMessage() {
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           )}
-          {sending ? 'Envoi en cours...' : 'Envoyer à tous les utilisateurs'}
+          {sending ? 'Envoi en cours...' : targetEmail.trim() ? `Envoyer à ${targetEmail.trim()}` : 'Envoyer à tous les utilisateurs'}
         </button>
       </div>
     </div>
