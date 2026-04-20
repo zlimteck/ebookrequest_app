@@ -26,6 +26,8 @@ import pushRoutes from './routes/push.js';
 import readingRoutes from './routes/reading.js';
 import broadcastRoutes from './routes/broadcast.js';
 import releasesRoutes from './routes/releases.js';
+import emailLogsRoutes from './routes/emailLogs.js';
+import webhooksRoutes from './routes/webhooks.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
 
@@ -114,6 +116,8 @@ app.use('/api/push', pushRoutes);
 app.use('/api/reading', readingRoutes);
 app.use('/api/admin/broadcast', broadcastRoutes);
 app.use('/api/admin/releases', releasesRoutes);
+app.use('/api/admin/email-logs', emailLogsRoutes);
+app.use('/api/webhooks', webhooksRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));

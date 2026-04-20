@@ -46,7 +46,10 @@ cp .env.example .env
 | `JWT_SECRET` | Clé secrète pour les tokens JWT |
 | `FRONTEND_URL` | URL publique de l'application |
 | `GOOGLE_BOOKS_API_KEY` | Clé API Google Books |
-| `SMTP_*` | Configuration serveur email |
+| `EMAIL_PROVIDER` | Fournisseur email : `smtp` (défaut) ou `resend` |
+| `SMTP_*` | Configuration serveur email (si `EMAIL_PROVIDER=smtp`) |
+| `RESEND_API_KEY` | Clé API Resend (si `EMAIL_PROVIDER=resend`) |
+| `RESEND_WEBHOOK_SECRET` | Secret de signature webhook Resend (optionnel, recommandé) |
 | `VAPID_PUBLIC_KEY` | Clé publique pour les push notifications |
 | `VAPID_PRIVATE_KEY` | Clé privée pour les push notifications |
 | `OPENAI_API_KEY` | Clé API OpenAI (si `AI_PROVIDER=openai`) |
