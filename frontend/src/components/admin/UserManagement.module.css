@@ -402,19 +402,24 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.55rem 1rem;
-  background: var(--color-accent);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: var(--radius);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s, color 0.2s;
 }
 
-.addButton:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
+.addButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.addButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Modal ── */

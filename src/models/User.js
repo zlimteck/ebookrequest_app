@@ -72,6 +72,12 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  opdsToken: {
+    type: String,
+    unique: true,
+    sparse: true,
+    default: null
+  },
   twoFactor: {
     enabled: { type: Boolean, default: false },
     secret: { type: String, select: false },

@@ -151,18 +151,18 @@
   width: 34px;
   height: 34px;
   padding: 0;
-  background: var(--color-accent, #6366f1);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent, #6366f1);
+  border: 1px solid var(--color-accent, #6366f1);
   border-radius: var(--radius, 0.5rem);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, transform 0.15s;
+  transition: background 0.2s, color 0.2s;
 }
 
-.addBtn:hover {
-  background: var(--color-accent-hover, #4f46e5);
-  transform: translateY(-1px);
+.addBtn:hover:not(:disabled) {
+  background: var(--color-accent, #6366f1);
+  color: #fff;
 }
 
 /* ── Search panel (Google Books) ── */

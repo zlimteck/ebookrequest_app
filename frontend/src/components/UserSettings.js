@@ -41,6 +41,9 @@ const UserSettings = () => {
   const [passwordErrors, setPasswordErrors] = useState({});
   const [passwordStrength, setPasswordStrength] = useState(0);
 
+  const [opdsUrl, setOpdsUrl] = useState('');
+  const [opdsLoading, setOpdsLoading] = useState(false);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -63,7 +66,16 @@ const UserSettings = () => {
         setIsLoading(false);
       }
     };
+    const fetchOpdsToken = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/users/opds-token');
+        if (res.data.success) setOpdsUrl(res.data.feedUrl);
+      } catch {
+        // silencieux — l'utilisateur peut cliquer sur le bouton pour générer
+      }
+    };
     fetchUserData();
+    fetchOpdsToken();
   }, []);
 
   useEffect(() => {
@@ -210,6 +222,22 @@ const UserSettings = () => {
       }));
     } else {
       setUser(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    }
+  };
+
+  const handleRegenerateOpds = async () => {
+    if (!window.confirm('Régénérer le lien OPDS ? L\'ancien lien ne fonctionnera plus dans vos liseuses.')) return;
+    setOpdsLoading(true);
+    try {
+      const res = await axiosAdmin.post('/api/users/opds-token/regenerate');
+      if (res.data.success) {
+        setOpdsUrl(res.data.feedUrl);
+        toast.success('Lien OPDS régénéré');
+      }
+    } catch {
+      toast.error('Erreur lors de la régénération du lien');
+    } finally {
+      setOpdsLoading(false);
     }
   };
 
@@ -392,6 +420,83 @@ const UserSettings = () => {
           )}
         </div>
 
+        {/* ── Catalogue OPDS ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            Catalogue OPDS
+          </h2>
+
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            Accédez à vos livres depuis votre liseuse. Utilisez les identifiants ci-dessous dans Panels, Kobo ou KOReader.
+          </p>
+
+          {/* Infos de connexion style Panels */}
+          {(() => {
+            const baseOpdsUrl = opdsUrl ? opdsUrl.substring(0, opdsUrl.lastIndexOf('/')) : '';
+            const opdsToken = opdsUrl ? opdsUrl.substring(opdsUrl.lastIndexOf('/') + 1) : '';
+            let opdsPort = '';
+            try {
+              const parsed = new URL(opdsUrl);
+              opdsPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+            } catch { opdsPort = '80'; }
+            const copyField = (val, label) => {
+              navigator.clipboard.writeText(val);
+              toast.success(`${label} copié !`);
+            };
+            const CopyBtn = ({ val, label }) => (
+              <button type="button" className={styles.btnOutline} disabled={!val} onClick={() => copyField(val, label)}
+                style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            );
+            const FieldRow = ({ label, value, mono }) => (
+              <div className={styles.fieldRow} style={{ marginBottom: '0.5rem' }}>
+                <label className={styles.fieldLabel}>{label}</label>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input readOnly value={value || 'Chargement…'} className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                    style={{ flex: 1, fontFamily: mono ? 'monospace' : undefined, fontSize: mono ? '0.78rem' : undefined }}
+                    onFocus={e => e.target.select()} />
+                  <CopyBtn val={value} label={label} />
+                </div>
+              </div>
+            );
+            return (
+              <>
+                <FieldRow label="Hôte" value={baseOpdsUrl} mono />
+                <FieldRow label="Port" value={opdsPort} />
+                <FieldRow label="Mot de passe" value={opdsToken} mono />
+                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem' }}>
+                  Le nom d'utilisateur peut être n'importe quoi. Le mot de passe est votre clé d'accès OPDS.
+                </p>
+                {/* URL directe pour Calibre / apps sans Basic Auth */}
+                <details style={{ marginTop: '0.5rem' }}>
+                  <summary style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none' }}>
+                    URL directe (Calibre, applications sans authentification)
+                  </summary>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                    <input readOnly value={opdsUrl || 'Chargement…'} className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                      style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                      onFocus={e => e.target.select()} />
+                    <CopyBtn val={opdsUrl} label="URL" />
+                  </div>
+                </details>
+              </>
+            );
+          })()}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="button" className={styles.btnOutline} onClick={handleRegenerateOpds} disabled={opdsLoading}>
+              {opdsLoading ? 'Régénération…' : 'Régénérer le lien'}
+            </button>
+          </div>
+        </div>
+
         {/* ── Sécurité ── */}
         <div className={styles.settingsCard}>
           <h2 className={styles.sectionTitle}>
@@ -488,6 +593,7 @@ const UserSettings = () => {
         </div>
 
       </form>
+
     </div>
   );
 };

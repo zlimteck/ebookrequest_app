@@ -320,16 +320,17 @@ input:focus + .slider {
   padding: 0.55rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  background: var(--color-accent);
-  color: #fff;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 8px;
   cursor: pointer;
-  transition: filter 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  filter: brightness(1.1);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .btnPrimary:disabled {

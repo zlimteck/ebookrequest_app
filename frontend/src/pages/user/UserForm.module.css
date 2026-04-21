@@ -400,28 +400,25 @@
 .submitButton {
   width: 100%;
   padding: 0.75rem;
-  background: var(--color-accent);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 10px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s;
   margin-top: 0.25rem;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: var(--color-accent-dark);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .submitButton:disabled {
-  opacity: 0.7;
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
 .submitButton[aria-busy="true"] {
@@ -437,9 +434,9 @@
   top: 50%;
   left: 50%;
   margin: -10px 0 0 -10px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(99, 102, 241, 0.3);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: var(--color-accent);
   animation: spin 1s ease-in-out infinite;
 }
 

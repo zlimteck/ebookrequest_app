@@ -61,12 +61,12 @@
   height: 48px;
   padding: 0;
   flex-shrink: 0;
-  color: white;
-  background: var(--color-accent);
-  border: none;
+  color: var(--color-accent);
+  background: none;
+  border: 1px solid var(--color-accent);
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -77,16 +77,13 @@
 }
 
 .searchButton:hover:not(:disabled) {
-  background: var(--color-accent-dark);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .searchButton:disabled {
-  opacity: 0.7;
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
 .suggestionsDropdown {

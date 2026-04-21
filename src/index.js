@@ -29,6 +29,8 @@ import broadcastRoutes from './routes/broadcast.js';
 import releasesRoutes from './routes/releases.js';
 import emailLogsRoutes from './routes/emailLogs.js';
 import webhooksRoutes from './routes/webhooks.js';
+import opdsRoutes from './routes/opds.js';
+import opdsAdminRoutes from './routes/opdsAdmin.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
 
@@ -103,6 +105,16 @@ const twoFactorLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+// Light rate limiter for OPDS endpoints (ebook readers, no OAuth)
+const opdsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  message: 'Trop de requêtes OPDS, réessayez dans une minute.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/opds', opdsLimiter, opdsRoutes);
+
 app.use('/api/auth/2fa', twoFactorLimiter, twoFactorRoutes);
 app.use('/api/auth', authLimiter);
 app.use('/api', generalLimiter);
@@ -126,6 +138,7 @@ app.use('/api/reading', readingRoutes);
 app.use('/api/admin/broadcast', broadcastRoutes);
 app.use('/api/admin/releases', releasesRoutes);
 app.use('/api/admin/email-logs', emailLogsRoutes);
+app.use('/api/admin/opds', opdsAdminRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 
 // Route de santé + version

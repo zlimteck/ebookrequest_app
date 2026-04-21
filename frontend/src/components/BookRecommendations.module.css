@@ -76,20 +76,20 @@
 
 .refreshButton {
   background: none;
-  border: none;
+  border: 1px solid var(--color-accent);
   border-radius: 6px;
-  padding: 0.4rem;
+  padding: 0.4rem 0.6rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: var(--color-accent);
   transition: background 0.2s, color 0.2s;
 }
 
 .refreshButton:hover:not(:disabled) {
-  background: var(--color-bg3);
-  color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .refreshButton:disabled {
@@ -264,19 +264,20 @@
 }
 
 .retryButton {
-  background: var(--color-accent);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 6px;
   padding: 0.5rem 1.1rem;
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
-.retryButton:hover {
-  background: var(--color-accent-dark);
+.retryButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 @media (max-width: 768px) {
