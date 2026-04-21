@@ -71,6 +71,15 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  twoFactor: {
+    enabled: { type: Boolean, default: false },
+    secret: { type: String, select: false },
+    recoveryCodes: {
+      type: [{ code: String, used: { type: Boolean, default: false } }],
+      select: false,
+      default: []
+    }
   }
 }, {
   timestamps: true

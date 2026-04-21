@@ -4,6 +4,7 @@ import axiosAdmin from '../axiosAdmin';
 import styles from './UserSettings.module.css';
 import { compressImage } from '../utils/imageCompressor';
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed } from '../serviceWorkerRegistration';
+import TwoFactorSetup from './TwoFactorSetup';
 
 const getAvatarColor = (username) => {
   const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
@@ -23,6 +24,7 @@ const UserSettings = () => {
       push: { enabled: true }
     }
   });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -53,6 +55,7 @@ const UserSettings = () => {
             }
           }));
           if (response.data.user.avatar) setAvatar(response.data.user.avatar);
+          setTwoFactorEnabled(response.data.user.twoFactor?.enabled || false);
         }
       } catch (error) {
         toast.error('Erreur lors du chargement de votre profil');
@@ -397,6 +400,25 @@ const UserSettings = () => {
             </svg>
             Sécurité
           </h2>
+
+          {/* ── 2FA ── */}
+          <div className={styles.toggleRow} style={{ cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: '0.75rem', borderBottom: 'none', paddingBottom: 0 }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Authentification à deux facteurs</p>
+                <p className={styles.toggleDesc}>Protégez votre compte avec un code TOTP</p>
+              </div>
+            </div>
+            <TwoFactorSetup
+              is2FAEnabled={twoFactorEnabled}
+              onDone={(enabled) => setTwoFactorEnabled(Boolean(enabled))}
+            />
+          </div>
+
+          <div className={styles.divider} />
 
           <div className={styles.toggleRow} style={{ cursor: 'pointer' }} onClick={() => setShowChangePassword(v => !v)}>
             <div className={styles.toggleInfo}>

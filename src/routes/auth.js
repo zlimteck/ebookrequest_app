@@ -107,22 +107,32 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Votre compte a été désactivé. Contactez un administrateur.' });
     }
 
+    // Vérifier si le 2FA est activé
+    if (user.twoFactor?.enabled) {
+      const tempToken = jwt.sign(
+        { id: user._id, scope: '2fa' },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ twoFactorRequired: true, tempToken });
+    }
+
     // Mise à jour de la dernière connexion (updateOne évite le hook pre-save)
     await User.updateOne(
       { _id: user._id },
       { $set: { lastLogin: new Date(), lastActivity: new Date() } }
     );
-    
-    const token = jwt.sign({ 
-      id: user._id, 
-      role: user.role 
+
+    const token = jwt.sign({
+      id: user._id,
+      role: user.role
     }, JWT_SECRET, { expiresIn: '30d' });
-    
+
     const userResponse = user.toObject();
     delete userResponse.password;
-    
-    res.json({ 
-      token, 
+
+    res.json({
+      token,
       role: user.role,
       user: {
         id: user._id,

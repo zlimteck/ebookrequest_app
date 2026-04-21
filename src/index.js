@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import bookRequestRoutes from './routes/bookRequest.js';
 import authRoutes from './routes/auth.js';
+import twoFactorRoutes from './routes/twoFactor.js';
 import googleBooksRoutes from './routes/googleBooks.js';
 import appriseRoutes from './routes/apprise.js';
 import notificationRoutes from './routes/notifications.js';
@@ -95,6 +96,14 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+const twoFactorLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Trop de tentatives 2FA' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/2fa', twoFactorLimiter, twoFactorRoutes);
 app.use('/api/auth', authLimiter);
 app.use('/api', generalLimiter);
 

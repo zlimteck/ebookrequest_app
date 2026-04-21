@@ -139,7 +139,10 @@ export const verifyEmail = async (req, res) => {
 // Récupère le profil de l'utilisateur connecté
 export const getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('username email role emailVerified notificationPreferences avatar createdAt updatedAt');
+    // Les champs avec select:false (password, twoFactor.secret, twoFactor.recoveryCodes…)
+    // sont exclus automatiquement par Mongoose. On exclut en plus les tokens internes.
+    const user = await User.findById(req.user.id)
+      .select('-resetPasswordToken -resetPasswordExpires -emailVerificationToken -emailVerificationExpires');
 
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
@@ -156,7 +159,8 @@ export const getCurrentUser = async (req, res) => {
         notificationPreferences: user.notificationPreferences,
         avatar: user.avatar || null,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
+        twoFactor: { enabled: user.twoFactor?.enabled || false }
       }
     });
   } catch (error) {
