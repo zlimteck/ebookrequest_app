@@ -493,29 +493,25 @@
   padding: 0.875rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: white;
-  background: var(--color-accent);
-  border: none;
+  color: var(--color-accent);
+  background: none;
+  border: 1px solid var(--color-accent);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: var(--transition);
+  transition: background 0.2s, color 0.2s;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
 }
 
-.button:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
-}
-
-.button:active {
-  transform: translateY(0);
+.button:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .button:disabled {
-  background: #666;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
