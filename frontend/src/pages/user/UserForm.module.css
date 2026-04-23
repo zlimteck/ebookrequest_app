@@ -105,6 +105,12 @@
   font-size: 0.8rem;
 }
 
+.dupBadge {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: var(--color-text);
+}
+
 .availabilityBadgeIcon {
   font-size: 1rem;
   flex-shrink: 0;

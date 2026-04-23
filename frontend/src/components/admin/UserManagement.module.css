@@ -601,9 +601,9 @@
 
 .saveButton {
   padding: 0.6rem 1.25rem;
-  background: var(--color-accent);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
@@ -616,8 +616,9 @@
   justify-content: center;
 }
 
-.saveButton:hover {
-  background: var(--color-accent-hover);
+.saveButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .saveButton:disabled {

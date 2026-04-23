@@ -829,15 +829,21 @@ body {
   gap: 0.5rem;
 }
 
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .button.primary {
-  background-color: var(--color-accent);
-  color: white;
+  background: none;
+  color: var(--color-accent);
   border-color: var(--color-accent);
 }
 
-.button.primary:hover {
-  background-color: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+.button.primary:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
 }
 
 /* ── Admin Layout sidebar + main ── */
@@ -1196,28 +1202,15 @@ body {
 }
 
 .button.secondary {
-  background-color: #6b7280;
-  color: white;
-  border-color: #6b7280;
+  background: none;
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
 }
 
-.button.secondary:hover {
-  background-color: #4b5563;
-  border-color: #4b5563;
-}
-
-.button.primary {
-  background: #3a7de9;
-  border-color: #3a7de9;
-}
-
-.button {
-  background: rgba(255, 255, 255, 0.1);
+.button.secondary:hover:not(:disabled) {
+  background: var(--color-bg3);
   color: var(--color-text);
-}
-
-.button:hover {
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--color-bg3);
 }
 
 .downloadLinkDisplay {
@@ -2067,6 +2060,112 @@ body {
   border-top: 1px solid var(--color-border);
 }
 
+/* ── File browser ── */
+.fileBrowserToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.9rem;
+  background: none;
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.fileBrowserToggle:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.fileBrowserToggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fileBrowserPanel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.fileBrowserSearch {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  background: var(--color-bg2);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.83rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.fileBrowserSearch::placeholder {
+  color: var(--color-text-muted);
+}
+
+.fileBrowserList {
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+.fileBrowserEmpty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.fileBrowserItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fileBrowserItem:last-child {
+  border-bottom: none;
+}
+
+.fileBrowserItem:hover:not(:disabled) {
+  background: var(--color-bg2);
+}
+
+.fileBrowserItem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fileBrowserName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileBrowserSize {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Modal commentaire ── */
 .commentModalTextarea {
   width: 100%;
@@ -2142,7 +2241,7 @@ body {
 
 .button {
   padding: 0.5rem 1rem;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   font-weight: 500;
   font-size: 0.9rem;
@@ -2154,22 +2253,32 @@ body {
   gap: 0.5rem;
 }
 
-.primaryButton {
-  background-color: var(--color-accent);
-  color: white;
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.primaryButton:hover {
-  background-color: var(--color-accent-hover);
+.primaryButton {
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .secondaryButton {
-  background-color: var(--color-bg3);
-  color: var(--color-text);
+  background: none;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
-.secondaryButton:hover {
-  background-color: var(--color-bg2);
+.secondaryButton:hover:not(:disabled) {
+  background: var(--color-bg3);
+  color: var(--color-text);
+  border-color: var(--color-bg3);
 }
 
 .errorText {

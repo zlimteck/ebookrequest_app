@@ -71,6 +71,20 @@ export const createBookRequest = async (req, res) => {
       }
     }
 
+    // ── Auto-complétion si le livre est déjà disponible ──────────────────────
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const completedVersion = await BookRequest.findOne({
+      title: { $regex: `^${escRe(title.trim())}$`, $options: 'i' },
+      author: { $regex: `^${escRe(author.trim())}$`, $options: 'i' },
+      status: 'completed',
+      $or: [
+        { downloadLink: { $exists: true, $ne: '' } },
+        { filePath: { $exists: true, $ne: '' } }
+      ]
+    }).lean();
+
+    const isAutoCompleted = !!completedVersion;
+
     const newRequest = new BookRequest({
       user: user._id,
       username: user.username,
@@ -81,10 +95,21 @@ export const createBookRequest = async (req, res) => {
       description: description || '',
       pageCount: pageCount || 0,
       format: format || '',
-      status: 'pending',
-      statusHistory: [{ status: 'pending', changedBy: user.username, note: 'Demande créée' }]
+      status: isAutoCompleted ? 'completed' : 'pending',
+      ...(isAutoCompleted && {
+        downloadLink: completedVersion.downloadLink || '',
+        filePath: completedVersion.filePath || '',
+        completedAt: new Date(),
+        statusHistory: [
+          { status: 'pending', changedBy: user.username, note: 'Demande créée' },
+          { status: 'completed', changedBy: 'système', note: 'Livre déjà disponible — complété automatiquement' }
+        ]
+      }),
+      ...(!isAutoCompleted && {
+        statusHistory: [{ status: 'pending', changedBy: user.username, note: 'Demande créée' }]
+      })
     });
-    
+
     await newRequest.save();
 
     // Auto-ajouter à la liste de lecture de l'utilisateur
@@ -101,6 +126,38 @@ export const createBookRequest = async (req, res) => {
     } catch (readingErr) {
       // Ne pas bloquer la création si l'ajout à la liste échoue
       console.error('Erreur ajout liste de lecture:', readingErr.message);
+    }
+
+    // ── Si auto-complété : notifier l'utilisateur, pas les admins ────────────
+    if (isAutoCompleted) {
+      try {
+        if (user.emailVerified && user.email) {
+          await sendBookCompletedEmail(user, newRequest);
+        }
+      } catch (e) {
+        console.error('Erreur email auto-completion:', e.message);
+      }
+      try {
+        await sendPushToUser(user._id, {
+          title: '📖 Livre disponible !',
+          body: `"${title}" de ${author} est déjà disponible. Vous pouvez le télécharger maintenant.`,
+          url: '/dashboard'
+        });
+      } catch (e) {
+        console.error('Erreur push auto-completion:', e.message);
+      }
+      try {
+        await Notification.create({
+          user: user._id,
+          type: 'request_completed',
+          title: newRequest.title,
+          author: newRequest.author,
+          message: `"${title}" est déjà disponible et a été ajouté à vos téléchargements automatiquement.`
+        });
+      } catch (e) {
+        console.error('Erreur notification auto-completion:', e.message);
+      }
+      return res.status(201).json(newRequest);
     }
 
     // Envoyer une notification Apprise pour la nouvelle demande
@@ -378,20 +435,27 @@ export const downloadEbook = async (req, res) => {
 export const addDownloadLink = async (req, res) => {
   try {
     const { id } = req.params;
-    const { downloadLink } = req.body;
+    const { downloadLink, existingFilePath } = req.body;
     const file = req.file; // Fichier téléversé via multer
-    
+
     const updateData = {
       status: 'completed',
       completedAt: new Date()
     };
-    
+
     // Si un fichier a été téléversé
     if (file) {
       updateData.filePath = `books/${file.filename}`;
       updateData.downloadLink = ''; // Effacer l'ancien lien s'il existe
       console.log(`Fichier téléversé: ${file.filename}`);
-    } 
+    }
+    // Si un fichier existant a été sélectionné
+    else if (existingFilePath) {
+      const safePath = path.basename(existingFilePath);
+      updateData.filePath = `books/${safePath}`;
+      updateData.downloadLink = '';
+      console.log(`Fichier existant sélectionné: ${safePath}`);
+    }
     // Sinon, vérifier le lien
     else if (downloadLink) {
       try {

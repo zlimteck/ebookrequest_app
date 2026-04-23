@@ -15,8 +15,41 @@ import {
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
+import BookRequest from '../models/BookRequest.js';
 
 const router = express.Router();
+
+// ── Vérification doublon inter-utilisateurs ───────────────────────────────────
+// Retourne la demande existante (d'un autre user) pour ce titre+auteur, si elle existe.
+// Les demandes annulées sont ignorées (peuvent être re-demandées).
+router.get('/check-duplicate', requireAuth, async (req, res) => {
+  try {
+    const { title, author } = req.query;
+    if (!title || !author) return res.status(400).json({ success: false, duplicate: false });
+
+    // Échapper les caractères spéciaux regex
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const existing = await BookRequest.findOne({
+      user: { $ne: req.user.id },
+      title: { $regex: `^${escRe(title.trim())}$`, $options: 'i' },
+      author: { $regex: `^${escRe(author.trim())}$`, $options: 'i' },
+      status: { $nin: ['canceled'] },
+    }).select('status createdAt').lean();
+
+    if (!existing) return res.json({ success: true, duplicate: false });
+
+    return res.json({
+      success: true,
+      duplicate: true,
+      status: existing.status,
+      requestedAt: existing.createdAt,
+    });
+  } catch (err) {
+    console.error('Erreur check-duplicate:', err);
+    res.status(500).json({ success: false, duplicate: false });
+  }
+});
 
 // Créer une nouvelle requête de livre
 router.post('/', requireAuth, createBookRequest);

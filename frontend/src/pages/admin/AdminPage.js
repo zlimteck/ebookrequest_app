@@ -75,6 +75,10 @@ function AdminPage() {
   const [adminLogs, setAdminLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [expandedCards, setExpandedCards] = useState(new Set());
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [uploadsList, setUploadsList] = useState([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
+  const [uploadsSearch, setUploadsSearch] = useState('');
 
   const toggleExpand = (id) => setExpandedCards(prev => {
     const next = new Set(prev);
@@ -124,6 +128,7 @@ function AdminPage() {
       setFile(null);
       setDownloadLink('');
       setEditingDownloadLink(null);
+      setShowFileBrowser(false);
       setUploadingFile(false);
       setUploadProgress(0);
       await fetchRequests();
@@ -186,6 +191,35 @@ function AdminPage() {
       
       setFile(selectedFile);
       setDownloadLink('');
+    }
+  };
+
+  const fetchUploadsList = async () => {
+    setUploadsLoading(true);
+    try {
+      const res = await axiosAdmin.get('/api/admin/uploads-list');
+      if (res.data.success) setUploadsList(res.data.files);
+    } catch (e) {
+      console.error('Erreur chargement liste uploads:', e);
+    } finally {
+      setUploadsLoading(false);
+    }
+  };
+
+  const handleSelectExistingFile = async (id, filePath) => {
+    try {
+      const formData = new FormData();
+      formData.append('existingFilePath', filePath);
+      await axiosAdmin.patch(`/api/requests/${id}/download-link`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setEditingDownloadLink(null);
+      setShowFileBrowser(false);
+      setUploadsSearch('');
+      await fetchRequests();
+      toast.success('Fichier existant associé avec succès !');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erreur lors de l\'association du fichier');
     }
   };
 
@@ -886,7 +920,7 @@ function AdminPage() {
         return (
           <div className={styles.uploadModalOverlay} onClick={(e) => {
             if (e.target === e.currentTarget && !uploadingFile) {
-              setEditingDownloadLink(null); setFile(null); setDownloadLink('');
+              setEditingDownloadLink(null); setFile(null); setDownloadLink(''); setShowFileBrowser(false); setUploadsSearch('');
             }
           }}>
             <div className={styles.uploadModal}>
@@ -898,7 +932,7 @@ function AdminPage() {
                   </h3>
                   {req && <p className={styles.uploadModalBook}>{req.title}</p>}
                 </div>
-                <button className={styles.uploadModalClose} onClick={() => { setEditingDownloadLink(null); setFile(null); setDownloadLink(''); }} disabled={uploadingFile}>
+                <button className={styles.uploadModalClose} onClick={() => { setEditingDownloadLink(null); setFile(null); setDownloadLink(''); setShowFileBrowser(false); setUploadsSearch(''); }} disabled={uploadingFile}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                   </svg>
@@ -952,13 +986,80 @@ function AdminPage() {
                   className={styles.downloadLinkInput}
                   disabled={uploadingFile}
                 />
+
+                {/* OU */}
+                <div className={styles.orDivider}><span>OU</span></div>
+
+                {/* Fichiers existants */}
+                <button
+                  type="button"
+                  className={styles.fileBrowserToggle}
+                  onClick={() => {
+                    const next = !showFileBrowser;
+                    setShowFileBrowser(next);
+                    if (next && uploadsList.length === 0) fetchUploadsList();
+                  }}
+                  disabled={uploadingFile}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.4rem', flexShrink: 0 }}>
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  Sélectionner un fichier existant
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: showFileBrowser ? 'rotate(180deg)' : 'none' }}>
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+
+                {showFileBrowser && (
+                  <div className={styles.fileBrowserPanel}>
+                    <input
+                      type="text"
+                      className={styles.fileBrowserSearch}
+                      placeholder="Rechercher un fichier…"
+                      value={uploadsSearch}
+                      onChange={e => setUploadsSearch(e.target.value)}
+                      autoFocus
+                    />
+                    <div className={styles.fileBrowserList}>
+                      {uploadsLoading ? (
+                        <div className={styles.fileBrowserEmpty}>Chargement…</div>
+                      ) : uploadsList.length === 0 ? (
+                        <div className={styles.fileBrowserEmpty}>Aucun fichier uploadé</div>
+                      ) : (() => {
+                        const filtered = uploadsList.filter(f =>
+                          f.name.toLowerCase().includes(uploadsSearch.toLowerCase())
+                        );
+                        if (filtered.length === 0) return (
+                          <div className={styles.fileBrowserEmpty}>Aucun fichier correspond à « {uploadsSearch} »</div>
+                        );
+                        return filtered.map(f => (
+                          <button
+                            key={f.filePath}
+                            type="button"
+                            className={styles.fileBrowserItem}
+                            onClick={() => handleSelectExistingFile(editingDownloadLink, f.filePath)}
+                            disabled={uploadingFile}
+                            title={f.filePath}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
+                              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                              <polyline points="13 2 13 9 20 9"/>
+                            </svg>
+                            <span className={styles.fileBrowserName}>{f.name}</span>
+                            <span className={styles.fileBrowserSize}>{(f.size / 1024 / 1024).toFixed(1)} Mo</span>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
               <div className={styles.uploadModalFooter}>
                 <button
                   className={`${styles.button} ${styles.secondary}`}
-                  onClick={() => { setEditingDownloadLink(null); setFile(null); setDownloadLink(''); }}
+                  onClick={() => { setEditingDownloadLink(null); setFile(null); setDownloadLink(''); setShowFileBrowser(false); setUploadsSearch(''); }}
                   disabled={uploadingFile}
                 >
                   Annuler

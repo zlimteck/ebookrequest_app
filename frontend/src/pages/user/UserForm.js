@@ -153,7 +153,7 @@ function UserForm() {
             }));
             setSearchMode('manual');
 
-            // Vérifier la disponibilité si on a un titre et un auteur
+            // Vérifier la disponibilité et les doublons si on a un titre et un auteur
             if (prefill.title && prefill.author) {
               checkAvailability(prefill.title, prefill.author);
             }
@@ -327,7 +327,7 @@ function UserForm() {
     }
 
     return true;
-  }, [existingRequests, checkAvailability]); // Dépendances nécessaires pour le callback
+  }, [existingRequests, checkAvailability]);
 
   const handleRemoveBook = () => {
     setSelectedBook(null);
@@ -529,6 +529,7 @@ function UserForm() {
               </div>
             </div>
           )}
+
 
           <div className={styles.formRow}>
             <div className={`${styles.formGroup} ${styles.halfWidth}`}>

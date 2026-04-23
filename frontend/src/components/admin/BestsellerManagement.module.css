@@ -197,9 +197,9 @@
 }
 
 .saveButton {
-  background: var(--color-accent);
-  color: white;
-  border: none;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
   font-size: 0.875rem;
@@ -208,8 +208,9 @@
   transition: var(--transition);
 }
 
-.saveButton:hover {
-  background: var(--color-accent-hover);
+.saveButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .cancelButton {
