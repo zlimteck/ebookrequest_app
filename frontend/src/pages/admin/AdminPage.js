@@ -11,6 +11,7 @@ import UpdatesPanel from '../../components/admin/UpdatesPanel';
 import EmailLogsPanel from '../../components/admin/EmailLogsPanel';
 import OPDSPanel from '../../components/admin/OPDSPanel';
 import InvitationsPanel from '../../components/admin/InvitationsPanel';
+import ConnectorsPanel from '../../components/admin/ConnectorsPanel';
 import BookPreviewModal from '../../components/BookPreviewModal';
 
 const TrashIcon = () => (
@@ -342,6 +343,8 @@ function AdminPage() {
         return <BroadcastMessage />;
       case 'invitations':
         return <InvitationsPanel />;
+      case 'connectors':
+        return <ConnectorsPanel />;
       case 'updates':
         return <UpdatesPanel />;
       case 'emails':
@@ -895,6 +898,16 @@ function AdminPage() {
           <circle cx="9" cy="7" r="4"/>
           <line x1="19" y1="8" x2="19" y2="14"/>
           <line x1="22" y1="11" x2="16" y2="11"/>
+        </svg>
+      )
+    },
+    {
+      id: 'connectors',
+      label: 'Connecteurs',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
         </svg>
       )
     },
