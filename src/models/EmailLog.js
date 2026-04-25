@@ -22,7 +22,7 @@ const emailLogSchema = new mongoose.Schema({
   // Catégorie de l'email
   type: {
     type: String,
-    enum: ['verification', 'password_reset', 'password_changed', 'book_completed', 'book_canceled', 'admin_comment', 'new_request', 'broadcast'],
+    enum: ['verification', 'password_reset', 'password_changed', 'book_completed', 'book_canceled', 'admin_comment', 'new_request', 'broadcast', 'invitation'],
     required: true,
   },
 

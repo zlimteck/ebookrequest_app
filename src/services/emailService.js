@@ -323,6 +323,31 @@ export const sendNewRequestToAdminsEmail = async (admin, bookRequest, requesterU
   }
 };
 
+export const sendInvitationEmail = async (email, invitedByUsername, token) => {
+  const link = `${FRONTEND()}/register?token=${token}`;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+    title: 'Vous avez été invité !',
+    subtitle: `${escapeHtml(invitedByUsername)} vous invite à rejoindre EbookRequest`,
+    body: `
+      <p style="color:#94a3b8;font-size:0.95rem;line-height:1.7;margin:0 0 1.5rem;">
+        Bonjour,<br><br>
+        <strong style="color:#f8fafc;">${escapeHtml(invitedByUsername)}</strong> vous a invité(e) à créer un compte sur EbookRequest,
+        la plateforme de gestion de demandes d'ebooks.
+      </p>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${link}" style="display:inline-block;padding:0.85rem 2rem;background:#6366f1;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.95rem;">
+          Créer mon compte
+        </a>
+      </div>
+      <p style="color:#475569;font-size:0.8rem;text-align:center;margin:0;">
+        Ce lien est valable 7 jours.<br>
+        Si vous ne souhaitez pas rejoindre, ignorez simplement cet email.
+      </p>`,
+  });
+  return sendEmail({ to: email, subject: `Invitation à rejoindre EbookRequest`, html, type: 'invitation' });
+};
+
 export const sendBroadcastEmail = async (to, subject, htmlContent) => {
   const html = htmlContent.replace(/\{\{FRONTEND_URL\}\}/g, process.env.FRONTEND_URL || '');
   return sendEmail({ to, subject, html, type: 'broadcast' });

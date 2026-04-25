@@ -8,6 +8,7 @@ import Login from './pages/auth/Login';
 import VerifyEmail from './pages/auth/VerifyEmail';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
+import Register from './pages/auth/Register';
 import UserSettings from './components/UserSettings';
 import ProfilePage from './pages/user/ProfilePage';
 import ReadingPage from './pages/user/ReadingPage';
@@ -97,7 +98,12 @@ function App() {
   const isVerifyEmailPage = location.pathname.startsWith('/verify-email/');
   const isForgotPage = location.pathname === '/forgot-password';
   const isResetPage = location.pathname.startsWith('/reset-password/');
+  const isRegisterPage = location.pathname === '/register';
   const token = localStorage.getItem('token');
+
+  if (isRegisterPage) {
+    return <Register />;
+  }
 
   if (!isVerifyEmailPage && !isForgotPage && !isResetPage) {
     if (!token && !isAuthPage) {

@@ -27,6 +27,7 @@ import pushRoutes from './routes/push.js';
 import readingRoutes from './routes/reading.js';
 import broadcastRoutes from './routes/broadcast.js';
 import releasesRoutes from './routes/releases.js';
+import invitationsRoutes from './routes/invitations.js';
 import emailLogsRoutes from './routes/emailLogs.js';
 import webhooksRoutes from './routes/webhooks.js';
 import opdsRoutes from './routes/opds.js';
@@ -140,6 +141,7 @@ app.use('/api/admin/releases', releasesRoutes);
 app.use('/api/admin/email-logs', emailLogsRoutes);
 app.use('/api/admin/opds', opdsAdminRoutes);
 app.use('/api/webhooks', webhooksRoutes);
+app.use('/api/invitations', invitationsRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));

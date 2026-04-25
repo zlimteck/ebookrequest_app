@@ -10,6 +10,7 @@ import BroadcastMessage from '../../components/admin/BroadcastMessage';
 import UpdatesPanel from '../../components/admin/UpdatesPanel';
 import EmailLogsPanel from '../../components/admin/EmailLogsPanel';
 import OPDSPanel from '../../components/admin/OPDSPanel';
+import InvitationsPanel from '../../components/admin/InvitationsPanel';
 import BookPreviewModal from '../../components/BookPreviewModal';
 
 const TrashIcon = () => (
@@ -339,6 +340,8 @@ function AdminPage() {
         return <BestsellerManagement />;
       case 'broadcast':
         return <BroadcastMessage />;
+      case 'invitations':
+        return <InvitationsPanel />;
       case 'updates':
         return <UpdatesPanel />;
       case 'emails':
@@ -880,6 +883,18 @@ function AdminPage() {
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      )
+    },
+    {
+      id: 'invitations',
+      label: 'Invitations',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <line x1="19" y1="8" x2="19" y2="14"/>
+          <line x1="22" y1="11" x2="16" y2="11"/>
         </svg>
       )
     },

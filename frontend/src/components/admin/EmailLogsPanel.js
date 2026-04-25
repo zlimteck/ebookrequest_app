@@ -23,6 +23,7 @@ const TYPE_LABELS = {
   admin_comment:   'Note admin',
   new_request:     'Nouvelle demande',
   broadcast:       'Diffusion',
+  invitation:      'Invitation',
 };
 
 function StatusBadge({ status }) {
