@@ -5,7 +5,6 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   enabled: { type: Boolean, default: false },
   url:    { type: String, default: '' },
   apiKey: { type: String, default: '' },
-  comicVineApiKey: { type: String, default: '' },
   username: { type: String, default: '' },
   password: { type: String, default: '' },
 }, { timestamps: true });

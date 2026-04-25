@@ -4,8 +4,6 @@ import Notification from '../models/Notification.js';
 import AdminLog from '../models/AdminLog.js';
 import ReadingList from '../models/ReadingList.js';
 import { sendPushToUser } from '../services/webPushService.js';
-import { addBookToLazyLibrarian } from '../services/lazyLibrarianService.js';
-import { addBookToMylar3 } from '../services/mylar3Service.js';
 import { downloadFromValentine } from '../services/valentineService.js';
 
 const logAdminAction = async (adminId, adminUsername, action, request, details = '') => {
@@ -163,9 +161,7 @@ export const createBookRequest = async (req, res) => {
       return res.status(201).json(newRequest);
     }
 
-    // Envoyer aux connecteurs (non bloquant)
-    addBookToLazyLibrarian(title, author);
-    addBookToMylar3(title, author);
+    // Tentative de téléchargement automatique via valentine (non bloquant)
     downloadFromValentine(title, author, newRequest._id.toString());
 
     // Envoyer une notification Apprise pour la nouvelle demande

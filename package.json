@@ -1,6 +1,6 @@
 {
   "name": "ebookrequest",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "EbookRequest — gestion de demandes de livres numériques",
   "main": "src/index.js",
   "type": "module",

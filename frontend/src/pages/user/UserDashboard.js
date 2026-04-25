@@ -437,7 +437,7 @@ const UserDashboard = () => {
                                   {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                   {h.changedBy && <em> · {h.changedBy}</em>}
                                 </span>
-                                {h.note && <span className={styles.historyNote}>{h.note}</span>}
+                                {h.note && <span className={styles.historyNote}>{h.note.replace(/\s*via\s+\S+/gi, '')}</span>}
                               </div>
                             ))}
                           </div>

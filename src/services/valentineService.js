@@ -270,7 +270,7 @@ export async function downloadFromValentine(title, author, requestId) {
     request.statusHistory.push({
       status: 'completed',
       changedBy: 'valentine',
-      note: 'Téléchargé automatiquement via valentine.wtf',
+      note: 'Téléchargé automatiquement',
     });
     await request.save();
 
@@ -302,7 +302,7 @@ export async function downloadFromValentine(title, author, requestId) {
         type: 'request_completed',
         title: request.title,
         author: request.author,
-        message: `"${title}" a été téléchargé automatiquement via valentine.wtf.`,
+        message: `"${title}" a été téléchargé automatiquement.`,
       });
     } catch (e) {
       console.error('[Valentine] Erreur notification:', e.message);

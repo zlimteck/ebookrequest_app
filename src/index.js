@@ -35,6 +35,7 @@ import opdsRoutes from './routes/opds.js';
 import opdsAdminRoutes from './routes/opdsAdmin.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
+import { startValentineCron } from './services/valentineCron.js';
 
 const require = createRequire(import.meta.url);
 const { version: APP_VERSION } = require('../package.json');
@@ -167,6 +168,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 
     // Initialiser le cache des livres tendance au démarrage (sans bloquer le serveur)
     initializeTrendingBooksCache();
+
+    // Cron Valentine : re-tentative de téléchargement pour les demandes en attente
+    startValentineCron();
   });
 })
 .catch((error) => console.error('Erreur de connexion MongoDB:', error));
