@@ -171,8 +171,16 @@ export async function testConnectionValentine(username, password) {
  * @param {string} author
  * @param {string} requestId - MongoDB ObjectId of the BookRequest
  */
-export async function downloadFromValentine(title, author, requestId) {
+export async function downloadFromValentine(title, author, requestId, category = 'ebook') {
   try {
+    const isMangaOrComic = category === 'comic' || category === 'manga' ||
+      /\b(manga|manhwa|manhua|comic|tome\s*\d+|vol\.?\s*\d+|t\d{2}\b)/i.test(title);
+
+    if (isMangaOrComic) {
+      console.log(`[Valentine] "${title}" est un comic/manga, skip.`);
+      return;
+    }
+
     const config = await getConfig();
     if (!config.enabled || !config.username || !config.password) {
       console.log('[Valentine] Désactivé ou config incomplète, skip.');

@@ -33,7 +33,7 @@ const __dirname = path.dirname(__filename);
 // Création d'une nouvelle demande de livre
 export const createBookRequest = async (req, res) => {
   try {
-    const { author, title, link, thumbnail, description, pageCount, format } = req.body;
+    const { author, title, link, thumbnail, description, pageCount, format, category } = req.body;
     
     // Validation des champs obligatoires
     if (!author || !title) {
@@ -96,6 +96,7 @@ export const createBookRequest = async (req, res) => {
       description: description || '',
       pageCount: pageCount || 0,
       format: format || '',
+      category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       status: isAutoCompleted ? 'completed' : 'pending',
       ...(isAutoCompleted && {
         downloadLink: completedVersion.downloadLink || '',
@@ -162,7 +163,7 @@ export const createBookRequest = async (req, res) => {
     }
 
     // Tentative de téléchargement automatique via valentine (non bloquant)
-    downloadFromValentine(title, author, newRequest._id.toString());
+    downloadFromValentine(title, author, newRequest._id.toString(), newRequest.category);
 
     // Envoyer une notification Apprise pour la nouvelle demande
     try {

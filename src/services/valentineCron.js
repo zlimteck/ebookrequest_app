@@ -26,7 +26,7 @@ async function runValentineCron() {
     console.log(`[Valentine Cron] ${pending.length} demande(s) en attente à vérifier…`);
 
     for (const req of pending) {
-      await downloadFromValentine(req.title, req.author, req._id.toString());
+      await downloadFromValentine(req.title, req.author, req._id.toString(), req.category || 'ebook');
       await sleep(DELAY_BETWEEN_MS);
     }
 

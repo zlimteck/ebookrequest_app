@@ -81,6 +81,7 @@ const bookRequestSchema = new mongoose.Schema({
   adminComment: { type: String, default: '' },
   userComment: { type: String, default: '' },
   format: { type: String, enum: ['epub', 'pdf', 'mobi', ''], default: '' },
+  category: { type: String, enum: ['ebook', 'comic', 'manga', ''], default: 'ebook' },
   statusHistory: [{
     status: { type: String },
     changedAt: { type: Date, default: Date.now },

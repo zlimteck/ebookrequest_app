@@ -111,7 +111,8 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
         pageCount: book.volumeInfo.pageCount,
         imageLinks: book.volumeInfo.imageLinks || {},
         description: book.volumeInfo.description || '',
-        infoLink: book.volumeInfo.infoLink || `https://books.google.fr/books?id=${book.id}`
+        infoLink: book.volumeInfo.infoLink || `https://books.google.fr/books?id=${book.id}`,
+        categories: book.volumeInfo.categories || []
       },
       id: book.id
     };

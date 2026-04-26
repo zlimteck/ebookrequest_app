@@ -72,6 +72,14 @@ const SelectedBookInfo = ({ book, onRemove }) => {
   );
 };
 
+function detectCategory(categories) {
+  if (!categories?.length) return 'ebook';
+  const joined = categories.join(' ').toLowerCase();
+  if (/manga|manhwa|manhua/.test(joined)) return 'manga';
+  if (/bande.dessin|comic|graphic.novel|\bbd\b/.test(joined)) return 'comic';
+  return 'ebook';
+}
+
 function UserForm() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,7 +93,8 @@ function UserForm() {
     coverImage: null,
     coverImagePreview: '',
     file: null,
-    format: ''
+    format: '',
+    category: 'ebook'
   });
   const [message, setMessage] = useState({ text: '', type: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -316,7 +325,8 @@ function UserForm() {
         link: googleBooksLink,
         coverImage: null,
         coverImagePreview: book.volumeInfo.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
-        pages: book.volumeInfo.pageCount || ''
+        pages: book.volumeInfo.pageCount || '',
+        category: detectCategory(book.volumeInfo.categories || [])
       }));
 
       // Vérifier la disponibilité
@@ -373,6 +383,7 @@ function UserForm() {
       thumbnail: form.coverImagePreview || '',
       pageCount: 0,
       format: form.format || '',
+      category: form.category || 'ebook',
       ...(selectedBook?.id && { googleBooksId: selectedBook.id })
     };
     
