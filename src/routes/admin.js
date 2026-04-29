@@ -1,6 +1,7 @@
 import express from 'express';
 import { getAdminStats } from '../controllers/adminController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import BookRequest from '../models/BookRequest.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,26 @@ const router = express.Router();
 router.use(requireAuth);
 router.use(requireAdmin);
 router.get('/stats', getAdminStats);
+
+// Stats d'un utilisateur spécifique pour le modal admin
+router.get('/user-stats/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [total, pending, completed, recentCount] = await Promise.all([
+      BookRequest.countDocuments({ user: userId }),
+      BookRequest.countDocuments({ user: userId, status: 'pending' }),
+      BookRequest.countDocuments({ user: userId, status: 'completed' }),
+      BookRequest.countDocuments({ user: userId, createdAt: { $gte: thirtyDaysAgo } }),
+    ]);
+
+    res.json({ total, pending, completed, recentCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // Liste des fichiers dans le dossier uploads/books
 router.get('/uploads-list', (req, res) => {

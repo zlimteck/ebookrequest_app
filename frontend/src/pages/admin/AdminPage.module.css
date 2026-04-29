@@ -1697,6 +1697,44 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.userFilterWrap {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.userFilterIcon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.userFilterInput {
+  width: 100%;
+  padding: 0.65rem 1rem 0.65rem 2.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg2);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.userFilterInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.userFilterInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
 .filterBarWrapper::after {
   content: '';
   position: absolute;

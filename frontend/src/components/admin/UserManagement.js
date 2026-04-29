@@ -55,6 +55,7 @@ const UserManagement = () => {
   const ITEMS_PER_PAGE = 10;
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [userStats, setUserStats] = useState(null);
 
   const filteredUsers = users.filter(user => {
     if (!searchTerm) return true;
@@ -160,7 +161,11 @@ const UserManagement = () => {
 
   const handleEdit = (user) => {
     setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: user.requestLimit ?? 10 });
+    setUserStats(null);
     setShowModal(true);
+    axiosAdmin.get(`/api/admin/user-stats/${user._id}`)
+      .then(res => setUserStats(res.data))
+      .catch(() => {});
   };
 
   const handleToggleActive = async (user) => {
@@ -396,18 +401,42 @@ const UserManagement = () => {
                 </div>
 
                 {formData._id && (
-                  <div className={styles.userStats}>
-                    {[
-                      { label: 'Inscription', value: formatDateTime(users.find(u => u._id === formData._id)?.createdAt) },
-                      { label: 'Dernière connexion', value: formatDateTime(users.find(u => u._id === formData._id)?.lastLogin) },
-                      { label: 'Dernière activité', value: formatDateTime(users.find(u => u._id === formData._id)?.lastActivity) },
-                    ].map(({ label, value }) => (
-                      <div key={label} className={styles.statItem}>
-                        <span className={styles.statLabel}>{label}</span>
-                        <span className={styles.statValue}>{value}</span>
+                  <>
+                    <div className={styles.userStats}>
+                      {[
+                        { label: 'Inscription', value: formatDateTime(users.find(u => u._id === formData._id)?.createdAt) },
+                        { label: 'Dernière connexion', value: formatDateTime(users.find(u => u._id === formData._id)?.lastLogin) },
+                        { label: 'Dernière activité', value: formatDateTime(users.find(u => u._id === formData._id)?.lastActivity) },
+                      ].map(({ label, value }) => (
+                        <div key={label} className={styles.statItem}>
+                          <span className={styles.statLabel}>{label}</span>
+                          <span className={styles.statValue}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {userStats && (
+                      <div className={styles.requestStats}>
+                        <div className={styles.requestStatItem}>
+                          <span className={styles.requestStatValue}>{userStats.total}</span>
+                          <span className={styles.requestStatLabel}>demandes total</span>
+                        </div>
+                        <div className={styles.requestStatItem}>
+                          <span className={styles.requestStatValue} style={{ color: '#10b981' }}>{userStats.completed}</span>
+                          <span className={styles.requestStatLabel}>complétées</span>
+                        </div>
+                        <div className={styles.requestStatItem}>
+                          <span className={styles.requestStatValue} style={{ color: '#f59e0b' }}>{userStats.pending}</span>
+                          <span className={styles.requestStatLabel}>en attente</span>
+                        </div>
+                        <div className={styles.requestStatItem}>
+                          <span className={styles.requestStatValue} style={{ color: userStats.recentCount >= (users.find(u => u._id === formData._id)?.requestLimit ?? 10) ? '#ef4444' : 'var(--color-text)' }}>
+                            {userStats.recentCount} / {users.find(u => u._id === formData._id)?.requestLimit ?? 10}
+                          </span>
+                          <span className={styles.requestStatLabel}>quota 30j</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
 
                 <div className={styles.formActions}>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './AdminPage.module.css';
 import { toast } from 'react-toastify';
@@ -50,7 +51,9 @@ const ClockIcon = () => (
 );
 
 function AdminPage() {
-  const [activeTab, setActiveTab] = useState('requests');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'requests';
+  const setActiveTab = (tab) => setSearchParams({ tab }, { replace: true });
   const [showPushoverConfig, setShowPushoverConfig] = useState(false);
   const [pushoverConfig, setPushoverConfig] = useState(null);
   const [requests, setRequests] = useState([]);
@@ -81,6 +84,7 @@ function AdminPage() {
   const [uploadsList, setUploadsList] = useState([]);
   const [uploadsLoading, setUploadsLoading] = useState(false);
   const [uploadsSearch, setUploadsSearch] = useState('');
+  const [userFilter, setUserFilter] = useState('');
 
   const toggleExpand = (id) => setExpandedCards(prev => {
     const next = new Set(prev);
@@ -424,6 +428,7 @@ function AdminPage() {
                       onClick={() => {
                         const savedScroll = filterBarRef.current?.scrollLeft ?? 0;
                         setFilter(key);
+                        setUserFilter('');
                         requestAnimationFrame(() => {
                           if (filterBarRef.current) filterBarRef.current.scrollLeft = savedScroll;
                         });
@@ -436,12 +441,30 @@ function AdminPage() {
                 })}
               </div>
             </div>
+            <div className={styles.userFilterWrap}>
+              <span className={styles.userFilterIcon}>
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input
+                className={styles.userFilterInput}
+                type="text"
+                placeholder="Rechercher par utilisateur..."
+                value={userFilter}
+                list="user-list"
+                onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
+              />
+              <datalist id="user-list">
+                {[...new Set(requests.map(r => r.username).filter(Boolean))].sort().map(u => <option key={u} value={u} />)}
+              </datalist>
+            </div>
             <button
               className={styles.refreshButton}
               onClick={fetchRequests}
               disabled={loading}
             >
-              <RefreshIcon /> Rafraîchir
+              <RefreshIcon />
             </button>
             {renderRequestsList()}
           </>
@@ -456,15 +479,17 @@ function AdminPage() {
   };
 
   const renderRequestsList = () => {
-    const totalPages = Math.ceil(requests.length / ITEMS_PER_PAGE);
-    const paginated = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
+    const filtered = userFilter
+      ? requests.filter(r => r.username?.toLowerCase().includes(userFilter.toLowerCase()))
+      : requests;
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     return (
       <div className={styles.requestsList}>
         {loading ? (
           <div className={styles.loading}>Chargement des demandes...</div>
-        ) : requests.length === 0 ? (
-          <div className={styles.noResults}>Aucune demande trouvée</div>
+        ) : filtered.length === 0 ? (
+          <div className={styles.noResults}>Aucune demande trouvée{userFilter ? ` pour "${userFilter}"` : ''}</div>
         ) : (
           <div className={styles.requestsGrid}>
             {paginated.map(request => {

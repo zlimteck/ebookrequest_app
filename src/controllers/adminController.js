@@ -26,6 +26,13 @@ export const getAdminStats = async (req, res) => {
       });
     }
     const totalUsers = await User.countDocuments({});
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const activeUsers = await User.countDocuments({ lastActivity: { $gte: thirtyDaysAgo } });
+    const newUsers = await User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
+    const usersWithPendingIds = await BookRequest.distinct('user', { status: 'pending' });
+    const usersWithPending = usersWithPendingIds.length;
+
     const totalRequests = await BookRequest.countDocuments({});
     const pendingRequests = await BookRequest.countDocuments({ status: 'pending' });
     const completedRequests = await BookRequest.countDocuments({ status: 'completed' });
@@ -89,6 +96,25 @@ export const getAdminStats = async (req, res) => {
     });
     const requestsByWeek = Object.values(weeksMap);
 
+    // Stats Valentine
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const valentineTotal = await BookRequest.countDocuments({
+      statusHistory: { $elemMatch: { changedBy: 'valentine', status: 'completed' } }
+    });
+    const valentineThisWeek = await BookRequest.countDocuments({
+      completedAt: { $gte: sevenDaysAgo },
+      statusHistory: { $elemMatch: { changedBy: 'valentine', status: 'completed' } }
+    });
+    const valentineSuccessRate = completedRequests > 0
+      ? Math.round((valentineTotal / completedRequests) * 100)
+      : 0;
+    const valentineStuck = await BookRequest.countDocuments({
+      status: 'pending',
+      createdAt: { $lt: sevenDaysAgo }
+    });
+
     // Top 5 utilisateurs par nombre de demandes
     const topUsers = await BookRequest.aggregate([
       { $group: { _id: '$username', total: { $sum: 1 }, completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } } } },
@@ -101,7 +127,10 @@ export const getAdminStats = async (req, res) => {
       success: true,
       data: {
         users: {
-          total: totalUsers
+          total: totalUsers,
+          active: activeUsers,
+          new: newUsers,
+          withPending: usersWithPending
         },
         requests: {
           total: totalRequests,
@@ -139,7 +168,13 @@ export const getAdminStats = async (req, res) => {
           successRate: totalAIRequests > 0 ? Math.round((successfulAIRequests / totalAIRequests) * 100) : 0
         },
         requestsByWeek,
-        topUsers
+        topUsers,
+        valentine: {
+          total: valentineTotal,
+          thisWeek: valentineThisWeek,
+          successRate: valentineSuccessRate,
+          stuck: valentineStuck
+        }
       }
     });
   } catch (error) {

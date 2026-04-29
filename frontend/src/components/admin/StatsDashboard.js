@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Doughnut, Bar, Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './StatsDashboard.module.css';
 import {
   Chart as ChartJS,
-  ArcElement,
   Tooltip,
   Legend,
   CategoryScale,
@@ -18,7 +17,6 @@ import {
 
 // Enregistrer les composants nécessaires de Chart.js
 ChartJS.register(
-  ArcElement,
   Tooltip,
   Legend,
   CategoryScale,
@@ -85,260 +83,187 @@ const StatsDashboard = () => {
     );
   }
 
-  // Données pour le graphique circulaire des requêtes
-  const requestsData = {
+  const tooltipBase = {
+    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+    titleFont: { size: 12, weight: '600' },
+    bodyFont: { size: 13 },
+    padding: 10,
+    cornerRadius: 8,
+  };
+
+  // Bar horizontal — répartition des statuts
+  const repartitionData = {
     labels: ['En attente', 'Complétées', 'Signalées', 'Annulées'],
-    datasets: [
-      {
-        data: [
-          stats.requests.pending,
-          stats.requests.completed,
-          stats.requests.reported || 0,
-          stats.requests.cancelled || 0
-        ],
-        backgroundColor: ['#F59E0B', '#10B981', '#9C27B0', '#EF4444'],
-        borderColor: ['#F59E0B', '#10B981', '#9C27B0', '#EF4444'],
-        borderWidth: 1,
-      },
-    ],
+    datasets: [{
+      data: [
+        stats.requests.pending,
+        stats.requests.completed,
+        stats.requests.reported || 0,
+        stats.requests.cancelled || 0,
+      ],
+      backgroundColor: [
+        'rgba(245, 158, 11, 0.8)',
+        'rgba(16, 185, 129, 0.8)',
+        'rgba(156, 39, 176, 0.8)',
+        'rgba(239, 68, 68, 0.8)',
+      ],
+      borderColor: ['#F59E0B', '#10B981', '#9C27B0', '#EF4444'],
+      borderWidth: 0,
+      borderRadius: 6,
+      borderSkipped: false,
+    }],
   };
 
-  // Données pour le graphique à barres
-  const usersData = {
-    labels: ['Utilisateurs', 'Requêtes'],
-    datasets: [
-      {
-        label: 'Total',
-        data: [stats.users.total, stats.requests.total],
-        backgroundColor: ['#6366F1', '#8B5CF6'],
-        borderColor: ['#6366F1', '#8B5CF6'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const options = {
+  const repartitionOptions = {
+    indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: '#f8fafc',
-          padding: 20,
-          font: {
-            size: 13,
-            family: 'Inter, system-ui, -apple-system, sans-serif',
-            weight: 500,
-            lineHeight: 1.6
-          },
-          usePointStyle: true,
-          pointStyle: 'circle',
-          boxWidth: 8,
-          padding: 12,
-          boxPadding: 10,
-          generateLabels: function(chart) {
-            const data = chart.data;
-            if (data.labels.length && data.datasets.length) {
-              return data.labels.map((label, i) => {
-                const dataset = data.datasets[0];
-                const value = dataset.data[i];
-                const color = dataset.backgroundColor[i];
-                
-                return {
-                  text: `${label} (${value})`,
-                  fillStyle: color,
-                  strokeStyle: color,
-                  lineWidth: 1,
-                  hidden: isNaN(dataset.data[i]) || chart.getDatasetMeta(0).data[i].hidden,
-                  index: i
-                };
-              });
-            }
-            return [];
-          }
-        },
-        align: 'center',
-        maxHeight: 100,
-        title: {
-          display: true,
-          padding: {top: 10, bottom: 15}
-        }
-      },
+      legend: { display: false },
       tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        backgroundColor: 'rgba(30, 41, 59, 0.95)',
-        titleFont: {
-          size: 12,
-          weight: '600'
+        ...tooltipBase,
+        callbacks: {
+          label: (item) => ` ${item.raw} demande${item.raw !== 1 ? 's' : ''}`,
         },
-        bodyFont: {
-          size: 13,
-          weight: '500'
-        },
-        padding: 12,
-        cornerRadius: 8,
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
       },
     },
     scales: {
-      y: {
-        beginAtZero: true,
-        display: false,
-        grid: {
-          display: false,
-        },
-        ticks: {
-          display: false,
-        },
-      },
       x: {
-        display: false,
-        grid: {
-          display: false,
-        },
-        ticks: {
-          display: false,
-        },
+        beginAtZero: true,
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        ticks: { color: '#8b949e', font: { size: 11 }, stepSize: 1 },
+      },
+      y: {
+        grid: { display: false },
+        ticks: { color: '#8b949e', font: { size: 12 } },
       },
     },
-    elements: {
-      arc: {
-        borderWidth: 3,
-        borderColor: 'var(--color-bg2)'
-      }
-    },
-    cutout: '75%',
-    layout: {
-      padding: {
-        top: 10,
-        bottom: 10,
-        left: 10,
-        right: 10
-      }
-    },
-    spacing: 0,
-    animation: {
-      animateScale: true,
-      animateRotate: true
-    }
   };
+
 
   return (
     <div className={styles.statsContainer}>
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
+
+      <div className={styles.groupCard}>
+        <div className={styles.groupHeader}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
           <h3>Utilisateurs</h3>
-          <p className={styles.statNumber}>{stats.users.total}</p>
-          <p className={styles.statLabel}>Total des utilisateurs</p>
+          <span className={styles.groupTotalBadge}>{stats.users.total} au total</span>
         </div>
-
-        <div className={styles.statCard}>
-          <h3>Requêtes</h3>
-          <p className={styles.statNumber}>{stats.requests.total}</p>
-          <p className={styles.statLabel}>Total des requêtes</p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>En attente</h3>
-          <p className={styles.statNumber}>{stats.requests.pending}</p>
-          <p className={styles.statLabel}>Requêtes en attente</p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Complétées</h3>
-          <p className={styles.statNumber}>{stats.requests.completed}</p>
-          <p className={styles.statLabel}>Requêtes complétées</p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Annulées</h3>
-          <p className={styles.statNumber}>{stats.requests.cancelled}</p>
-          <p className={styles.statLabel}>Requêtes annulées</p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Signalements</h3>
-          <p className={styles.statNumber}>{stats.requests.reported || 0}</p>
-          <p className={styles.statLabel}>Problèmes signalés</p>
-        </div>
-
-        <div className={styles.statCard}>
-          {(() => {
-            const ai = stats.aiProvider;
-            const providerLabels = {
-              openai: 'OpenAI / ChatGPT',
-              ollama: 'Ollama (local)',
-              anthropic: 'Claude / Anthropic',
-            };
-            const label = providerLabels[ai?.provider] || ai?.provider || 'IA';
-            return (
-              <>
-                <h3>Statut {label}</h3>
-                <div className={styles.ollamaStatus}>
-                  <div className={styles.statusIndicator}>
-                    <span className={`${styles.statusDot} ${ai?.connected ? styles.connected : styles.disconnected}`}></span>
-                    <span className={styles.statusText}>{ai?.connected ? 'Connecté' : 'Déconnecté'}</span>
-                  </div>
-                  {ai?.connected && (
-                    <>
-                      <p className={styles.ollamaModel}>
-                        <strong>Modèle :</strong> {ai.model}
-                      </p>
-                      {ai.provider === 'ollama' && (
-                        ai.modelAvailable
-                          ? <p className={styles.modelStatus}>✓ Modèle disponible</p>
-                          : <p className={styles.modelStatusWarning}>⚠ Modèle non disponible</p>
-                      )}
-                    </>
-                  )}
-                  {ai?.error && <p className={styles.ollamaError}>{ai.error}</p>}
-                </div>
-              </>
-            );
-          })()}
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Requêtes IA</h3>
-          <p className={styles.statNumber}>{stats.aiRequests?.total || 0}</p>
-          <p className={styles.statLabel}>Total des requêtes</p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Taux de succès IA</h3>
-          <p className={styles.statNumber}>{stats.aiRequests?.successRate || 0}%</p>
-          <p className={styles.statLabel}>
-            {stats.aiRequests?.successful || 0} réussies / {stats.aiRequests?.failed || 0} échouées
-          </p>
-        </div>
-
-        <div className={styles.statCard}>
-          <h3>Temps moyen</h3>
-          <p className={styles.statNumber}>
-            {stats.aiRequests?.avgResponseTime
-              ? `${(stats.aiRequests.avgResponseTime / 1000).toFixed(1)}s`
-              : '0s'}
-          </p>
-          <p className={styles.statLabel}>Temps de réponse IA</p>
+        <div className={styles.groupGrid}>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.active ?? '—'}</span>
+            <span className={styles.groupLabel}>actifs ce mois</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.new ?? '—'}</span>
+            <span className={styles.groupLabel}>nouveaux ce mois</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.withPending ?? '—'}</span>
+            <span className={styles.groupLabel}>avec demandes en attente</span>
+          </div>
         </div>
       </div>
 
-      <div className={styles.chartsContainer}>
-        <div className={styles.chartCard}>
-          <h3>Répartition des requêtes</h3>
-          <div className={styles.chartWrapper}>
-            <Doughnut data={requestsData} options={options} />
+      <div className={styles.groupCard}>
+        <div className={styles.groupHeader}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          <h3>Demandes</h3>
+          <span className={styles.groupTotalBadge}>{stats.requests.total} au total</span>
+        </div>
+        <div className={styles.groupGrid}>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.requests.pending}</span>
+            <span className={styles.groupLabel}>en attente</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.requests.completed}</span>
+            <span className={styles.groupLabel}>complétées</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.requests.cancelled}</span>
+            <span className={styles.groupLabel}>annulées</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.requests.reported || 0}</span>
+            <span className={styles.groupLabel}>signalements</span>
           </div>
         </div>
+      </div>
 
-        <div className={styles.chartCard}>
-          <h3>Vue d'ensemble</h3>
-          <div className={styles.chartWrapper}>
-            <Bar data={usersData} options={options} />
+      {(() => {
+        const ai = stats.aiProvider;
+        const providerLabels = {
+          openai: 'OpenAI',
+          ollama: 'Ollama',
+        };
+        const label = providerLabels[ai?.provider] || ai?.provider || 'IA';
+        const avgTime = stats.aiRequests?.avgResponseTime
+          ? `${(stats.aiRequests.avgResponseTime / 1000).toFixed(1)}s`
+          : '—';
+        return (
+          <div className={styles.groupCard}>
+            <div className={styles.groupHeader}>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/>
+              </svg>
+              <h3>{label}</h3>
+              <span className={`${styles.groupStatusBadge} ${ai?.connected ? styles.groupStatusConnected : styles.groupStatusDisconnected}`}>
+                <span className={`${styles.statusDot} ${ai?.connected ? styles.connected : styles.disconnected}`}></span>
+                {ai?.connected ? 'Connecté' : 'Déconnecté'}
+              </span>
+            </div>
+            {ai?.connected && ai.model && (
+              <p className={styles.groupSubInfo}>
+                Modèle : <strong>{ai.model}</strong>
+                {ai.provider === 'ollama' && (
+                  ai.modelAvailable
+                    ? <span className={styles.groupSubOk}> · disponible</span>
+                    : <span className={styles.groupSubWarn}> · non disponible</span>
+                )}
+              </p>
+            )}
+            {ai?.error && (
+              <p className={styles.groupError}>
+                {ai.error.length > 100 ? ai.error.slice(0, 100) + '…' : ai.error}
+              </p>
+            )}
+            <div className={styles.groupGrid}>
+              <div className={styles.groupStat}>
+                <span className={styles.groupValue}>{stats.aiRequests?.total || 0}</span>
+                <span className={styles.groupLabel}>requêtes</span>
+              </div>
+              <div className={styles.groupStat}>
+                <span className={styles.groupValue}>{stats.aiRequests?.successRate || 0}%</span>
+                <span className={styles.groupLabel}>taux de succès</span>
+              </div>
+              <div className={styles.groupStat}>
+                <span className={styles.groupValue}>{stats.aiRequests?.successful || 0}</span>
+                <span className={styles.groupLabel}>réussies</span>
+              </div>
+              <div className={styles.groupStat}>
+                <span className={`${styles.groupValue} ${(stats.aiRequests?.failed || 0) > 0 ? styles.groupWarnValue : ''}`}>{stats.aiRequests?.failed || 0}</span>
+                <span className={styles.groupLabel}>échouées</span>
+              </div>
+            </div>
+            {stats.aiRequests?.avgResponseTime > 0 && (
+              <p className={styles.groupSubInfo} style={{ marginTop: '0.75rem' }}>
+                Temps de réponse moyen : <strong>{avgTime}</strong>
+              </p>
+            )}
           </div>
+        );
+      })()}
+
+      <div className={styles.chartCardWide}>
+        <h3>Répartition des requêtes <span className={styles.chartSubtitle}>par statut</span></h3>
+        <div className={styles.chartWrapperWide}>
+          <Bar data={repartitionData} options={repartitionOptions} />
         </div>
       </div>
 
@@ -401,10 +326,9 @@ const StatsDashboard = () => {
           <div className={styles.topUsersList}>
             {stats.topUsers.map((u, i) => {
               const pct = stats.requests.total > 0 ? Math.round((u.total / stats.requests.total) * 100) : 0;
-              const medals = ['🥇', '🥈', '🥉'];
               return (
                 <div key={u.username} className={styles.topUserRow}>
-                  <span className={styles.topUserRank}>{medals[i] || `#${i + 1}`}</span>
+                  <span className={styles.topUserRank}>#{i + 1}</span>
                   <span className={styles.topUserName}>{u.username}</span>
                   <div className={styles.topUserBar}>
                     <div className={styles.topUserBarFill} style={{ width: `${pct}%` }} />
@@ -413,6 +337,35 @@ const StatsDashboard = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {stats.valentine && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            <h3>Téléchargements automatiques</h3>
+          </div>
+          <div className={styles.groupGrid}>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.valentine.thisWeek}</span>
+              <span className={styles.groupLabel}>cette semaine</span>
+            </div>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.valentine.total}</span>
+              <span className={styles.groupLabel}>au total</span>
+            </div>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.valentine.successRate}%</span>
+              <span className={styles.groupLabel}>des complétées</span>
+            </div>
+            <div className={`${styles.groupStat} ${stats.valentine.stuck > 0 ? styles.groupWarn : ''}`}>
+              <span className={styles.groupValue}>{stats.valentine.stuck}</span>
+              <span className={styles.groupLabel}>en attente +7j</span>
+            </div>
           </div>
         </div>
       )}
