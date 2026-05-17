@@ -731,6 +731,14 @@ body {
   background: rgba(239,68,68,0.08);
   border-color: #ef4444;
 }
+.aIconBtnValentine {
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #6366f1;
+}
+.aIconBtnValentine:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: #6366f1;
+}
 .btnDivider {
   width: 1px;
   height: 20px;
@@ -740,6 +748,56 @@ body {
 }
 
 /* ── Accordéon ── */
+/* ── Valentine search panel ─────────────────────────────────── */
+/* ── Valentine logo ── */
+.valentineLogo {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.85;
+}
+
+/* ── Valentine modal ── */
+.valentineSearchRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.valentineSearchIconBtn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #6366f1;
+}
+.valentineSearchIconBtn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.valentineResultsList {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.valentineResultRow {
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  gap: 0.75rem;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.valentineResultRow:last-child { border-bottom: none; }
+.valentineResultRow:hover:not(:disabled) { background: rgba(79, 140, 255, 0.06); }
+.valentineResultRow:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .expandToggle {
   display: flex;
   align-items: center;
@@ -2468,6 +2526,36 @@ body {
   font-weight: 700;
   letter-spacing: 0.05em;
   vertical-align: middle;
+}
+
+.categoryMetaTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
+  border: 1px solid transparent;
+}
+.categoryMetaTag:hover { opacity: 0.75; }
+.categoryMetaTag_ebook {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #6366f1;
+}
+.categoryMetaTag_manga {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+.categoryMetaTag_comic {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
 }
 
 .historyBlock {

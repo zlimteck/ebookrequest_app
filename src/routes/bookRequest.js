@@ -88,6 +88,26 @@ router.delete('/:id', requireAuth, requireAdmin, deleteRequest);
 // Commentaire admin sur une demande
 router.patch('/:id/comment', requireAuth, requireAdmin, updateAdminComment);
 
+// Correction de catégorie par l'admin
+router.patch('/:id/category', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { category } = req.body;
+    if (!['ebook', 'manga', 'comic', ''].includes(category)) {
+      return res.status(400).json({ error: 'Catégorie invalide' });
+    }
+    const BookRequest = (await import('../models/BookRequest.js')).default;
+    const request = await BookRequest.findByIdAndUpdate(
+      req.params.id,
+      { $set: { category } },
+      { new: true }
+    );
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+    res.json({ success: true, category: request.category });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Commentaire utilisateur sur sa propre demande
 router.patch('/:id/user-comment', requireAuth, updateUserComment);
 

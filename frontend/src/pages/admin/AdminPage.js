@@ -85,6 +85,59 @@ function AdminPage() {
   const [uploadsLoading, setUploadsLoading] = useState(false);
   const [uploadsSearch, setUploadsSearch] = useState('');
   const [userFilter, setUserFilter] = useState('');
+  const [valentineModal, setValentineModal] = useState(null); // { _id, title }
+  const [valentineQuery, setValentineQuery] = useState('');
+  const [valentineResults, setValentineResults] = useState(null);
+  const [valentineLoading, setValentineLoading] = useState(false);
+  const [valentineDownloading, setValentineDownloading] = useState(null);
+
+  const openValentineModal = (request) => {
+    setValentineModal(request);
+    setValentineQuery(request.title);
+    setValentineResults(null);
+    setValentineDownloading(null);
+  };
+
+  const closeValentineModal = () => {
+    setValentineModal(null);
+    setValentineResults(null);
+    setValentineLoading(false);
+    setValentineDownloading(null);
+  };
+
+  const runValentineSearch = async (query) => {
+    setValentineLoading(true);
+    setValentineResults(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axiosAdmin.get(`/api/connectors/valentine/search?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setValentineResults(res.data.results);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur de recherche Valentine');
+      setValentineResults([]);
+    } finally {
+      setValentineLoading(false);
+    }
+  };
+
+  const downloadFromValentine = async (ebookId) => {
+    if (!valentineModal) return;
+    setValentineDownloading(ebookId);
+    try {
+      const token = localStorage.getItem('token');
+      await axiosAdmin.post('/api/connectors/valentine/download-request', { requestId: valentineModal._id, ebookId }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Téléchargement lancé avec succès');
+      closeValentineModal();
+      fetchRequests();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors du téléchargement');
+      setValentineDownloading(null);
+    }
+  };
 
   const toggleExpand = (id) => setExpandedCards(prev => {
     const next = new Set(prev);
@@ -556,6 +609,29 @@ function AdminPage() {
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                       {new Date(request.createdAt).toLocaleDateString('fr-FR')}
                     </span>
+                    {(() => {
+                      const cats = ['ebook', 'manga', 'comic'];
+                      const labels = { ebook: 'Roman', manga: 'Manga', comic: 'Comic' };
+                      const cur = cats.includes(request.category) ? request.category : 'ebook';
+                      const next = cats[(cats.indexOf(cur) + 1) % cats.length];
+                      return (
+                        <span
+                          className={`${styles.categoryMetaTag} ${styles[`categoryMetaTag_${cur}`]}`}
+                          title={`Changer → ${labels[next]}`}
+                          onClick={async e => {
+                            e.stopPropagation();
+                            try {
+                              await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next }, {
+                                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                              });
+                              setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
+                            } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
+                          }}
+                        >
+                          {labels[cur]}
+                        </span>
+                      );
+                    })()}
                     {request.downloadedAt && (
                       <span className={`${styles.adminMetaItem} ${styles.adminMetaDownloaded}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -710,6 +786,13 @@ function AdminPage() {
                           onClick={() => handlePredbCheck(request)} disabled={checkingPredb.has(request._id)}>
                           {checkingPredb.has(request._id) ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
                         </button>
+                        {request.status === 'pending' && (
+                          <button className={`${styles.aIconBtn} ${styles.aIconBtnValentine}`}
+                            title="Rechercher sur Valentine"
+                            onClick={() => openValentineModal(request)}>
+                            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.valentineLogo} />
+                          </button>
+                        )}
                         <button className={styles.aIconBtn} title={request.adminComment ? 'Modifier la note admin' : 'Ajouter une note admin'}
                           onClick={() => { setCommentModal(request._id); setCommentValue(request.adminComment || ''); }}>
                           {request.adminComment
@@ -1192,6 +1275,74 @@ function AdminPage() {
           </div>
         );
       })()}
+
+      {/* Modal recherche Valentine */}
+      {valentineModal && (
+        <div className={styles.uploadModalOverlay} onClick={e => { if (e.target === e.currentTarget) closeValentineModal(); }}>
+          <div className={styles.uploadModal}>
+            <div className={styles.uploadModalHeader}>
+              <div>
+                <h3 className={styles.uploadModalTitle}>Rechercher sur Valentine</h3>
+                <p className={styles.uploadModalBook}>{valentineModal.title}</p>
+              </div>
+              <button className={styles.uploadModalClose} onClick={closeValentineModal}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className={styles.uploadModalBody}>
+              <div className={styles.valentineSearchRow}>
+                <input
+                  className={styles.cancelInput}
+                  style={{ flex: 1 }}
+                  value={valentineQuery}
+                  onChange={e => setValentineQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !valentineLoading && runValentineSearch(valentineQuery)}
+                  placeholder="Titre à rechercher…"
+                  autoFocus
+                />
+                <button
+                  className={`${styles.aIconBtn} ${styles.aIconBtnValentine} ${styles.valentineSearchIconBtn}`}
+                  onClick={() => runValentineSearch(valentineQuery)}
+                  disabled={valentineLoading}
+                  title="Rechercher"
+                >
+                  {valentineLoading
+                    ? <span className={styles.spinner} />
+                    : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  }
+                </button>
+              </div>
+
+              {valentineResults !== null && (
+                valentineResults.length === 0 ? (
+                  <div className={styles.fileBrowserEmpty}>Aucun résultat</div>
+                ) : (
+                  <div className={styles.valentineResultsList}>
+                    {valentineResults.map(r => (
+                      <button
+                        key={r.id}
+                        className={`${styles.fileBrowserItem} ${styles.valentineResultRow}`}
+                        disabled={valentineDownloading !== null}
+                        onClick={() => downloadFromValentine(r.id)}
+                        title="Télécharger ce livre"
+                      >
+                        <span className={styles.fileBrowserName}>{r.title}</span>
+                        {valentineDownloading === r.id
+                          ? <span className={styles.spinner} />
+                          : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,color:'var(--color-text-muted)'}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        }
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={styles.adminLayout}>
         {/* Sidebar navigation */}

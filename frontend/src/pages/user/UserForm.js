@@ -598,6 +598,22 @@ function UserForm() {
                 ))}
               </div>
             </div>
+            <div className={styles.formGroup}>
+              <label className={styles.label}>Type de livre</label>
+              <div className={styles.formatButtons}>
+                {[
+                  { value: 'ebook', label: 'Roman / Essai' },
+                  { value: 'manga', label: 'Manga' },
+                  { value: 'comic', label: 'Comic / BD' },
+                ].map(({ value, label }) => (
+                  <button key={value} type="button"
+                    className={`${styles.formatBtn} ${form.category === value ? styles.formatBtnActive : ''}`}
+                    onClick={() => setForm(prev => ({ ...prev, category: value }))}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className={styles.formGroup} style={{ flex: 1 }}>
               <label className={styles.label}>
                 Couverture <span className={styles.optionalLabel}>(optionnel)</span>

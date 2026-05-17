@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
-import { testConnectionValentine } from '../services/valentineService.js';
+import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
 import { getNextScanTime } from '../services/valentineCron.js';
 
 const router = express.Router();
@@ -79,6 +79,30 @@ router.post('/valentine/test', requireAuth, requireAdmin, async (req, res) => {
     res.json({ success: true, message: 'Connexion réussie — valentine.wtf' });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible' });
+  }
+});
+
+// ── GET /api/connectors/valentine/search?q=... ────────────────────────────────
+router.get('/valentine/search', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre q requis' });
+  try {
+    const results = await searchOnValentine(q);
+    res.json({ results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/connectors/valentine/download-request ──────────────────────────
+router.post('/valentine/download-request', requireAuth, requireAdmin, async (req, res) => {
+  const { requestId, ebookId } = req.body;
+  if (!requestId || !ebookId) return res.status(400).json({ error: 'requestId et ebookId requis' });
+  try {
+    const result = await downloadFromValentineById(requestId, ebookId);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

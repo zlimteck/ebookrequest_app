@@ -319,3 +319,69 @@ export async function downloadFromValentine(title, author, requestId, category =
     console.error('[Valentine] Erreur (non bloquante):', err.message);
   }
 }
+
+/**
+ * Search valentine.wtf and return results (for admin UI).
+ */
+export async function searchOnValentine(query) {
+  const config = await getConfig();
+  if (!config.enabled || !config.username || !config.password) {
+    throw new Error('Valentine désactivé ou configuration incomplète');
+  }
+  const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+  const cookies = await login(baseUrl, config.username, config.password);
+  const results = await searchTitles(baseUrl, cookies, query);
+  return results;
+}
+
+/**
+ * Download a specific ebook by its valentine ID for a given request (admin manual action).
+ */
+export async function downloadFromValentineById(requestId, ebookId) {
+  const config = await getConfig();
+  if (!config.enabled || !config.username || !config.password) {
+    throw new Error('Valentine désactivé ou configuration incomplète');
+  }
+  const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+  const cookies = await login(baseUrl, config.username, config.password);
+
+  const dlPath = await getDownloadPath(baseUrl, cookies, ebookId);
+  if (!dlPath) throw new Error('Lien de téléchargement introuvable pour cet ebook');
+
+  const fileRes = await axios.get(`${baseUrl}${dlPath}`, {
+    headers: { ...BASE_HEADERS, 'Accept': '*/*', 'Cookie': cookieHeader(cookies) },
+    responseType: 'arraybuffer',
+    timeout: 120000,
+  });
+
+  const cd = fileRes.headers['content-disposition'] || '';
+  const fnMatch = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)["']?/i);
+  let filename = fnMatch ? decodeURIComponent(fnMatch[1].trim()) : `valentine_${ebookId}.epub`;
+  filename = filename.replace(/[<>:"/\\|?*]/g, '').trim() || `valentine_${ebookId}.epub`;
+
+  const uploadsDir = path.join(__dirname, '../../uploads/books');
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(fileRes.data));
+
+  // Complete the request
+  const request = await BookRequest.findById(requestId);
+  if (!request) throw new Error('Demande introuvable');
+  if (request.status === 'completed') throw new Error('Demande déjà complétée');
+
+  request.status = 'completed';
+  request.filePath = `books/${filename}`;
+  request.completedAt = new Date();
+  if (!Array.isArray(request.statusHistory)) request.statusHistory = [];
+  request.statusHistory.push({ status: 'completed', changedBy: 'admin-valentine', note: 'Téléchargé manuellement via Valentine' });
+  await request.save();
+
+  // Notify user
+  const user = await User.findById(request.user);
+  if (user) {
+    try { if (user.emailVerified && user.email) await sendBookCompletedEmail(user, request); } catch {}
+    try { await sendPushToUser(user._id, { title: '📖 Livre disponible !', body: `"${request.title}" est maintenant disponible.`, url: '/dashboard' }); } catch {}
+    try { await Notification.create({ user: user._id, type: 'request_completed', title: request.title, author: request.author, message: `"${request.title}" a été téléchargé.` }); } catch {}
+  }
+
+  return { filename, filePath: `books/${filename}` };
+}
