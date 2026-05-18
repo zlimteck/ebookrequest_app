@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
 import { getNextScanTime } from '../services/valentineCron.js';
+import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig } from '../services/annasArchiveService.js';
 
 const router = express.Router();
 
@@ -101,6 +102,38 @@ router.post('/valentine/download-request', requireAuth, requireAdmin, async (req
   try {
     const result = await downloadFromValentineById(requestId, ebookId);
     res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/connectors/annasarchive ─────────────────────────────────────────
+router.get('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await getAnnasArchiveConfig();
+    res.json({ enabled: doc.enabled, url: doc.url });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/annasarchive ─────────────────────────────────────────
+router.put('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await saveAnnasArchiveConfig(req.body);
+    res.json({ enabled: doc.enabled, url: doc.url });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── GET /api/connectors/annasarchive/search?q=... ─────────────────────────────
+router.get('/annasarchive/search', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre q requis' });
+  try {
+    const { results, baseUrl } = await searchOnAnnasArchive(q);
+    res.json({ results, baseUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

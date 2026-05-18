@@ -133,9 +133,7 @@ function ValentineCard() {
       <div className={styles.cardHeader}>
         <div className={styles.cardBrand}>
           <div className={styles.cardLogoWrap}>
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
+            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorLogoValentine} />
           </div>
           <div>
             <p className={styles.cardName}>Valentine.wtf</p>
@@ -234,6 +232,95 @@ function ValentineCard() {
   );
 }
 
+function AnnasArchiveCard() {
+  const [config, setConfig] = useState({ enabled: false, url: 'https://annas-archive.pk' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/annasarchive')
+      .then(res => setConfig({ enabled: res.data.enabled ?? false, url: res.data.url || 'https://annas-archive.pk' }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await axiosAdmin.put('/api/connectors/annasarchive', config);
+      showAlertMsg('success', 'Configuration enregistrée.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={`${styles.cardLogoWrap} ${styles.cardLogoWrapAnnas}`}>
+            <span className={styles.annasLogoLetter}>A</span>
+          </div>
+          <div>
+            <p className={styles.cardName}>Anna's Archive</p>
+            <p className={styles.cardDesc}>Recherche de livres sur Anna's Archive. Recherche uniquement — téléchargement manuel depuis le site.</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={e => setConfig(c => ({ ...c, enabled: e.target.checked }))}
+          />
+          <span className={styles.slider} />
+        </label>
+      </div>
+
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>URL</label>
+          <input
+            className={styles.fieldInput}
+            type="url"
+            placeholder="https://annas-archive.pk"
+            value={config.url}
+            onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
+          />
+          <p className={styles.fieldHint}>Miroirs de secours : annas-archive.gl · annas-archive.gd</p>
+        </div>
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function ConnectorsPanel() {
   return (
     <div className={styles.panel}>
@@ -249,6 +336,7 @@ export default function ConnectorsPanel() {
       </div>
 
       <ValentineCard />
+      <AnnasArchiveCard />
     </div>
   );
 }

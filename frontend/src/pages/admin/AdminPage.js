@@ -85,53 +85,54 @@ function AdminPage() {
   const [uploadsLoading, setUploadsLoading] = useState(false);
   const [uploadsSearch, setUploadsSearch] = useState('');
   const [userFilter, setUserFilter] = useState('');
-  const [valentineModal, setValentineModal] = useState(null); // { _id, title }
-  const [valentineQuery, setValentineQuery] = useState('');
+  const [connectorsModal, setConnectorsModal] = useState(null); // { _id, title, author }
+  const [connectorsQuery, setConnectorsQuery] = useState('');
   const [valentineResults, setValentineResults] = useState(null);
   const [valentineLoading, setValentineLoading] = useState(false);
   const [valentineDownloading, setValentineDownloading] = useState(null);
+  const [annasResults, setAnnasResults] = useState(null);
+  const [annasLoading, setAnnasLoading] = useState(false);
 
-  const openValentineModal = (request) => {
-    setValentineModal(request);
-    setValentineQuery(request.title);
+  const openConnectorsModal = (request) => {
+    setConnectorsModal(request);
+    setConnectorsQuery(request.title);
     setValentineResults(null);
+    setAnnasResults(null);
     setValentineDownloading(null);
   };
 
-  const closeValentineModal = () => {
-    setValentineModal(null);
+  const closeConnectorsModal = () => {
+    setConnectorsModal(null);
     setValentineResults(null);
+    setAnnasResults(null);
     setValentineLoading(false);
+    setAnnasLoading(false);
     setValentineDownloading(null);
   };
 
-  const runValentineSearch = async (query) => {
-    setValentineLoading(true);
+  const runConnectorsSearch = async (query) => {
     setValentineResults(null);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axiosAdmin.get(`/api/connectors/valentine/search?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setValentineResults(res.data.results);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur de recherche Valentine');
-      setValentineResults([]);
-    } finally {
-      setValentineLoading(false);
-    }
+    setAnnasResults(null);
+    // Search both in parallel
+    setValentineLoading(true);
+    setAnnasLoading(true);
+    axiosAdmin.get(`/api/connectors/valentine/search?q=${encodeURIComponent(query)}`)
+      .then(res => setValentineResults(res.data.results))
+      .catch(() => setValentineResults([]))
+      .finally(() => setValentineLoading(false));
+    axiosAdmin.get(`/api/connectors/annasarchive/search?q=${encodeURIComponent(query)}`)
+      .then(res => setAnnasResults(res.data.results))
+      .catch(() => setAnnasResults([]))
+      .finally(() => setAnnasLoading(false));
   };
 
   const downloadFromValentine = async (ebookId) => {
-    if (!valentineModal) return;
+    if (!connectorsModal) return;
     setValentineDownloading(ebookId);
     try {
-      const token = localStorage.getItem('token');
-      await axiosAdmin.post('/api/connectors/valentine/download-request', { requestId: valentineModal._id, ebookId }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axiosAdmin.post('/api/connectors/valentine/download-request', { requestId: connectorsModal._id, ebookId });
       toast.success('Téléchargement lancé avec succès');
-      closeValentineModal();
+      closeConnectorsModal();
       fetchRequests();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors du téléchargement');
@@ -788,9 +789,11 @@ function AdminPage() {
                         </button>
                         {request.status === 'pending' && (
                           <button className={`${styles.aIconBtn} ${styles.aIconBtnValentine}`}
-                            title="Rechercher sur Valentine"
-                            onClick={() => openValentineModal(request)}>
-                            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.valentineLogo} />
+                            title="Rechercher sur les connecteurs"
+                            onClick={() => openConnectorsModal(request)}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                            </svg>
                           </button>
                         )}
                         <button className={styles.aIconBtn} title={request.adminComment ? 'Modifier la note admin' : 'Ajouter une note admin'}
@@ -1276,16 +1279,16 @@ function AdminPage() {
         );
       })()}
 
-      {/* Modal recherche Valentine */}
-      {valentineModal && (
-        <div className={styles.uploadModalOverlay} onClick={e => { if (e.target === e.currentTarget) closeValentineModal(); }}>
-          <div className={styles.uploadModal}>
+      {/* Modal unifiée connecteurs (Valentine + Anna's Archive) */}
+      {connectorsModal && (
+        <div className={styles.uploadModalOverlay} onClick={e => { if (e.target === e.currentTarget) closeConnectorsModal(); }}>
+          <div className={`${styles.uploadModal} ${styles.connectorsModal}`}>
             <div className={styles.uploadModalHeader}>
               <div>
-                <h3 className={styles.uploadModalTitle}>Rechercher sur Valentine</h3>
-                <p className={styles.uploadModalBook}>{valentineModal.title}</p>
+                <h3 className={styles.uploadModalTitle}>Rechercher sur les connecteurs</h3>
+                <p className={styles.uploadModalBook}>{connectorsModal.title}</p>
               </div>
-              <button className={styles.uploadModalClose} onClick={closeValentineModal}>
+              <button className={styles.uploadModalClose} onClick={closeConnectorsModal}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -1297,47 +1300,99 @@ function AdminPage() {
                 <input
                   className={styles.cancelInput}
                   style={{ flex: 1 }}
-                  value={valentineQuery}
-                  onChange={e => setValentineQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !valentineLoading && runValentineSearch(valentineQuery)}
+                  value={connectorsQuery}
+                  onChange={e => setConnectorsQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !(valentineLoading || annasLoading) && runConnectorsSearch(connectorsQuery)}
                   placeholder="Titre à rechercher…"
                   autoFocus
                 />
                 <button
                   className={`${styles.aIconBtn} ${styles.aIconBtnValentine} ${styles.valentineSearchIconBtn}`}
-                  onClick={() => runValentineSearch(valentineQuery)}
-                  disabled={valentineLoading}
+                  onClick={() => runConnectorsSearch(connectorsQuery)}
+                  disabled={valentineLoading || annasLoading}
                   title="Rechercher"
                 >
-                  {valentineLoading
+                  {(valentineLoading || annasLoading)
                     ? <span className={styles.spinner} />
                     : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   }
                 </button>
               </div>
 
-              {valentineResults !== null && (
-                valentineResults.length === 0 ? (
-                  <div className={styles.fileBrowserEmpty}>Aucun résultat</div>
-                ) : (
-                  <div className={styles.valentineResultsList}>
-                    {valentineResults.map(r => (
-                      <button
-                        key={r.id}
-                        className={`${styles.fileBrowserItem} ${styles.valentineResultRow}`}
-                        disabled={valentineDownloading !== null}
-                        onClick={() => downloadFromValentine(r.id)}
-                        title="Télécharger ce livre"
-                      >
-                        <span className={styles.fileBrowserName}>{r.title}</span>
-                        {valentineDownloading === r.id
-                          ? <span className={styles.spinner} />
-                          : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,color:'var(--color-text-muted)'}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        }
-                      </button>
-                    ))}
+              {(valentineResults !== null || annasResults !== null) && (
+                <div className={styles.connectorsResultsGrid}>
+
+                  <div className={styles.connectorsSection}>
+                    <div className={styles.connectorsSectionHeader}>
+                      <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorsSectionLogo} />
+                      <span>Valentine.wtf</span>
+                      {valentineLoading && <span className={styles.spinner} style={{marginLeft:'auto'}} />}
+                    </div>
+                    {valentineResults === null ? null : valentineResults.length === 0 ? (
+                      <div className={styles.fileBrowserEmpty}>Aucun résultat</div>
+                    ) : (
+                      <div className={styles.valentineResultsList}>
+                        {valentineResults.map(r => (
+                          <div key={r.id} className={styles.valentineResultRow}>
+                            {r.cover && <img src={r.cover} alt="" className={styles.valentineResultCover} />}
+                            <div className={styles.valentineResultInfo}>
+                              <span className={styles.valentineResultTitle}>{r.title}</span>
+                              {r.author && <span className={styles.valentineResultAuthor}>{r.author}</span>}
+                              {r.size && <span className={styles.valentineResultSize}>{r.size}</span>}
+                            </div>
+                            <div className={styles.valentineResultActions}>
+                              {r.valentineUrl && (
+                                <a href={r.valentineUrl} target="_blank" rel="noopener noreferrer"
+                                  className={styles.aIconBtn} title="Voir sur Valentine" onClick={e => e.stopPropagation()}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                </a>
+                              )}
+                              <button className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
+                                disabled={valentineDownloading !== null}
+                                onClick={() => downloadFromValentine(r.id)} title="Télécharger">
+                                {valentineDownloading === r.id
+                                  ? <span className={styles.spinner} />
+                                  : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                }
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )
+
+                  <div className={styles.connectorsSection}>
+                    <div className={styles.connectorsSectionHeader}>
+                      <span className={styles.connectorsSectionLogoAnnas}>A</span>
+                      <span>Anna's Archive</span>
+                      {annasLoading && <span className={styles.spinner} style={{marginLeft:'auto'}} />}
+                    </div>
+                    {annasResults === null ? null : annasResults.length === 0 ? (
+                      <div className={styles.fileBrowserEmpty}>Aucun résultat</div>
+                    ) : (
+                      <div className={styles.valentineResultsList}>
+                        {annasResults.map(r => (
+                          <div key={r.md5} className={styles.valentineResultRow}>
+                            {r.cover && <img src={r.cover} alt="" className={styles.valentineResultCover} referrerPolicy="no-referrer" />}
+                            <div className={styles.valentineResultInfo}>
+                              <span className={styles.valentineResultTitle}>{r.title}</span>
+                              {r.author && <span className={styles.valentineResultAuthor}>{r.author}</span>}
+                              <span className={styles.valentineResultSize}>{[r.format, r.size, r.year, r.lang].filter(Boolean).join(' · ')}</span>
+                            </div>
+                            <div className={styles.valentineResultActions}>
+                              <a href={r.annaUrl} target="_blank" rel="noopener noreferrer"
+                                className={styles.aIconBtn} title="Ouvrir sur Anna's Archive" onClick={e => e.stopPropagation()}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               )}
             </div>
           </div>

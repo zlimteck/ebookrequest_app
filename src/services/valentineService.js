@@ -117,9 +117,56 @@ async function searchTitles(baseUrl, cookies, query) {
   for (const item of data) {
     if (!item.value || !item.id) continue;
     if (item.txt?.includes('Cliquez ici')) continue;
-    results.push({ id: String(item.id), title: item.value, url: item.url || '' });
+    // Extract author from txt field: "Titre [Author1, Author2]"
+    const authorMatch = item.txt?.match(/\[([^\]]+)\]/);
+    const author = authorMatch ? authorMatch[1].trim() : null;
+    results.push({ id: String(item.id), title: item.value, url: item.url || '', author });
   }
   return results;
+}
+
+/**
+ * Fetch cover image URL and file size from the ebook modal.
+ */
+async function getBookDetails(baseUrl, cookies, bookId) {
+  try {
+    const res = await axios.post(
+      `${baseUrl}/pages/eBookModalNew.php`,
+      new URLSearchParams({ ebook_id: bookId, downloaded: '0' }).toString(),
+      {
+        headers: {
+          ...BASE_HEADERS,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Cookie': cookieHeader(cookies),
+        },
+        timeout: 15000,
+        validateStatus: () => true,
+      }
+    );
+    const html = res.data || '';
+
+    // Cover: <img src="..." class="couverture"> (attribute order may vary)
+    const coverMatch = html.match(/class=["']couverture["'][^>]*>|<img[^>]+class=["']couverture["']/);
+    let cover = null;
+    if (coverMatch) {
+      const srcMatch = html.slice(html.indexOf('<img', html.indexOf(coverMatch[0]) > 0 ? html.indexOf(coverMatch[0]) - 200 : 0))
+        .match(/src=["']([^"']+)["']/);
+      if (srcMatch) cover = srcMatch[1].startsWith('http') ? srcMatch[1] : `${baseUrl}${srcMatch[1]}`;
+    }
+    // Fallback cover extraction
+    if (!cover) {
+      const imgCover = html.match(/<img[^>]+src=["']([^"']+)["'][^>]*class=["']couverture["']/);
+      if (imgCover) cover = imgCover[1].startsWith('http') ? imgCover[1] : `${baseUrl}${imgCover[1]}`;
+    }
+
+    // Size + format: <span class="poids-ebook">ePub - 0.56 Mo</span>
+    const sizeMatch = html.match(/<span[^>]+class=["']poids-ebook["'][^>]*>([^<]+)<\/span>/);
+    const size = sizeMatch ? sizeMatch[1].trim() : null;
+
+    return { cover, size };
+  } catch {
+    return { cover: null, size: null };
+  }
 }
 
 /**
@@ -321,7 +368,8 @@ export async function downloadFromValentine(title, author, requestId, category =
 }
 
 /**
- * Search valentine.wtf and return results (for admin UI).
+ * Search valentine.wtf and return enriched results (for admin UI).
+ * Fetches cover + size for each result in parallel.
  */
 export async function searchOnValentine(query) {
   const config = await getConfig();
@@ -331,7 +379,21 @@ export async function searchOnValentine(query) {
   const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
   const cookies = await login(baseUrl, config.username, config.password);
   const results = await searchTitles(baseUrl, cookies, query);
-  return results;
+
+  // Enrich results with cover + size in parallel (best-effort, failures silently ignored)
+  const enriched = await Promise.all(
+    results.map(async r => {
+      const details = await getBookDetails(baseUrl, cookies, r.id);
+      return {
+        ...r,
+        cover: details.cover,
+        size: details.size,
+        valentineUrl: r.url ? `${baseUrl}${r.url}` : null,
+      };
+    })
+  );
+
+  return enriched;
 }
 
 /**

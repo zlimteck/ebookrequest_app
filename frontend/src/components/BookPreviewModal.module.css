@@ -150,18 +150,20 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--color-accent);
-  color: white;
-  border-radius: 6px;
-  padding: 0.45rem 1rem;
-  font-size: 0.85rem;
+  background: none;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
-  transition: opacity 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
 .linkBtn:hover {
-  opacity: 0.85;
+  background: var(--color-accent);
+  color: #fff;
 }
 
 @media (max-width: 600px) {

@@ -55,7 +55,27 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--color-accent);
+  color: #6366f1;
+  overflow: hidden;
+}
+.cardLogoWrapAnnas {
+  background: rgba(99,102,241,0.1);
+  border-color: rgba(99,102,241,0.2);
+}
+.annasLogoLetter {
+  font-size: 1.35rem;
+  font-weight: 900;
+  font-family: 'Arial Black', Arial, Helvetica, sans-serif;
+  color: #6366f1;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.connectorLogoValentine {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  /* Convert to violet #6366f1 */
+  filter: brightness(0) saturate(100%) invert(41%) sepia(87%) saturate(585%) hue-rotate(213deg) brightness(99%) contrast(92%);
 }
 
 .cardName {
