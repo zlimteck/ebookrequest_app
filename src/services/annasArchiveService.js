@@ -123,8 +123,11 @@ export async function searchOnAnnasArchive(query) {
 
   const baseUrl = await getWorkingUrl((config.url || FALLBACK_URLS[0]).replace(/\/$/, ''));
 
+  const params = { q: query };
+  if (config.lang) params.lang = config.lang;
+
   const res = await axios.get(`${baseUrl}/search`, {
-    params: { q: query },
+    params,
     headers: HEADERS,
     timeout: 20000,
   });
@@ -138,13 +141,13 @@ export async function searchOnAnnasArchive(query) {
  */
 export async function getAnnasArchiveConfig() {
   const doc = await ConnectorSettings.findOne({ service: 'annasarchive' }).lean();
-  return doc || { service: 'annasarchive', enabled: false, url: FALLBACK_URLS[0] };
+  return doc || { service: 'annasarchive', enabled: false, url: FALLBACK_URLS[0], lang: '' };
 }
 
-export async function saveAnnasArchiveConfig({ enabled, url }) {
+export async function saveAnnasArchiveConfig({ enabled, url, lang }) {
   const doc = await ConnectorSettings.findOneAndUpdate(
     { service: 'annasarchive' },
-    { enabled: !!enabled, url: url?.trim() || FALLBACK_URLS[0] },
+    { enabled: !!enabled, url: url?.trim() || FALLBACK_URLS[0], lang: lang || '' },
     { upsert: true, new: true, runValidators: true }
   );
   return doc;

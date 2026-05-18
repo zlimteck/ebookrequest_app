@@ -92,6 +92,8 @@ function AdminPage() {
   const [valentineDownloading, setValentineDownloading] = useState(null);
   const [annasResults, setAnnasResults] = useState(null);
   const [annasLoading, setAnnasLoading] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavRef = useRef(null);
 
   const openConnectorsModal = (request) => {
     setConnectorsModal(request);
@@ -303,6 +305,17 @@ function AdminPage() {
       fetchAdminLogs();
     }
   }, [filter, activeTab]);
+
+  // Fermer le dropdown mobile au clic extérieur
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (mobileNavRef.current && !mobileNavRef.current.contains(e.target)) {
+        setMobileNavOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleUpdateStatus = async (id, status, reason = '') => {
     try {
@@ -1400,7 +1413,7 @@ function AdminPage() {
       )}
 
       <div className={styles.adminLayout}>
-        {/* Sidebar navigation */}
+        {/* Sidebar navigation — desktop */}
         <aside className={styles.adminSidebar}>
           <div className={styles.sidebarHeader}>
             <span className={styles.sidebarTitle}>Administration</span>
@@ -1419,6 +1432,43 @@ function AdminPage() {
             ))}
           </nav>
         </aside>
+
+        {/* Dropdown navigation — mobile */}
+        <div className={styles.mobileNav} ref={mobileNavRef}>
+          <button
+            className={styles.mobileNavTrigger}
+            onClick={() => setMobileNavOpen(v => !v)}
+          >
+            <span className={styles.sidebarIcon}>
+              {NAV_ITEMS.find(i => i.id === activeTab)?.icon}
+            </span>
+            <span className={styles.mobileNavCurrent}>
+              {NAV_ITEMS.find(i => i.id === activeTab)?.label}
+            </span>
+            <svg
+              className={`${styles.mobileNavChevron} ${mobileNavOpen ? styles.mobileNavChevronOpen : ''}`}
+              width="16" height="16" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor" strokeWidth="2.5"
+            >
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          {mobileNavOpen && (
+            <div className={styles.mobileNavDropdown}>
+              {NAV_ITEMS.map(item => (
+                <button
+                  key={item.id}
+                  className={`${styles.mobileNavItem} ${activeTab === item.id ? styles.mobileNavItemActive : ''}`}
+                  onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
+                >
+                  <span className={styles.sidebarIcon}>{item.icon}</span>
+                  <span>{item.label}</span>
+                  {activeTab === item.id && <span className={styles.sidebarDot} style={{marginLeft:'auto'}} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Contenu principal */}
         <main className={styles.adminMain}>

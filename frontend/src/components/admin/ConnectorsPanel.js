@@ -233,14 +233,18 @@ function ValentineCard() {
 }
 
 function AnnasArchiveCard() {
-  const [config, setConfig] = useState({ enabled: false, url: 'https://annas-archive.pk' });
+  const [config, setConfig] = useState({ enabled: false, url: 'https://annas-archive.pk', lang: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     axiosAdmin.get('/api/connectors/annasarchive')
-      .then(res => setConfig({ enabled: res.data.enabled ?? false, url: res.data.url || 'https://annas-archive.pk' }))
+      .then(res => setConfig({
+        enabled: res.data.enabled ?? false,
+        url: res.data.url || 'https://annas-archive.pk',
+        lang: res.data.lang || '',
+      }))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -302,6 +306,19 @@ function AnnasArchiveCard() {
             onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
           />
           <p className={styles.fieldHint}>Miroirs de secours : annas-archive.gl · annas-archive.gd</p>
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Langue des résultats</label>
+          <select
+            className={styles.fieldInput}
+            value={config.lang}
+            onChange={e => setConfig(c => ({ ...c, lang: e.target.value }))}
+          >
+            <option value="">Toutes les langues</option>
+            <option value="fr">Français uniquement</option>
+            <option value="en">Anglais uniquement</option>
+          </select>
         </div>
 
         {alert && (

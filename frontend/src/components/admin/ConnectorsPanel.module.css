@@ -187,6 +187,14 @@ input:focus + .slider {
   padding-right: 0.9rem;
 }
 
+select.fieldInput {
+  appearance: none;
+  padding-right: 0.9rem;
+  height: auto;
+  line-height: normal;
+  cursor: pointer;
+}
+
 .fieldInput:focus {
   outline: none;
   border-color: var(--color-accent);
