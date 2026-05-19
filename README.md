@@ -10,12 +10,15 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - **Backend** — Node.js, Express, MongoDB (Mongoose), JWT
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
 - **IA** — OpenAI / Ollama (recommandations, descriptions)
+- **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
 ## Fonctionnalités
 
 - Soumission et suivi de demandes de livres
 - Recherche via Google Books API
+- Téléchargement automatique via Valentine, avec fallback Anna's Archive
+- Recherche manuelle sur les connecteurs depuis le panel admin
 - Bibliothèque personnelle avec statut de lecture et notation
 - Page Découverte (tendances, bestsellers, recommandations IA)
 - Notifications email et push par événement
@@ -55,6 +58,7 @@ cp .env.example .env
 | `OPENAI_API_KEY` | Clé API OpenAI (si `AI_PROVIDER=openai`) |
 | `APPRISE_URL` | URL du service Apprise |
 | `UPLOADS_PATH` | Chemin local pour les fichiers uploadés |
+| `FLARESOLVERR_URL` | URL du service FlareSolverr (défaut : `http://flaresolverr:8191`) |
 
 Générer les clés VAPID :
 ```bash

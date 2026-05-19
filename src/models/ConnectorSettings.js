@@ -7,6 +7,7 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   apiKey: { type: String, default: '' },
   username: { type: String, default: '' },
   password: { type: String, default: '' },
+  lang:   { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

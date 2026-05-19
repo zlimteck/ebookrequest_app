@@ -3,7 +3,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
 import { getNextScanTime } from '../services/valentineCron.js';
-import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig } from '../services/annasArchiveService.js';
+import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
 
 const router = express.Router();
 
@@ -111,7 +111,7 @@ router.post('/valentine/download-request', requireAuth, requireAdmin, async (req
 router.get('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
   try {
     const doc = await getAnnasArchiveConfig();
-    res.json({ enabled: doc.enabled, url: doc.url });
+    res.json({ enabled: doc.enabled, url: doc.url, lang: doc.lang || '' });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }
@@ -134,6 +134,18 @@ router.get('/annasarchive/search', requireAuth, requireAdmin, async (req, res) =
   try {
     const { results, baseUrl } = await searchOnAnnasArchive(q);
     res.json({ results, baseUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/connectors/annasarchive/download ────────────────────────────────
+router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res) => {
+  const { md5, requestId } = req.body;
+  if (!md5 || !requestId) return res.status(400).json({ error: 'md5 et requestId requis' });
+  try {
+    const result = await downloadFromAnnas(md5, requestId);
+    res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

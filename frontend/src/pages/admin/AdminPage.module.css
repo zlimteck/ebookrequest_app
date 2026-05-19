@@ -1653,10 +1653,11 @@ body {
   display: inline-block;
   width: 1rem;
   height: 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid currentColor;
   border-radius: 50%;
-  border-top-color: #fff;
-  animation: spin 1s ease-in-out infinite;
+  border-top-color: transparent;
+  opacity: 0.85;
+  animation: spin 0.8s linear infinite;
 }
 
 .progressBarContainer {

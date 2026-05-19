@@ -21,6 +21,12 @@
     <meta name="apple-mobile-web-app-title" content="EbookRequest">
     <meta name="application-name" content="EbookRequest">
     <script src="%PUBLIC_URL%/env.js"></script>
+    <script>
+      (function() {
+        var t = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,6 +1,19 @@
 import mongoose from 'mongoose';
+import axios from 'axios';
 import { testAIProviderConnection, getProviderInfo } from '../services/aiProviderService.js';
 import AIRequestLog from '../models/AIRequestLog.js';
+
+const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
+
+async function checkFlareSolverr() {
+  try {
+    const res = await axios.get(FLARESOLVERR_URL, { timeout: 4000 });
+    const version = res.data?.version || null;
+    return { connected: true, version };
+  } catch {
+    return { connected: false, version: null };
+  }
+}
 
 const getISOWeek = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -43,7 +56,10 @@ export const getAdminStats = async (req, res) => {
       : 0;
 
     // Vérifier le statut du provider IA configuré
-    const aiProviderStatus = await testAIProviderConnection();
+    const [aiProviderStatus, flareSolverrStatus] = await Promise.all([
+      testAIProviderConnection(),
+      checkFlareSolverr(),
+    ]);
     const providerInfo = getProviderInfo();
 
     // Statistiques des requêtes IA
@@ -174,6 +190,10 @@ export const getAdminStats = async (req, res) => {
           thisWeek: valentineThisWeek,
           successRate: valentineSuccessRate,
           stuck: valentineStuck
+        },
+        flareSolverr: {
+          connected: flareSolverrStatus.connected,
+          version: flareSolverrStatus.version,
         }
       }
     });

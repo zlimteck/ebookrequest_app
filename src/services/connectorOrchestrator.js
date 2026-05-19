@@ -1,0 +1,118 @@
+import BookRequest from '../models/BookRequest.js';
+import { downloadFromValentine } from './valentineService.js';
+import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
+
+// ─── Helpers de matching (dupliqués ici pour éviter une dépendance circulaire) ─
+
+function normalizeForMatch(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[.,'"""'']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Score 0–1 : proportion des tokens de requestAuthor présents dans resultAuthor.
+ * Retourne 1 si aucun auteur n'est fourni (pas de contrainte).
+ */
+function authorMatchScore(requestAuthor, resultAuthor) {
+  if (!requestAuthor) return 1;
+  const reqTokens = normalizeForMatch(requestAuthor).split(' ').filter(t => t.length > 1);
+  if (!reqTokens.length) return 1;
+  if (!resultAuthor) return 0;
+  const resTokens = normalizeForMatch(resultAuthor).split(' ').filter(t => t.length > 1);
+  let matches = 0;
+  for (const rw of reqTokens) {
+    if (resTokens.some(w => w === rw || w.startsWith(rw) || rw.startsWith(w))) matches++;
+  }
+  return matches / reqTokens.length;
+}
+
+const MIN_AUTHOR_SCORE = 0.5;
+
+/**
+ * Téléchargement automatique avec fallback :
+ *   1. Valentine (si activé)
+ *   2. Anna's Archive (si activé et Valentine n'a rien trouvé)
+ *
+ * Non bloquant — toutes les erreurs sont capturées.
+ */
+export async function downloadWithFallback(title, author, requestId, category = 'ebook') {
+  try {
+    // ── 1. Tentative Valentine ───────────────────────────────────────────────
+    await downloadFromValentine(title, author, requestId, category);
+
+    // Vérifier si Valentine a complété la demande
+    const afterValentine = await BookRequest.findById(requestId).lean();
+    if (afterValentine?.status === 'completed') {
+      console.log(`[Orchestrateur] ✓ Valentine a complété "${title}"`);
+      return;
+    }
+
+    // ── 2. Fallback Anna's Archive ───────────────────────────────────────────
+    console.log(`[Orchestrateur] Valentine n'a rien trouvé pour "${title}", essai Anna's Archive…`);
+
+    // Nettoyer l'auteur (supprimer les points parasites de Google Books)
+    const cleanAuthor = (author || '')
+      .replace(/([A-ZÀ-Ÿa-zà-ÿ])\./g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Chercher d'abord avec titre + auteur, puis titre seul en fallback
+    const searchQueries = cleanAuthor
+      ? [`${title} ${cleanAuthor}`, title]
+      : [title];
+
+    let results = [];
+    for (const q of searchQueries) {
+      try {
+        const res = await searchOnAnnasArchive(q);
+        if (res.results?.length) {
+          results = res.results;
+          console.log(`[Orchestrateur] Anna's Archive : ${results.length} résultat(s) pour "${q}"`);
+          break;
+        }
+      } catch (err) {
+        console.log(`[Orchestrateur] Anna's Archive indisponible: ${err.message}`);
+        return;
+      }
+    }
+
+    if (!results.length) {
+      console.log(`[Orchestrateur] Aucun résultat Anna's Archive pour "${title}"`);
+      return;
+    }
+
+    // ── Sélectionner le meilleur résultat avec vérification auteur ───────────
+    const titleNorm = normalizeForMatch(title);
+    const scored = results
+      .map(r => ({
+        ...r,
+        authorScore: authorMatchScore(author, r.author),
+        titleMatch: normalizeForMatch(r.title).includes(titleNorm) ||
+                    titleNorm.includes(normalizeForMatch(r.title)),
+      }))
+      .filter(r => r.authorScore >= MIN_AUTHOR_SCORE)
+      .sort((a, b) => {
+        // Priorité : correspondance titre exact > score auteur
+        if (a.titleMatch !== b.titleMatch) return a.titleMatch ? -1 : 1;
+        return b.authorScore - a.authorScore;
+      });
+
+    if (!scored.length) {
+      console.log(`[Orchestrateur] Anna's Archive : aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
+      return;
+    }
+
+    const best = scored[0];
+    console.log(`[Orchestrateur] Anna's Archive → "${best.title}" / "${best.author}" (score auteur: ${best.authorScore.toFixed(2)})`);
+
+    await downloadFromAnnas(best.md5, requestId);
+
+  } catch (err) {
+    console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
+  }
+}

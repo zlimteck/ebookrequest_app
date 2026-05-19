@@ -4,7 +4,7 @@ import Notification from '../models/Notification.js';
 import AdminLog from '../models/AdminLog.js';
 import ReadingList from '../models/ReadingList.js';
 import { sendPushToUser } from '../services/webPushService.js';
-import { downloadFromValentine } from '../services/valentineService.js';
+import { downloadWithFallback } from '../services/connectorOrchestrator.js';
 
 const logAdminAction = async (adminId, adminUsername, action, request, details = '') => {
   try {
@@ -162,8 +162,8 @@ export const createBookRequest = async (req, res) => {
       return res.status(201).json(newRequest);
     }
 
-    // Tentative de téléchargement automatique via valentine (non bloquant)
-    downloadFromValentine(title, author, newRequest._id.toString(), newRequest.category);
+    // Tentative de téléchargement automatique — Valentine puis Anna's Archive (non bloquant)
+    downloadWithFallback(title, author, newRequest._id.toString(), newRequest.category);
 
     // Envoyer une notification Apprise pour la nouvelle demande
     try {

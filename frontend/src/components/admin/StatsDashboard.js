@@ -260,6 +260,32 @@ const StatsDashboard = () => {
         );
       })()}
 
+      {stats.flareSolverr !== undefined && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            {/* Shield / proxy icon */}
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h3>FlareSolverr</h3>
+            <span className={`${styles.groupStatusBadge} ${stats.flareSolverr.connected ? styles.groupStatusConnected : styles.groupStatusDisconnected}`}>
+              <span className={`${styles.statusDot} ${stats.flareSolverr.connected ? styles.connected : styles.disconnected}`}></span>
+              {stats.flareSolverr.connected ? 'Connecté' : 'Déconnecté'}
+            </span>
+          </div>
+          {stats.flareSolverr.connected && stats.flareSolverr.version && (
+            <p className={styles.groupSubInfo}>
+              Version : <strong>{stats.flareSolverr.version}</strong>
+            </p>
+          )}
+          {!stats.flareSolverr.connected && (
+            <p className={styles.groupError}>
+              Service inaccessible — les téléchargements via Anna's Archive seront indisponibles.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className={styles.chartCardWide}>
         <h3>Répartition des requêtes <span className={styles.chartSubtitle}>par statut</span></h3>
         <div className={styles.chartWrapperWide}>

@@ -92,6 +92,7 @@ function AdminPage() {
   const [valentineDownloading, setValentineDownloading] = useState(null);
   const [annasResults, setAnnasResults] = useState(null);
   const [annasLoading, setAnnasLoading] = useState(false);
+  const [annasDownloading, setAnnasDownloading] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useRef(null);
 
@@ -110,6 +111,7 @@ function AdminPage() {
     setValentineLoading(false);
     setAnnasLoading(false);
     setValentineDownloading(null);
+    setAnnasDownloading(null);
   };
 
   const runConnectorsSearch = async (query) => {
@@ -139,6 +141,20 @@ function AdminPage() {
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors du téléchargement');
       setValentineDownloading(null);
+    }
+  };
+
+  const downloadFromAnnasArchive = async (md5) => {
+    if (!connectorsModal) return;
+    setAnnasDownloading(md5);
+    try {
+      await axiosAdmin.post('/api/connectors/annasarchive/download', { requestId: connectorsModal._id, md5 });
+      toast.success('Téléchargement lancé avec succès');
+      closeConnectorsModal();
+      fetchRequests();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors du téléchargement');
+      setAnnasDownloading(null);
     }
   };
 
@@ -1398,6 +1414,17 @@ function AdminPage() {
                                 className={styles.aIconBtn} title="Ouvrir sur Anna's Archive" onClick={e => e.stopPropagation()}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                               </a>
+                              <button
+                                className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
+                                disabled={annasDownloading !== null}
+                                onClick={() => downloadFromAnnasArchive(r.md5)}
+                                title="Télécharger via Anna's Archive"
+                              >
+                                {annasDownloading === r.md5
+                                  ? <span className={styles.spinner} />
+                                  : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                }
+                              </button>
                             </div>
                           </div>
                         ))}

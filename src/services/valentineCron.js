@@ -1,6 +1,6 @@
 import BookRequest from '../models/BookRequest.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
-import { downloadFromValentine } from './valentineService.js';
+import { downloadWithFallback } from './connectorOrchestrator.js';
 
 const INTERVAL_HOURS = 6;
 const DELAY_BETWEEN_MS = 3000; // 3s entre chaque requête pour ne pas spammer
@@ -17,22 +17,30 @@ function sleep(ms) {
 
 async function runValentineCron() {
   try {
-    const config = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-    if (!config?.enabled || !config?.username || !config?.password) return;
+    // Le cron tourne si Valentine OU Anna's Archive est activé
+    const [valentineConfig, annasConfig] = await Promise.all([
+      ConnectorSettings.findOne({ service: 'valentine' }).lean(),
+      ConnectorSettings.findOne({ service: 'annasarchive' }).lean(),
+    ]);
+
+    const valentineActive = valentineConfig?.enabled && valentineConfig?.username && valentineConfig?.password;
+    const annasActive = annasConfig?.enabled;
+
+    if (!valentineActive && !annasActive) return;
 
     const pending = await BookRequest.find({ status: 'pending' }).lean();
     if (!pending.length) return;
 
-    console.log(`[Valentine Cron] ${pending.length} demande(s) en attente à vérifier…`);
+    console.log(`[Connecteurs Cron] ${pending.length} demande(s) en attente à vérifier…`);
 
     for (const req of pending) {
-      await downloadFromValentine(req.title, req.author, req._id.toString(), req.category || 'ebook');
+      await downloadWithFallback(req.title, req.author, req._id.toString(), req.category || 'ebook');
       await sleep(DELAY_BETWEEN_MS);
     }
 
-    console.log('[Valentine Cron] Vérification terminée.');
+    console.log('[Connecteurs Cron] Vérification terminée.');
   } catch (err) {
-    console.error('[Valentine Cron] Erreur:', err.message);
+    console.error('[Connecteurs Cron] Erreur:', err.message);
   } finally {
     // Mettre à jour l'heure du prochain scan après chaque passage
     nextScanAt = new Date(Date.now() + INTERVAL_HOURS * 60 * 60 * 1000);

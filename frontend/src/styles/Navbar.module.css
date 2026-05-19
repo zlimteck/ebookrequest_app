@@ -55,8 +55,9 @@
   flex-shrink: 0;
 }
 
-/* Taille commune pour cloche et hamburger */
+/* Taille commune pour cloche, toggle thème et hamburger */
 .bellButton,
+.themeToggle,
 .hamburgerBtn {
   width: 36px;
   height: 36px;
@@ -114,6 +115,19 @@
 
 .hamburgerBtn:hover {
   background: rgba(255, 255, 255, 0.1);
+  color: var(--color-accent);
+}
+
+.themeToggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.2s, color 0.2s;
+}
+
+.themeToggle:hover {
+  background: rgba(99, 102, 241, 0.1);
   color: var(--color-accent);
 }
 

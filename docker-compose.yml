@@ -34,5 +34,14 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-60000}
+      - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    ports:
+      - "8191:8191"

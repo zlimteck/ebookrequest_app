@@ -14,6 +14,35 @@ const __dirname = path.dirname(__filename);
 
 const DEFAULT_URL = 'https://valentine.wtf';
 
+// ─── Helpers de matching ───────────────────────────────────────────────────────
+
+function normalizeForMatch(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')   // supprimer les accents
+    .replace(/[.,'"""'']/g, ' ')       // ponctuation → espace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Retourne un score 0–1 : proportion des tokens de requestAuthor présents dans resultAuthor.
+ * Retourne 1 si aucun auteur n'est fourni (pas de contrainte).
+ */
+function authorMatchScore(requestAuthor, resultAuthor) {
+  if (!requestAuthor) return 1;
+  const reqTokens = normalizeForMatch(requestAuthor).split(' ').filter(t => t.length > 1);
+  if (!reqTokens.length) return 1;
+  if (!resultAuthor) return 0;
+  const resTokens = normalizeForMatch(resultAuthor).split(' ').filter(t => t.length > 1);
+  let matches = 0;
+  for (const rw of reqTokens) {
+    if (resTokens.some(w => w === rw || w.startsWith(rw) || rw.startsWith(w))) matches++;
+  }
+  return matches / reqTokens.length;
+}
+
 const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -253,21 +282,49 @@ export async function downloadFromValentine(title, author, requestId, category =
       .replace(/\s*\(.*\)\s*/g, '')
       .trim();
 
-    const queries = [`${cleanTitle} ${author}`.trim(), cleanTitle];
+    // Nettoyer l'auteur pour la recherche : "ALEXANDRE. CONTART" → "ALEXANDRE CONTART"
+    const cleanAuthor = (author || '')
+      .replace(/([A-ZÀ-Ÿa-zà-ÿ])\./g, '$1')  // supprimer les points après les mots
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const queries = [`${cleanTitle} ${cleanAuthor}`.trim(), cleanTitle];
+    const MIN_AUTHOR_SCORE = 0.5; // au moins 50 % des tokens auteur doivent correspondre
 
     let book = null;
     for (const q of queries) {
       const results = await searchTitles(baseUrl, cookies, q);
-      if (results.length) {
-        book =
-          results.find(r => r.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-          results[0];
+      if (!results.length) continue;
+
+      // Restreindre aux livres dont le titre correspond exactement (si possible)
+      const titleNorm = normalizeForMatch(cleanTitle);
+      const byTitle = results.filter(r => normalizeForMatch(r.title) === titleNorm);
+      const pool = byTitle.length ? byTitle : results;
+
+      if (author) {
+        // Scorer par correspondance auteur et ne garder que les bons matchs
+        const scored = pool
+          .map(r => ({ ...r, authorScore: authorMatchScore(author, r.author) }))
+          .filter(r => r.authorScore >= MIN_AUTHOR_SCORE)
+          .sort((a, b) => b.authorScore - a.authorScore);
+
+        if (scored.length) {
+          book = scored[0];
+          console.log(`[Valentine] Match "${book.title}" / "${book.author}" (score auteur: ${book.authorScore.toFixed(2)})`);
+          break;
+        }
+        // Aucun résultat avec auteur compatible dans cette requête → essayer la suivante
+        console.log(`[Valentine] Requête "${q}" : ${results.length} résultat(s) mais aucun auteur compatible`);
+        continue;
+      } else {
+        // Pas d'auteur fourni : prendre le premier titre exact ou le premier résultat
+        book = pool[0];
         break;
       }
     }
 
     if (!book) {
-      console.log(`[Valentine] Aucun résultat pour "${title}"`);
+      console.log(`[Valentine] Aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
       return;
     }
 

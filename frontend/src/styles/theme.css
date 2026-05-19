@@ -1,0 +1,41 @@
+/* ─── Thème clair — surcharge toutes les variables :root des modules ─── */
+/* html[data-theme="light"] a une spécificité (0,1,1) > :root (0,1,0)    */
+
+html[data-theme="light"] {
+  /* Fonds */
+  --color-bg:   #dde3ee;
+  --color-bg2:  #f4f6fb;
+  --color-bg3:  #eaecf4;
+  --color-bg4:  #d5dae8;
+
+  /* Texte */
+  --color-text:       #0f172a;
+  --color-text-muted: #64748b;
+
+  /* Accent (violet identique dark/light) */
+  --color-accent:       #6366f1;
+  --color-accent2:      #818cf8;
+  --color-accent-hover: #4f46e5;
+
+  /* Bordures */
+  --color-border: #c8d0e0;
+
+  /* États */
+  --color-danger:       #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-success:      #059669;
+  --color-warning:      #d97706;
+  --color-error:        #ef4444;
+
+  /* Admin — effets */
+  --glass:        rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.07);
+  --shadow:       0 4px 30px rgba(0, 0, 0, 0.08);
+  --shadow-md:    0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Corps en light mode */
+html[data-theme="light"] body {
+  background: #dde3ee;
+  color: #0f172a;
+}
