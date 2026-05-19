@@ -78,9 +78,16 @@ function ValentineCard() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    axiosAdmin.get('/api/connectors/valentine/next-scan')
-      .then(res => setNextScanAt(res.data.nextScanAt))
-      .catch(() => {});
+    const fetchNextScan = () => {
+      axiosAdmin.get('/api/connectors/valentine/next-scan')
+        .then(res => setNextScanAt(res.data.nextScanAt))
+        .catch(() => {});
+    };
+
+    fetchNextScan();
+    // Re-fetch toutes les 30s pour mettre à jour après passage du cron
+    const id = setInterval(fetchNextScan, 30000);
+    return () => clearInterval(id);
   }, []);
 
   const showAlertMsg = (type, message) => {
@@ -282,7 +289,7 @@ function AnnasArchiveCard() {
           </div>
           <div>
             <p className={styles.cardName}>Anna's Archive</p>
-            <p className={styles.cardDesc}>Recherche de livres sur Anna's Archive. Recherche uniquement — téléchargement manuel depuis le site.</p>
+            <p className={styles.cardDesc}>Recherche et téléchargement automatique via Anna's Archive. Utilise FlareSolverr pour contourner la protection DDoS. Fallback automatique si Valentine ne trouve pas le livre.</p>
           </div>
         </div>
         <label className={styles.switch}>

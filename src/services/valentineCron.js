@@ -3,7 +3,7 @@ import ConnectorSettings from '../models/ConnectorSettings.js';
 import { downloadWithFallback } from './connectorOrchestrator.js';
 
 const INTERVAL_HOURS = 6;
-const DELAY_BETWEEN_MS = 3000; // 3s entre chaque requête pour ne pas spammer
+const DELAY_BETWEEN_MS = 15000; // 15s entre chaque livre — évite le rate-limit Anna's Archive
 
 let nextScanAt = null;
 
@@ -16,6 +16,9 @@ function sleep(ms) {
 }
 
 async function runValentineCron() {
+  // Planifier le prochain scan dès le début — le frontend affiche immédiatement la bonne heure
+  nextScanAt = new Date(Date.now() + INTERVAL_HOURS * 60 * 60 * 1000);
+
   try {
     // Le cron tourne si Valentine OU Anna's Archive est activé
     const [valentineConfig, annasConfig] = await Promise.all([
@@ -41,9 +44,6 @@ async function runValentineCron() {
     console.log('[Connecteurs Cron] Vérification terminée.');
   } catch (err) {
     console.error('[Connecteurs Cron] Erreur:', err.message);
-  } finally {
-    // Mettre à jour l'heure du prochain scan après chaque passage
-    nextScanAt = new Date(Date.now() + INTERVAL_HOURS * 60 * 60 * 1000);
   }
 }
 

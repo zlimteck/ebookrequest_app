@@ -303,8 +303,16 @@ export async function downloadFromAnnas(md5, requestId) {
         throw new Error('Aucun lien de téléchargement trouvé sur la page MD5');
       }
 
+      // Dédupliquer : garder seulement le 1er lien slow (tous pointent vers le même serveur)
+      // et tous les liens partner. Évite le rate-limit IP d'Anna's Archive.
+      const slowLink = downloadLinks.find(l => l.type === 'slow');
+      const partnerLinks = downloadLinks.filter(l => l.type === 'partner');
+      const linksToTry = [...(slowLink ? [slowLink] : []), ...partnerLinks];
+
+      console.log(`[Annas] Liens à essayer: ${linksToTry.map(l => l.type).join(', ')}`);
+
       // ── Try each link until one succeeds ────────────────────────────────────
-      for (const link of downloadLinks) {
+      for (const link of linksToTry) {
         if (fileBuffer) break;
         console.log(`[Annas] Essai ${link.type}: ${link.url}`);
 
@@ -317,16 +325,27 @@ export async function downloadFromAnnas(md5, requestId) {
               { session: sessionId, maxTimeout: 120000 }
             );
 
-            // 1. La page a été redirigée vers une URL externe (CDN)
-            if (finalUrl && finalUrl !== link.url && !finalUrl.includes('annas-archive')) {
-              console.log(`[Annas] Redirect CDN → ${finalUrl}`);
+            console.log(`[Annas] slow_download finalUrl: ${finalUrl}`);
+
+            // Détecter le rate-limit IP d'Anna's Archive
+            if ((dlHtml || '').includes('Too many downloads')) {
+              console.warn(`[Annas] Rate-limit IP détecté — téléchargement reporté au prochain passage`);
+              break;
+            }
+
+            console.log(`[Annas] slow_download HTML (200 premiers chars): ${(dlHtml || '').slice(0, 200)}`);
+
+            // 1. FlareSolverr a suivi une redirection hors de la page slow_download
+            const redirectedAway = finalUrl && finalUrl !== link.url && !finalUrl.includes('/slow_download/');
+            if (redirectedAway) {
+              console.log(`[Annas] Redirect → ${finalUrl}`);
               try {
                 const { buffer, filename: fn } = await directDownload(finalUrl, dlUA);
                 fileBuffer = buffer;
                 if (fn) filename = fn;
                 console.log(`[Annas] ✓ Téléchargé via slow+redirect (${fileBuffer.length} octets)`);
               } catch (e) {
-                console.warn(`[Annas] Redirect CDN échoué: ${e.message}`);
+                console.warn(`[Annas] Redirect échoué: ${e.message}`);
               }
             }
 
@@ -343,6 +362,8 @@ export async function downloadFromAnnas(md5, requestId) {
                 } catch (e) {
                   console.warn(`[Annas] Parse URL échoué: ${e.message}`);
                 }
+              } else {
+                console.log(`[Annas] Aucune URL de fichier trouvée dans le HTML`);
               }
             }
 
