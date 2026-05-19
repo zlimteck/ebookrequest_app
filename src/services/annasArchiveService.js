@@ -202,7 +202,7 @@ async function directDownload(url, userAgent) {
   const res = await axios.get(url, {
     headers,
     responseType: 'arraybuffer',
-    timeout: 120000,
+    timeout: 45000,
     maxRedirects: 10,
     validateStatus: s => s < 400,
   });
@@ -322,7 +322,7 @@ export async function downloadFromAnnas(md5, requestId) {
             // maxTimeout 120s pour laisser le countdown JS se terminer
             const { html: dlHtml, finalUrl, userAgent: dlUA } = await flareSolverrGet(
               link.url,
-              { session: sessionId, maxTimeout: 120000 }
+              { session: sessionId, maxTimeout: 30000 }
             );
 
             console.log(`[Annas] slow_download finalUrl: ${finalUrl}`);

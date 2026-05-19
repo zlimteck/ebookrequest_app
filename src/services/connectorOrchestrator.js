@@ -34,6 +34,17 @@ function authorMatchScore(requestAuthor, resultAuthor) {
 const MIN_AUTHOR_SCORE = 0.5;
 
 /**
+ * Extrait le numéro de volume/tome d'un titre (T01, T15, Vol. 3, Vol.3, #3…).
+ * Retourne null si aucun numéro trouvé.
+ */
+function extractVolumeNumber(title) {
+  const m = normalizeForMatch(title).match(
+    /(?:^|\s)(?:t|tome|vol\.?|volume|#)\s*(\d{1,3})(?:\s|$)/i
+  );
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
  * Téléchargement automatique avec fallback :
  *   1. Valentine (si activé)
  *   2. Anna's Archive (si activé et Valentine n'a rien trouvé)
@@ -86,18 +97,25 @@ export async function downloadWithFallback(title, author, requestId, category = 
       return;
     }
 
-    // ── Sélectionner le meilleur résultat avec vérification auteur ───────────
+    // ── Sélectionner le meilleur résultat avec vérification auteur + tome ────
     const titleNorm = normalizeForMatch(title);
+    const reqVolume = extractVolumeNumber(title);
+
     const scored = results
-      .map(r => ({
-        ...r,
-        authorScore: authorMatchScore(author, r.author),
-        titleMatch: normalizeForMatch(r.title).includes(titleNorm) ||
-                    titleNorm.includes(normalizeForMatch(r.title)),
-      }))
-      .filter(r => r.authorScore >= MIN_AUTHOR_SCORE)
+      .map(r => {
+        const resVolume = extractVolumeNumber(r.title);
+        // Si la demande a un numéro de tome, le résultat doit avoir le même
+        const volumeOk = reqVolume === null || resVolume === reqVolume;
+        return {
+          ...r,
+          authorScore: authorMatchScore(author, r.author),
+          titleMatch: normalizeForMatch(r.title).includes(titleNorm) ||
+                      titleNorm.includes(normalizeForMatch(r.title)),
+          volumeOk,
+        };
+      })
+      .filter(r => r.authorScore >= MIN_AUTHOR_SCORE && r.volumeOk)
       .sort((a, b) => {
-        // Priorité : correspondance titre exact > score auteur
         if (a.titleMatch !== b.titleMatch) return a.titleMatch ? -1 : 1;
         return b.authorScore - a.authorScore;
       });
