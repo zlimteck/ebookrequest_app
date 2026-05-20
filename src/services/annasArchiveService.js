@@ -193,6 +193,18 @@ function parseDownloadLinks(html, baseUrl) {
 /**
  * Try to download a file directly (no challenge). Returns { buffer, filename }.
  */
+function fmtBytes(bytes) {
+  return bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1)} MB`
+    : `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+function fmtSpeed(bytesPerSec) {
+  return bytesPerSec >= 1048576
+    ? `${(bytesPerSec / 1048576).toFixed(1)} MB/s`
+    : `${(bytesPerSec / 1024).toFixed(0)} KB/s`;
+}
+
 async function directDownload(url, userAgent) {
   const headers = {
     ...HEADERS,
@@ -201,23 +213,142 @@ async function directDownload(url, userAgent) {
 
   const res = await axios.get(url, {
     headers,
-    responseType: 'arraybuffer',
-    timeout: 45000,
+    responseType: 'stream',
+    timeout: 45000,       // timeout connexion initiale uniquement
     maxRedirects: 10,
     validateStatus: s => s < 400,
   });
 
   const contentType = res.headers['content-type'] || '';
-  // Reject HTML pages (means we landed on a gateway, not the file)
   if (contentType.includes('text/html')) {
+    res.data.destroy();
     throw new Error('Réponse HTML reçue, pas un fichier');
   }
 
+  const totalSize = parseInt(res.headers['content-length'] || '0', 10);
+
+  // 1. Nom depuis Content-Disposition
   const cd = res.headers['content-disposition'] || '';
   const fnMatch = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)["']?/i);
-  const filename = fnMatch ? decodeURIComponent(fnMatch[1].trim()) : null;
+  let filename = fnMatch ? decodeURIComponent(fnMatch[1].trim()) : null;
 
-  return { buffer: Buffer.from(res.data), filename };
+  // 2. Fallback : extraire le nom depuis l'URL (contient souvent l'extension correcte)
+  if (!filename || !path.extname(filename)) {
+    try {
+      const urlPath = decodeURIComponent(new URL(url).pathname);
+      const urlBasename = path.basename(urlPath);
+      const knownExts = ['.epub', '.mobi', '.pdf', '.cbz', '.cbr', '.azw3', '.fb2', '.djvu', '.zip'];
+      if (knownExts.includes(path.extname(urlBasename).toLowerCase())) {
+        filename = filename || urlBasename;
+        console.log(`[Annas] Nom extrait de l'URL: ${urlBasename}`);
+      }
+    } catch {}
+  }
+
+  const totalStr = totalSize ? fmtBytes(totalSize) : '?';
+  console.log(`[Annas] Début téléchargement — taille: ${totalStr}`);
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let downloaded = 0;
+    const startTime = Date.now();
+    let lastLogTime = Date.now();
+    let lastLogBytes = 0;
+    let stallTimer = null;
+    const STALL_TIMEOUT = 30000; // 30s sans données = stall
+
+    const resetStall = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        res.data.destroy(new Error('Téléchargement bloqué — aucune donnée depuis 30s'));
+      }, STALL_TIMEOUT);
+    };
+
+    resetStall();
+
+    res.data.on('data', chunk => {
+      resetStall();
+      chunks.push(chunk);
+      downloaded += chunk.length;
+
+      const now = Date.now();
+      const elapsed = (now - lastLogTime) / 1000;
+      if (elapsed >= 10) {
+        const speed = (downloaded - lastLogBytes) / elapsed;
+        const pct = totalSize ? `${Math.round((downloaded / totalSize) * 100)}%` : '?%';
+        console.log(`[Annas] ↓ ${fmtBytes(downloaded)} / ${totalStr} (${pct}) — ${fmtSpeed(speed)}`);
+        lastLogTime = now;
+        lastLogBytes = downloaded;
+      }
+    });
+
+    res.data.on('end', () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      const elapsed = (Date.now() - startTime) / 1000;
+      const avg = elapsed > 0 ? downloaded / elapsed : 0;
+      console.log(`[Annas] ✓ Terminé — ${fmtBytes(downloaded)} en ${elapsed.toFixed(1)}s (moy. ${fmtSpeed(avg)})`);
+      resolve({ buffer: Buffer.concat(chunks), filename });
+    });
+
+    res.data.on('error', err => {
+      if (stallTimer) clearTimeout(stallTimer);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Determine if a ZIP buffer is an EPUB or CBZ.
+ * EPUB: first entry in the ZIP is "mimetype" (containing "application/epub+zip").
+ * CBZ:  first entry is an image file (jpg, png, gif, webp…).
+ * Returns 'epub' or 'cbz'.
+ */
+function detectZipFormat(buffer) {
+  try {
+    if (buffer.length < 30) return 'epub';
+
+    // Iterate through ZIP local file headers (PK\x03\x04 = 0x04034b50)
+    // to find the first meaningful entry (skipping directory entries).
+    // This handles CBZ files that have a root folder as their first entry.
+    let offset = 0;
+    const MAX_ENTRIES = 20; // examine at most 20 entries
+
+    for (let i = 0; i < MAX_ENTRIES; i++) {
+      if (offset + 30 > buffer.length) break;
+      // Check local file header signature
+      if (buffer.readUInt32LE(offset) !== 0x04034b50) break;
+
+      const fnLen         = buffer.readUInt16LE(offset + 26);
+      const extraLen      = buffer.readUInt16LE(offset + 28);
+      const compressedSz  = buffer.readUInt32LE(offset + 18);
+
+      if (offset + 30 + fnLen > buffer.length) break;
+      const entryName = buffer.slice(offset + 30, offset + 30 + fnLen).toString('utf8');
+
+      // EPUB: first (non-dir) entry must be exactly "mimetype"
+      if (entryName === 'mimetype') {
+        const contentStart = offset + 30 + fnLen + extraLen;
+        const mimeSnippet  = buffer.slice(contentStart, contentStart + 30).toString('utf8');
+        return mimeSnippet.includes('epub') ? 'epub' : 'cbz';
+      }
+
+      // Skip directory entries (name ends with /)
+      if (!entryName.endsWith('/')) {
+        // Non-directory, non-mimetype entry → check if it's an image
+        if (/\.(jpe?g|png|gif|webp|bmp|tiff?)$/i.test(entryName)) return 'cbz';
+        // First real file is not an image and not mimetype → assume epub
+        break;
+      }
+
+      // Advance to next entry
+      const dataStart = offset + 30 + fnLen + extraLen;
+      offset = dataStart + compressedSz;
+    }
+
+    return 'epub'; // default
+  } catch {
+    return 'epub';
+  }
 }
 
 /**
@@ -270,7 +401,7 @@ export async function searchOnAnnasArchive(query) {
  * Download a book from Anna's Archive by MD5 hash for a given request.
  * Uses FlareSolverr to bypass DDoS-Guard, then attempts direct file download.
  */
-export async function downloadFromAnnas(md5, requestId) {
+export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
   try {
     const config = await getConfig();
     if (!config.enabled) throw new Error('Connecteur Anna\'s Archive désactivé');
@@ -303,11 +434,10 @@ export async function downloadFromAnnas(md5, requestId) {
         throw new Error('Aucun lien de téléchargement trouvé sur la page MD5');
       }
 
-      // Dédupliquer : garder seulement le 1er lien slow (tous pointent vers le même serveur)
-      // et tous les liens partner. Évite le rate-limit IP d'Anna's Archive.
-      const slowLink = downloadLinks.find(l => l.type === 'slow');
+      // Garder 3 liens slow max (CDN différents) + tous les liens partner
+      const slowLinks = downloadLinks.filter(l => l.type === 'slow').slice(0, 3);
       const partnerLinks = downloadLinks.filter(l => l.type === 'partner');
-      const linksToTry = [...(slowLink ? [slowLink] : []), ...partnerLinks];
+      const linksToTry = [...slowLinks, ...partnerLinks];
 
       console.log(`[Annas] Liens à essayer: ${linksToTry.map(l => l.type).join(', ')}`);
 
@@ -361,6 +491,11 @@ export async function downloadFromAnnas(md5, requestId) {
                   console.log(`[Annas] ✓ Téléchargé via slow+parse (${fileBuffer.length} octets)`);
                 } catch (e) {
                   console.warn(`[Annas] Parse URL échoué: ${e.message}`);
+                  // 429 CDN → essayer le prochain lien slow (CDN différent)
+                  if (e.message?.includes('429')) {
+                    console.log(`[Annas] Rate-limit CDN (429) — essai du lien suivant`);
+                    continue;
+                  }
                 }
               } else {
                 console.log(`[Annas] Aucune URL de fichier trouvée dans le HTML`);
@@ -392,14 +527,49 @@ export async function downloadFromAnnas(md5, requestId) {
       return;
     }
 
-    if (!filename) {
-      // Guess extension from buffer magic bytes
+    // ── Déterminer l'extension finale ────────────────────────────────────────
+    // Priorité pour l'extension (du plus fiable au moins fiable) :
+    //   1. Extension depuis l'URL de téléchargement (ex: .mobi dans le chemin CDN)
+    //   2. Extension depuis Content-Disposition
+    //   3. hintFormat depuis la fiche Anna's Archive
+    //   4. Magic bytes pour PDF et ZIP (epub/cbz)
+    //   5. 'epub' par défaut
+    // Le nom de base = toujours le titre de la demande (propre et court)
+    {
       const magic = fileBuffer.slice(0, 4).toString('hex');
-      const ext = magic.startsWith('504b') ? 'epub'
-        : magic.startsWith('25504446') ? 'pdf'
-        : magic.startsWith('424d') ? 'mobi'
-        : 'epub';
-      filename = `${request.title.replace(/[<>:"/\\|?*]/g, '').trim()}.${ext}`;
+      const knownExts = ['epub', 'mobi', 'pdf', 'cbz', 'cbr', 'azw3', 'fb2', 'djvu'];
+
+      // Extension depuis le filename récupéré (URL ou Content-Disposition)
+      const serverExt = filename
+        ? path.extname(filename).toLowerCase().replace('.', '')
+        : null;
+
+      let ext;
+      if (serverExt && knownExts.includes(serverExt)) {
+        // Le serveur / l'URL nous dit le bon format
+        ext = serverExt;
+        // Pour ZIP déclaré epub/cbz, vérifier le contenu réel
+        if ((ext === 'epub' || ext === 'cbz') && magic.startsWith('504b')) {
+          ext = detectZipFormat(fileBuffer);
+        }
+      } else if (hintFormat) {
+        ext = hintFormat.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if ((ext === 'epub' || ext === 'cbz') && magic.startsWith('504b')) {
+          ext = detectZipFormat(fileBuffer);
+        }
+      } else if (magic.startsWith('25504446')) {
+        ext = 'pdf';
+      } else if (magic.startsWith('504b')) {
+        ext = detectZipFormat(fileBuffer);
+      } else {
+        ext = 'epub';
+      }
+
+      // Toujours utiliser le titre de la demande comme base (pas le nom verbeux du CDN)
+      const baseName = request.title.replace(/[<>:"/\\|?*]/g, '').trim();
+      const prevFilename = filename || '(aucun)';
+      filename = `${baseName}.${ext}`;
+      console.log(`[Annas] Fichier: "${path.basename(prevFilename)}" → "${filename}" (serverExt: ${serverExt || '-'}, hint: ${hintFormat || '-'}, magic: ${magic.slice(0, 8)})`);
     }
 
     filename = filename.replace(/[<>:"/\\|?*]/g, '').trim();

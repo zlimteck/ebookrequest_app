@@ -2,7 +2,7 @@ import express from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
-import { getNextScanTime } from '../services/valentineCron.js';
+import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
 import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
 
 const router = express.Router();
@@ -16,11 +16,12 @@ router.get('/valentine/next-scan', requireAuth, requireAdmin, (req, res) => {
 router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
     let doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-    if (!doc) doc = { service: 'valentine', enabled: false, url: 'https://valentine.wtf', username: '', password: '' };
+    if (!doc) doc = { service: 'valentine', enabled: false, url: 'https://valentine.wtf', username: '', password: '', cronInterval: 6 };
     res.json({
       ...doc,
       password: doc.password ? '••••••••' : '',
       _hasPassword: !!doc.password,
+      cronInterval: doc.cronInterval || 6,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -30,12 +31,13 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/valentine ─────────────────────────────────────────────
 router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, url, username, password, _hasPassword } = req.body;
+    const { enabled, url, username, password, _hasPassword, cronInterval } = req.body;
 
     const update = {
       enabled: !!enabled,
       url: url?.trim() || 'https://valentine.wtf',
       username: username?.trim() || '',
+      cronInterval: Number(cronInterval) || 6,
     };
 
     if (password && password !== '••••••••') {
@@ -51,10 +53,13 @@ router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
+    restartCronInterval(doc.cronInterval || 6);
+
     res.json({
       ...doc.toObject(),
       password: doc.password ? '••••••••' : '',
       _hasPassword: !!doc.password,
+      cronInterval: doc.cronInterval || 6,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
@@ -141,10 +146,10 @@ router.get('/annasarchive/search', requireAuth, requireAdmin, async (req, res) =
 
 // ── POST /api/connectors/annasarchive/download ────────────────────────────────
 router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res) => {
-  const { md5, requestId } = req.body;
+  const { md5, requestId, format } = req.body;
   if (!md5 || !requestId) return res.status(400).json({ error: 'md5 et requestId requis' });
   try {
-    const result = await downloadFromAnnas(md5, requestId);
+    const result = await downloadFromAnnas(md5, requestId, format || null);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });

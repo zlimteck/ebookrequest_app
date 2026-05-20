@@ -52,9 +52,11 @@ function extractVolumeNumber(title) {
  * Non bloquant — toutes les erreurs sont capturées.
  */
 export async function downloadWithFallback(title, author, requestId, category = 'ebook') {
+  const connectorsTried = [];
   try {
     // ── 1. Tentative Valentine ───────────────────────────────────────────────
     await downloadFromValentine(title, author, requestId, category);
+    connectorsTried.push('valentine');
 
     // Vérifier si Valentine a complété la demande
     const afterValentine = await BookRequest.findById(requestId).lean();
@@ -128,9 +130,18 @@ export async function downloadWithFallback(title, author, requestId, category = 
     const best = scored[0];
     console.log(`[Orchestrateur] Anna's Archive → "${best.title}" / "${best.author}" (score auteur: ${best.authorScore.toFixed(2)})`);
 
-    await downloadFromAnnas(best.md5, requestId);
+    await downloadFromAnnas(best.md5, requestId, best.format);
+    connectorsTried.push('annas-archive');
 
   } catch (err) {
     console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
+  } finally {
+    if (connectorsTried.length) {
+      try {
+        await BookRequest.findByIdAndUpdate(requestId, {
+          lastAutoAttempt: { date: new Date(), connectors: connectorsTried }
+        });
+      } catch {}
+    }
   }
 }

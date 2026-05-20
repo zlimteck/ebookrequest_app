@@ -57,6 +57,7 @@ function ValentineCard() {
     username: '',
     password: '',
     _hasPassword: false,
+    cronInterval: 6,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,6 +75,7 @@ function ValentineCard() {
         username: res.data.username || '',
         password: res.data.password || '',
         _hasPassword: res.data._hasPassword ?? false,
+        cronInterval: res.data.cronInterval || 6,
       }))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -163,6 +165,7 @@ function ValentineCard() {
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
           Prochain scan dans <strong>{countdown}</strong>
+          <span className={styles.nextScanInterval}>(toutes les {config.cronInterval}h)</span>
         </div>
       )}
 
@@ -176,6 +179,22 @@ function ValentineCard() {
             value={config.url}
             onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
           />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Intervalle de scan</label>
+          <select
+            className={styles.fieldInput}
+            value={config.cronInterval}
+            onChange={e => setConfig(c => ({ ...c, cronInterval: Number(e.target.value) }))}
+          >
+            <option value={1}>Toutes les heures</option>
+            <option value={2}>Toutes les 2h</option>
+            <option value={4}>Toutes les 4h</option>
+            <option value={6}>Toutes les 6h</option>
+            <option value={12}>Toutes les 12h</option>
+            <option value={24}>Une fois par jour</option>
+          </select>
         </div>
 
         <div className={styles.fieldRow}>

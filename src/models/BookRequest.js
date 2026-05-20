@@ -88,6 +88,10 @@ const bookRequestSchema = new mongoose.Schema({
     changedBy: { type: String, default: '' },
     note: { type: String, default: '' }
   }],
+  lastAutoAttempt: {
+    date: { type: Date, default: null },
+    connectors: [{ type: String }],
+  },
   reportSeenByAdmin: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 }, {

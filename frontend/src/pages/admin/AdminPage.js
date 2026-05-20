@@ -144,11 +144,11 @@ function AdminPage() {
     }
   };
 
-  const downloadFromAnnasArchive = async (md5) => {
+  const downloadFromAnnasArchive = async (md5, format) => {
     if (!connectorsModal) return;
     setAnnasDownloading(md5);
     try {
-      await axiosAdmin.post('/api/connectors/annasarchive/download', { requestId: connectorsModal._id, md5 });
+      await axiosAdmin.post('/api/connectors/annasarchive/download', { requestId: connectorsModal._id, md5, format: format || null });
       toast.success('Téléchargement lancé avec succès');
       closeConnectorsModal();
       fetchRequests();
@@ -627,6 +627,16 @@ function AdminPage() {
                   <div className={styles.bookAuthor}>
                     {request.author}
                     {request.format && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
+                    {request.lastAutoAttempt?.date && (
+                      <span className={styles.autoAttemptBadge} title={`Dernière tentative auto : ${new Date(request.lastAutoAttempt.date).toLocaleString('fr-FR')}`}>
+                        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        {request.lastAutoAttempt.connectors.map((c, i) =>
+                          c === 'valentine'
+                            ? <span key={i} className={styles.autoAttemptChip} data-connector="valentine">V</span>
+                            : <span key={i} className={styles.autoAttemptChip} data-connector="annas">A</span>
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   {/* Meta compact */}
@@ -1417,7 +1427,7 @@ function AdminPage() {
                               <button
                                 className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
                                 disabled={annasDownloading !== null}
-                                onClick={() => downloadFromAnnasArchive(r.md5)}
+                                onClick={() => downloadFromAnnasArchive(r.md5, r.format)}
                                 title="Télécharger via Anna's Archive"
                               >
                                 {annasDownloading === r.md5

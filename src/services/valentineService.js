@@ -43,6 +43,17 @@ function authorMatchScore(requestAuthor, resultAuthor) {
   return matches / reqTokens.length;
 }
 
+/**
+ * Extrait le numéro de volume/tome d'un titre (T01, T15, Vol. 3, Vol.3, #3…).
+ * Retourne null si aucun numéro trouvé.
+ */
+function extractVolumeNumber(title) {
+  const m = normalizeForMatch(title).match(
+    /(?:^|\s)(?:t|tome|vol\.?|volume|#)\s*(\d{1,3})(?:\s|$)/i
+  );
+  return m ? parseInt(m[1], 10) : null;
+}
+
 const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -302,10 +313,11 @@ export async function downloadFromValentine(title, author, requestId, category =
       const pool = byTitle.length ? byTitle : results;
 
       if (author) {
-        // Scorer par correspondance auteur et ne garder que les bons matchs
+        // Scorer par correspondance auteur + vérification du numéro de tome
+        const reqVolume = extractVolumeNumber(cleanTitle);
         const scored = pool
-          .map(r => ({ ...r, authorScore: authorMatchScore(author, r.author) }))
-          .filter(r => r.authorScore >= MIN_AUTHOR_SCORE)
+          .map(r => ({ ...r, authorScore: authorMatchScore(author, r.author), volumeOk: reqVolume === null || extractVolumeNumber(r.title) === reqVolume }))
+          .filter(r => r.authorScore >= MIN_AUTHOR_SCORE && r.volumeOk)
           .sort((a, b) => b.authorScore - a.authorScore);
 
         if (scored.length) {

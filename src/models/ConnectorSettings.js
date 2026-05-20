@@ -8,6 +8,7 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   username: { type: String, default: '' },
   password: { type: String, default: '' },
   lang:   { type: String, default: '' },
+  cronInterval: { type: Number, default: 6 },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

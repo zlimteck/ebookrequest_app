@@ -2691,6 +2691,46 @@ body {
   vertical-align: middle;
 }
 
+.autoAttemptBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  cursor: default;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.autoAttemptChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.autoAttemptChip[data-connector="valentine"] {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.autoAttemptChip[data-connector="annas"] {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 .categoryMetaTag {
   display: inline-flex;
   align-items: center;
