@@ -196,17 +196,26 @@ export const updateAvatar = async (req, res) => {
 export const getUserStats = async (req, res) => {
   try {
     const BookRequest = mongoose.model('BookRequest');
-    const [user, total, pending, completed, canceled, reported, downloaded] = await Promise.all([
-      User.findById(req.user.id).select('username avatar role createdAt'),
+    const [user, total, pending, completed, canceled, reported, downloaded, calibreSynced, calibreFailed] = await Promise.all([
+      User.findById(req.user.id).select('username avatar role createdAt calibreWeb'),
       BookRequest.countDocuments({ user: req.user.id }),
       BookRequest.countDocuments({ user: req.user.id, status: 'pending' }),
       BookRequest.countDocuments({ user: req.user.id, status: 'completed' }),
       BookRequest.countDocuments({ user: req.user.id, status: 'canceled' }),
       BookRequest.countDocuments({ user: req.user.id, status: 'reported' }),
       BookRequest.countDocuments({ user: req.user.id, downloadedAt: { $ne: null } }),
+      BookRequest.countDocuments({ user: req.user.id, 'calibrePush.status': 'success' }),
+      BookRequest.countDocuments({ user: req.user.id, 'calibrePush.status': 'failed' }),
     ]);
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    res.json({ success: true, stats: { total, pending, completed, canceled, reported, downloaded, completionRate }, user });
+    const calibreEnabled = user.calibreWeb?.enabled || false;
+    const userPublic = { username: user.username, avatar: user.avatar, role: user.role, createdAt: user.createdAt };
+    res.json({
+      success: true,
+      stats: { total, pending, completed, canceled, reported, downloaded, completionRate, calibreSynced, calibreFailed },
+      calibreEnabled,
+      user: userPublic,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
   }

@@ -8,6 +8,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { sendBookCompletedEmail } from './emailService.js';
 import { sendPushToUser } from './webPushService.js';
+import { runPostCompletionHooks } from './postCompletionHooks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -398,6 +399,9 @@ export async function downloadFromValentine(title, author, requestId, category =
     });
     await request.save();
 
+    // ── Post-completion hooks (non-blocking) ─────────────────────────────────
+    runPostCompletionHooks(request, request.user).catch(e => console.error('[Calibre]', e.message));
+
     // ── Notify the user ────────────────────────────────────────────────────
     const user = await User.findById(request.user);
     if (!user) return;
@@ -505,6 +509,9 @@ export async function downloadFromValentineById(requestId, ebookId) {
   if (!Array.isArray(request.statusHistory)) request.statusHistory = [];
   request.statusHistory.push({ status: 'completed', changedBy: 'admin-valentine', note: 'Téléchargé manuellement via Valentine' });
   await request.save();
+
+  // ── Post-completion hooks (non-blocking) ───────────────────────────────────
+  runPostCompletionHooks(request, request.user).catch(e => console.error('[Calibre]', e.message));
 
   // Notify user
   const user = await User.findById(request.user);

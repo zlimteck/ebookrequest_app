@@ -42,13 +42,12 @@ export default function OPDSPanel() {
           <h2 className={styles.title}>Catalogue OPDS</h2>
           <p className={styles.subtitle}>Utilisateurs ayant accédé à leur catalogue depuis une liseuse</p>
         </div>
-        <button className={styles.refreshBtn} onClick={fetchStats} disabled={loading}>
+        <button className={styles.refreshBtn} onClick={fetchStats} disabled={loading} title="Rafraîchir">
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <polyline points="23 4 23 10 17 10"/>
             <polyline points="1 20 1 14 7 14"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
-          Rafraîchir
         </button>
       </div>
 

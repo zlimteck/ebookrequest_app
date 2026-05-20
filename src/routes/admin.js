@@ -1,6 +1,8 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { getAdminStats } from '../controllers/adminController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { getLogBuffer, subscribeToLogs, unsubscribeFromLogs } from '../services/logBuffer.js';
 import BookRequest from '../models/BookRequest.js';
 import path from 'path';
 import fs from 'fs';
@@ -10,6 +12,49 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// ── Route SSE (doit être AVANT requireAuth car EventSource ne peut pas envoyer
+//    de header Authorization → auth manuelle via query param ?token=<jwt>)
+router.get('/logs/system/stream', (req, res) => {
+  const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+  const token = req.query.token;
+  if (!token) {
+    return res.status(401).json({ error: 'Token manquant.' });
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Token invalide.' });
+  }
+  if (!decoded || decoded.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // désactiver le buffering nginx
+  res.flushHeaders();
+
+  // Keepalive toutes les 25 s pour éviter les timeouts proxy
+  const keepalive = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 25000);
+
+  const onLine = (line) => {
+    res.write(`data: ${JSON.stringify(line)}\n\n`);
+  };
+
+  subscribeToLogs(onLine);
+
+  req.on('close', () => {
+    clearInterval(keepalive);
+    unsubscribeFromLogs(onLine);
+  });
+});
+
+// ── Toutes les routes suivantes requièrent auth + rôle admin ──
 router.use(requireAuth);
 router.use(requireAdmin);
 router.get('/stats', getAdminStats);
@@ -59,6 +104,17 @@ router.get('/uploads-list', (req, res) => {
     console.error('Erreur uploads-list:', err);
     res.status(500).json({ success: false, files: [] });
   }
+});
+
+// Logs système — buffer complet (protégé par requireAuth + requireAdmin ci-dessus)
+// GET /api/admin/logs/system?filter=annas
+router.get('/logs/system', (req, res) => {
+  let logs = getLogBuffer();
+  const { filter } = req.query;
+  if (filter) {
+    logs = logs.filter(l => l.msg.includes(filter));
+  }
+  res.json({ logs });
 });
 
 export default router;

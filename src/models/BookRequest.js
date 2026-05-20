@@ -92,6 +92,11 @@ const bookRequestSchema = new mongoose.Schema({
     date: { type: Date, default: null },
     connectors: [{ type: String }],
   },
+  calibrePush: {
+    status:   { type: String, enum: [null, 'success', 'failed'], default: null },
+    error:    { type: String, default: null },
+    pushedAt: { type: Date, default: null },
+  },
   reportSeenByAdmin: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 }, {

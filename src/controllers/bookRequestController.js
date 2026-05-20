@@ -23,6 +23,7 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
 };
 import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail } from '../services/emailService.js';
 import appriseService from '../services/appriseService.js';
+import { runPostCompletionHooks } from '../services/postCompletionHooks.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -517,6 +518,11 @@ export const addDownloadLink = async (req, res) => {
         body: `"${request.title}" est prêt au téléchargement.`,
         url: '/dashboard'
       }).catch(() => {});
+    }
+
+    // Post-completion hooks (non-blocking) — only if file is present
+    if (request.filePath) {
+      runPostCompletionHooks(request, request.user).catch(e => console.error('[Calibre]', e.message));
     }
 
     res.json(request);

@@ -86,6 +86,12 @@ const userSchema = new mongoose.Schema({
       select: false,
       default: []
     }
+  },
+  calibreWeb: {
+    enabled:  { type: Boolean, default: false },
+    url:      { type: String, default: '' },
+    username: { type: String, default: '' },
+    password: { type: String, default: '' },
   }
 }, {
   timestamps: true

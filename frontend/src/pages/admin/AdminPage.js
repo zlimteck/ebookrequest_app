@@ -79,6 +79,11 @@ function AdminPage() {
   const [previewBook, setPreviewBook] = useState(null);
   const [adminLogs, setAdminLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logSubTab, setLogSubTab] = useState('actions');
+  const [systemLogs, setSystemLogs] = useState([]);
+  const [systemFilter, setSystemFilter] = useState('all');
+  const [followMode, setFollowMode] = useState(true);
+  const systemLogsBodyRef = useRef(null);
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [uploadsList, setUploadsList] = useState([]);
@@ -313,6 +318,79 @@ function AdminPage() {
     }
   };
 
+  const fetchSystemLogs = async () => {
+    try {
+      const res = await axiosAdmin.get('/api/admin/logs/system');
+      setSystemLogs(res.data.logs || []);
+    } catch (e) {
+      console.error('Erreur chargement logs système:', e);
+    }
+  };
+
+  const getSystemFilteredLogs = () => {
+    let logs = systemLogs;
+    if (systemFilter === 'annas') {
+      logs = logs.filter(l => l.msg.includes('[Annas]'));
+    } else if (systemFilter === 'valentine') {
+      logs = logs.filter(l => l.msg.includes('[Valentine]') || l.msg.includes('[Orchestrateur]'));
+    } else if (systemFilter === 'cron') {
+      logs = logs.filter(l => l.msg.includes('[Cron]') || l.msg.includes('[Connecteurs'));
+    } else if (systemFilter === 'error') {
+      logs = logs.filter(l => l.level === 'error' || l.level === 'warn');
+    }
+    return logs.slice(-500);
+  };
+
+  const formatLogTime = (isoTs) => {
+    const d = new Date(isoTs);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  };
+
+  // SSE : abonnement quand sous-onglet "system" est actif et followMode=true
+  useEffect(() => {
+    if (activeTab !== 'logs' || logSubTab !== 'system' || !followMode) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const es = new EventSource(`/api/admin/logs/system/stream?token=${encodeURIComponent(token)}`);
+
+    es.onmessage = (e) => {
+      try {
+        const line = JSON.parse(e.data);
+        setSystemLogs(prev => {
+          const next = [...prev, line];
+          return next.length > 500 ? next.slice(next.length - 500) : next;
+        });
+      } catch { /* ignorer */ }
+    };
+
+    es.onerror = () => {
+      es.close();
+    };
+
+    return () => {
+      es.close();
+    };
+  }, [activeTab, logSubTab, followMode]);
+
+  // Auto-scroll vers le bas quand followMode est actif
+  useEffect(() => {
+    if (followMode && systemLogsBodyRef.current) {
+      systemLogsBodyRef.current.scrollTop = systemLogsBodyRef.current.scrollHeight;
+    }
+  }, [systemLogs, followMode]);
+
+  // Charger les logs système au montage du sous-onglet
+  useEffect(() => {
+    if (activeTab === 'logs' && logSubTab === 'system') {
+      fetchSystemLogs();
+    }
+  }, [activeTab, logSubTab]);
+
   useEffect(() => {
     if (activeTab === 'requests') {
       setCurrentPage(1);
@@ -441,52 +519,133 @@ function AdminPage() {
       case 'logs':
         return (
           <div className={styles.logsContainer}>
-            <div className={styles.logsHeader}>
-              <button className={styles.refreshLogsBtn} onClick={fetchAdminLogs}>
-                <RefreshIcon /> Rafraîchir
+            {/* Sous-onglets */}
+            <div className={styles.logSubTabs}>
+              <button
+                className={`${styles.logSubTab} ${logSubTab === 'actions' ? styles.logSubTabActive : ''}`}
+                onClick={() => setLogSubTab('actions')}
+              >
+                Actions
+              </button>
+              <button
+                className={`${styles.logSubTab} ${logSubTab === 'system' ? styles.logSubTabActive : ''}`}
+                onClick={() => setLogSubTab('system')}
+              >
+                Connecteurs
               </button>
             </div>
-            {logsLoading ? (
-              <div className={styles.loading}>Chargement...</div>
-            ) : adminLogs.length === 0 ? (
-              <div className={styles.noResults}>Aucun log disponible</div>
-            ) : (
-              <div className={styles.logsTableWrapper}>
-              <table className={styles.logsTable}>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Admin</th>
-                    <th>Action</th>
-                    <th>Livre</th>
-                    <th>Utilisateur</th>
-                    <th>Détails</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {adminLogs.map(log => {
-                    const meta = actionLabels[log.action] || { label: log.action, color: '#94a3b8' };
-                    return (
-                      <tr key={log._id}>
-                        <td className={styles.logDate}>
-                          {new Date(log.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className={styles.logAdmin}>{log.adminUsername}</td>
-                        <td>
-                          <span className={styles.logBadge} style={{ background: `${meta.color}22`, color: meta.color, borderColor: `${meta.color}44` }}>
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className={styles.logTitle}>{log.requestTitle || '—'}</td>
-                        <td className={styles.logUser}>{log.targetUser || '—'}</td>
-                        <td className={styles.logDetails}>{log.details || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
+
+            {logSubTab === 'actions' && (
+              <>
+                <div className={styles.logsHeader}>
+                  <button className={styles.refreshLogsBtn} onClick={fetchAdminLogs} title="Rafraîchir">
+                    <RefreshIcon />
+                  </button>
+                </div>
+                {logsLoading ? (
+                  <div className={styles.loading}>Chargement...</div>
+                ) : adminLogs.length === 0 ? (
+                  <div className={styles.noResults}>Aucun log disponible</div>
+                ) : (
+                  <div className={styles.logsTableWrapper}>
+                    <table className={styles.logsTable}>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Admin</th>
+                          <th>Action</th>
+                          <th>Livre</th>
+                          <th>Utilisateur</th>
+                          <th>Détails</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminLogs.map(log => {
+                          const meta = actionLabels[log.action] || { label: log.action, color: '#94a3b8' };
+                          return (
+                            <tr key={log._id}>
+                              <td className={styles.logDate}>
+                                {new Date(log.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className={styles.logAdmin}>{log.adminUsername}</td>
+                              <td>
+                                <span className={styles.logBadge} style={{ background: `${meta.color}22`, color: meta.color, borderColor: `${meta.color}44` }}>
+                                  {meta.label}
+                                </span>
+                              </td>
+                              <td className={styles.logTitle}>{log.requestTitle || '—'}</td>
+                              <td className={styles.logUser}>{log.targetUser || '—'}</td>
+                              <td className={styles.logDetails}>{log.details || '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
+
+            {logSubTab === 'system' && (() => {
+              const filteredLogs = getSystemFilteredLogs();
+              return (
+                <div className={styles.systemLogsContainer}>
+                  <div className={styles.systemLogsToolbar}>
+                    <div className={styles.systemLogsFilters}>
+                      {[
+                        { key: 'all',       label: 'Tous' },
+                        { key: 'annas',     label: 'Annas' },
+                        { key: 'valentine', label: 'Valentine' },
+                        { key: 'cron',      label: 'Cron' },
+                        { key: 'error',     label: 'Erreurs' },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          className={`${styles.systemLogsFilterBtn} ${systemFilter === key ? styles.systemLogsFilterBtnActive : ''}`}
+                          onClick={() => setSystemFilter(key)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className={styles.systemLogsActions}>
+                      <button
+                        className={styles.refreshLogsBtn}
+                        onClick={fetchSystemLogs}
+                        title="Recharger le buffer"
+                      >
+                        <RefreshIcon />
+                      </button>
+                      <button
+                        className={`${styles.systemLogsFollowBtn} ${followMode ? styles.systemLogsFollowBtnActive : ''}`}
+                        onClick={() => setFollowMode(v => !v)}
+                        title={followMode ? 'Désactiver le suivi automatique' : 'Activer le suivi automatique'}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <circle cx="8" cy="8" r={followMode ? 8 : 6} stroke="currentColor" strokeWidth={followMode ? 0 : 2} fill={followMode ? 'currentColor' : 'none'} />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className={styles.systemLogsBody} ref={systemLogsBodyRef}>
+                    {filteredLogs.length === 0 ? (
+                      <div className={styles.systemLogsEmpty}>Aucun log{systemFilter !== 'all' ? ' pour ce filtre' : ''}</div>
+                    ) : (
+                      filteredLogs.map(line => (
+                        <div
+                          key={line.id}
+                          className={styles.systemLogLine}
+                          data-level={line.level}
+                        >
+                          <span className={styles.systemLogTime}>[{formatLogTime(line.ts)}]</span>
+                          {' '}{line.msg}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         );
       case 'requests':
@@ -627,16 +786,6 @@ function AdminPage() {
                   <div className={styles.bookAuthor}>
                     {request.author}
                     {request.format && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
-                    {request.lastAutoAttempt?.date && (
-                      <span className={styles.autoAttemptBadge} title={`Dernière tentative auto : ${new Date(request.lastAutoAttempt.date).toLocaleString('fr-FR')}`}>
-                        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                        {request.lastAutoAttempt.connectors.map((c, i) =>
-                          c === 'valentine'
-                            ? <span key={i} className={styles.autoAttemptChip} data-connector="valentine">V</span>
-                            : <span key={i} className={styles.autoAttemptChip} data-connector="annas">A</span>
-                        )}
-                      </span>
-                    )}
                   </div>
 
                   {/* Meta compact */}
@@ -682,6 +831,24 @@ function AdminPage() {
                       <span className={`${styles.adminMetaItem} ${styles.adminMetaFile}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         {request.filePath ? getFileType(request.filePath) : 'Lien'}
+                      </span>
+                    )}
+                    {request.lastAutoAttempt?.date && (
+                      <span className={styles.autoAttemptBadge} title={`Dernière tentative auto : ${new Date(request.lastAutoAttempt.date).toLocaleString('fr-FR')}`}>
+                        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        {request.lastAutoAttempt.connectors.map((c, i) =>
+                          c === 'valentine'
+                            ? <span key={i} className={styles.autoAttemptChip} data-connector="valentine">V</span>
+                            : <span key={i} className={styles.autoAttemptChip} data-connector="annas">A</span>
+                        )}
+                      </span>
+                    )}
+                    {request.calibrePush?.status && (
+                      <span
+                        className={`${styles.calibrePushBadge} ${request.calibrePush.status === 'success' ? styles.calibrePushSuccess : styles.calibrePushFailed}`}
+                        title={request.calibrePush.status === 'failed' ? `Calibre: ${request.calibrePush.error}` : 'Envoyé dans Calibre-Web'}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                       </span>
                     )}
                     {request.link && (

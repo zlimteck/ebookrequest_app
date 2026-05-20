@@ -149,6 +149,20 @@
   text-align: center;
 }
 
+/* Grille Calibre-Web (3 colonnes) */
+.calibreGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .calibreGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* Grille bibliothèque (4 colonnes) */
 .readingGrid {
   display: grid;

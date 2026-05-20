@@ -44,6 +44,20 @@ const UserSettings = () => {
   const [opdsUrl, setOpdsUrl] = useState('');
   const [opdsLoading, setOpdsLoading] = useState(false);
 
+  const [calibre, setCalibre] = useState({
+    enabled: false,
+    url: '',
+    username: '',
+    password: '',
+    hasPassword: false,
+    lastSync: null,
+  });
+  const [calibreSaving, setCalibreSaving] = useState(false);
+  const [calibreTesting, setCalibreTesting] = useState(false);
+  const [calibreTestResult, setCalibreTestResult] = useState(null);
+  const [calibreSyncing, setCalibreSyncing] = useState(false);
+  const [calibreSyncResult, setCalibreSyncResult] = useState(null);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -74,8 +88,17 @@ const UserSettings = () => {
         // silencieux — l'utilisateur peut cliquer sur le bouton pour générer
       }
     };
+    const fetchCalibreConfig = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/users/calibre');
+        setCalibre(prev => ({ ...prev, ...res.data, password: '' }));
+      } catch {
+        // silencieux
+      }
+    };
     fetchUserData();
     fetchOpdsToken();
+    fetchCalibreConfig();
   }, []);
 
   useEffect(() => {
@@ -238,6 +261,73 @@ const UserSettings = () => {
       toast.error('Erreur lors de la régénération du lien');
     } finally {
       setOpdsLoading(false);
+    }
+  };
+
+  // Les name attrs des champs Calibre utilisent des préfixes non-standards
+  // pour éviter l'autofill Safari (qui détecte "username"/"password" même hors <form>)
+  const CALIBRE_FIELD_MAP = { 'cweb-url': 'url', 'cweb-user': 'username', 'cweb-pass': 'password' };
+  const handleCalibreChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    const key = CALIBRE_FIELD_MAP[name] ?? name;
+    setCalibre(prev => ({ ...prev, [key]: type === 'checkbox' ? checked : value }));
+    setCalibreTestResult(null);
+  };
+
+  const handleCalibreTest = async () => {
+    setCalibreTesting(true);
+    setCalibreTestResult(null);
+    try {
+      const res = await axiosAdmin.post('/api/users/calibre/test', {
+        url: calibre.url,
+        username: calibre.username,
+        password: calibre.password,
+      });
+      setCalibreTestResult(res.data);
+    } catch (err) {
+      setCalibreTestResult({ connected: false, error: err.response?.data?.error || err.message });
+    } finally {
+      setCalibreTesting(false);
+    }
+  };
+
+  const handleCalibreSave = async () => {
+    setCalibreSaving(true);
+    try {
+      await axiosAdmin.put('/api/users/calibre', {
+        enabled: calibre.enabled,
+        url: calibre.url,
+        username: calibre.username,
+        password: calibre.password || undefined,
+      });
+      // Update hasApiKey/hasPassword hints without clearing fields
+      setCalibre(prev => ({
+        ...prev,
+        hasApiKey: prev.hasApiKey || Boolean(prev.apiKey),
+        hasPassword: prev.hasPassword || Boolean(prev.password),
+        password: '',
+      }));
+      toast.success('Configuration Calibre-Web enregistrée');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde');
+    } finally {
+      setCalibreSaving(false);
+    }
+  };
+
+  const handleCalibreSync = async () => {
+    setCalibreSyncing(true);
+    setCalibreSyncResult(null);
+    try {
+      const res = await axiosAdmin.post('/api/users/calibre/sync');
+      setCalibreSyncResult(res.data);
+      if (res.data.lastSync) {
+        setCalibre(prev => ({ ...prev, lastSync: res.data.lastSync }));
+      }
+    } catch (err) {
+      setCalibreSyncResult({ error: err.response?.data?.error || err.message });
+    } finally {
+      setCalibreSyncing(false);
     }
   };
 
@@ -495,6 +585,123 @@ const UserSettings = () => {
               {opdsLoading ? 'Régénération…' : 'Régénérer le lien'}
             </button>
           </div>
+        </div>
+
+        {/* ── Calibre-Web ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            Calibre-Web
+          </h2>
+
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            Envoyer automatiquement les livres complétés vers votre bibliothèque Calibre-Web.
+          </p>
+
+          {/* Toggle */}
+          <div className={styles.toggleRow}>
+            <div className={styles.toggleInfo}>
+              <div>
+                <p className={styles.toggleLabel}>Activer l'envoi automatique</p>
+                <p className={styles.toggleDesc}>Les livres complétés seront envoyés vers Calibre-Web</p>
+              </div>
+            </div>
+            <label className={styles.switch}>
+              <input type="checkbox" name="enabled" checked={calibre.enabled} onChange={handleCalibreChange} />
+              <span className={styles.slider} />
+            </label>
+          </div>
+
+          {/* URL */}
+          <div className={styles.fieldRow} style={{ marginTop: '0.75rem' }}>
+            <label className={styles.fieldLabel}>URL du serveur</label>
+            <input
+              type="text"
+              name="cweb-url"
+              value={calibre.url}
+              onChange={handleCalibreChange}
+              className={styles.fieldInput}
+              placeholder="http://192.168.1.10:8083"
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Identifiants */}
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Nom d'utilisateur</label>
+            <input
+              type="text"
+              name="cweb-user"
+              value={calibre.username}
+              onChange={handleCalibreChange}
+              className={styles.fieldInput}
+              placeholder="admin"
+              autoComplete="off"
+            />
+          </div>
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Mot de passe</label>
+            <input
+              type="password"
+              name="cweb-pass"
+              value={calibre.password}
+              onChange={handleCalibreChange}
+              className={styles.fieldInput}
+              placeholder={calibre.hasPassword ? '••••••••' : 'Entrez votre mot de passe'}
+              autoComplete="new-password"
+            />
+          </div>
+
+          {/* Test result */}
+          {calibreTestResult && (
+            <p style={{
+              margin: '0.5rem 0 0',
+              fontSize: '0.83rem',
+              color: calibreTestResult.connected ? 'var(--color-success, #10b981)' : 'var(--color-danger, #ef4444)',
+            }}>
+              {calibreTestResult.connected
+                ? '✓ Connecté avec succès'
+                : `✗ ${calibreTestResult.error || 'Connexion échouée'}`}
+            </p>
+          )}
+
+          <div className={styles.cardActions} style={{ gap: '0.5rem' }}>
+            <button type="button" className={styles.btnOutline} onClick={handleCalibreTest} disabled={calibreTesting || !calibre.url}>
+              {calibreTesting ? 'Test en cours…' : 'Tester la connexion'}
+            </button>
+            <button type="button" className={styles.btnPrimary} onClick={handleCalibreSave} disabled={calibreSaving}>
+              {calibreSaving ? 'Enregistrement…' : 'Sauvegarder'}
+            </button>
+          </div>
+
+          {calibre.enabled && (
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+              <p style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
+                {calibre.lastSync ? (
+                  <>
+                    Synchroniser les livres complétés manquants vers Calibre-Web.
+                    <span style={{ marginLeft: '0.3rem', opacity: 0.75 }}>
+                      — Dernière sync : {new Date(calibre.lastSync).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} à {new Date(calibre.lastSync).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </>
+                ) : (
+                  'Envoyer les livres déjà complétés (non encore synchronisés) vers Calibre-Web.'
+                )}
+              </p>
+              <button type="button" className={styles.btnOutline} onClick={handleCalibreSync} disabled={calibreSyncing}>
+                {calibreSyncing ? 'Synchronisation…' : 'Synchroniser les livres existants'}
+              </button>
+              {calibreSyncResult && (
+                <p style={{ marginTop: '0.5rem', fontSize: '0.83rem', color: calibreSyncResult.error ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                  {calibreSyncResult.error
+                    ? `✗ ${calibreSyncResult.error}`
+                    : `✓ ${calibreSyncResult.pushed} envoyé(s)${calibreSyncResult.failed ? `, ${calibreSyncResult.failed} échoué(s)` : ''}${calibreSyncResult.skipped ? `, ${calibreSyncResult.skipped} ignoré(s) (fichier absent)` : ''} ${calibreSyncResult.message || ''}`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Sécurité ── */}
