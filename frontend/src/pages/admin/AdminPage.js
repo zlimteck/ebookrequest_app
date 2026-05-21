@@ -100,6 +100,47 @@ function AdminPage() {
   const [annasDownloading, setAnnasDownloading] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useRef(null);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_admin') || 'cards');
+  const [expandedTableRows, setExpandedTableRows] = useState(new Set());
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: 'asc' });
+
+  const toggleSort = (key) => {
+    setSortConfig(prev => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' }
+    );
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (sortConfig.key !== colKey) return (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.3, marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/>
+      </svg>
+    );
+    return sortConfig.dir === 'asc' ? (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/>
+      </svg>
+    ) : (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 19 12 12 19 19"/>
+      </svg>
+    );
+  };
+
+  const setView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('ebookrequest_view_admin', mode);
+  };
+
+  const toggleTableRow = (id) => {
+    setExpandedTableRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const openConnectorsModal = (request) => {
     setConnectorsModal(request);
@@ -701,13 +742,36 @@ function AdminPage() {
                 {[...new Set(requests.map(r => r.username).filter(Boolean))].sort().map(u => <option key={u} value={u} />)}
               </datalist>
             </div>
-            <button
-              className={styles.refreshButton}
-              onClick={fetchRequests}
-              disabled={loading}
-            >
-              <RefreshIcon />
-            </button>
+            <div className={styles.requestsToolbar}>
+              <button
+                className={styles.refreshButton}
+                onClick={fetchRequests}
+                disabled={loading}
+              >
+                <RefreshIcon />
+              </button>
+              <div className={styles.viewToggle}>
+                <button
+                  className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+                  onClick={() => setView('cards')}
+                  title="Vue grille"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                </button>
+                <button
+                  className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
+                  onClick={() => setView('table')}
+                  title="Vue tableau"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
             {renderRequestsList()}
           </>
         );
@@ -721,9 +785,19 @@ function AdminPage() {
   };
 
   const renderRequestsList = () => {
-    const filtered = userFilter
+    const STATUS_ORDER = { reported: 1, completed: 2, pending: 3, canceled: 4 };
+    const base = userFilter
       ? requests.filter(r => r.username?.toLowerCase().includes(userFilter.toLowerCase()))
       : requests;
+    const filtered = sortConfig.key ? [...base].sort((a, b) => {
+      let va, vb;
+      if (sortConfig.key === 'status')    { va = STATUS_ORDER[a.status] ?? 9; vb = STATUS_ORDER[b.status] ?? 9; }
+      else if (sortConfig.key === 'createdAt') { va = new Date(a.createdAt); vb = new Date(b.createdAt); }
+      else { va = (a[sortConfig.key] || '').toLowerCase(); vb = (b[sortConfig.key] || '').toLowerCase(); }
+      if (va < vb) return sortConfig.dir === 'asc' ? -1 : 1;
+      if (va > vb) return sortConfig.dir === 'asc' ? 1 : -1;
+      return 0;
+    }) : base;
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
     const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     return (
@@ -732,6 +806,358 @@ function AdminPage() {
           <div className={styles.loading}>Chargement des demandes...</div>
         ) : filtered.length === 0 ? (
           <div className={styles.noResults}>Aucune demande trouvée{userFilter ? ` pour "${userFilter}"` : ''}</div>
+        ) : viewMode === 'table' ? (
+          <div className={styles.adminTableWrapper}>
+            <table className={styles.adminTable}>
+              <thead>
+                <tr>
+                  {[
+                    { label: 'Titre / Auteur', key: 'title' },
+                    { label: 'Utilisateur',    key: 'username' },
+                    { label: 'Format',         key: 'format' },
+                    { label: 'Statut',         key: 'status' },
+                    { label: 'Date',           key: 'createdAt' },
+                  ].map(({ label, key }) => (
+                    <th key={key} className={`${styles.adminTh} ${styles.adminThSortable}`} onClick={() => toggleSort(key)}>
+                      {label}<SortIcon colKey={key} />
+                    </th>
+                  ))}
+                  <th className={styles.adminTh} style={{ width: '1%', whiteSpace: 'nowrap' }}>Badges</th>
+                  <th className={styles.adminTh} style={{ width: '1%', whiteSpace: 'nowrap' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map(request => {
+                  const isExpanded = expandedCards.has(request._id)
+                    || cancelingRequest === request._id
+                    || !!predbResults[request._id]
+                    || expandedTableRows.has(request._id);
+                  return (
+                    <React.Fragment key={request._id}>
+                      <tr
+                        className={`${styles.adminTableRow} ${isExpanded ? styles.adminTableRowExpanded : ''}`}
+                        onClick={() => { toggleExpand(request._id); toggleTableRow(request._id); }}
+                      >
+                        <td className={styles.adminTd}>
+                          <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{request.title}</div>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)' }}>{request.author}</div>
+                        </td>
+                        <td className={styles.adminTd} style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{request.username}</td>
+                        <td className={styles.adminTd}>
+                          {request.format ? <span className={styles.formatBadge}>{request.format.toUpperCase()}</span> : '—'}
+                        </td>
+                        <td className={styles.adminTd}>
+                          <span className={`${styles.status} ${
+                            request.status === 'completed' ? styles.completed :
+                            request.status === 'canceled' ? styles.canceled :
+                            request.status === 'reported' ? styles.reported : ''
+                          }`}>
+                            {request.status === 'pending' ? 'En attente' :
+                             request.status === 'completed' ? 'Complétée' :
+                             request.status === 'reported' ? 'Signalée' : 'Annulée'}
+                          </span>
+                        </td>
+                        <td className={styles.adminTd} style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                          {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td className={styles.adminTd} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                            {(() => {
+                              const cats = ['ebook', 'manga', 'comic'];
+                              const labels = { ebook: 'Roman', manga: 'Manga', comic: 'Comic' };
+                              const cur = cats.includes(request.category) ? request.category : 'ebook';
+                              const next = cats[(cats.indexOf(cur) + 1) % cats.length];
+                              return (
+                                <span
+                                  className={`${styles.categoryMetaTag} ${styles[`categoryMetaTag_${cur}`]}`}
+                                  title={`Changer → ${labels[next]}`}
+                                  onClick={async e => {
+                                    e.stopPropagation();
+                                    try {
+                                      await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next }, {
+                                        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                                      });
+                                      setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
+                                    } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
+                                  }}
+                                >
+                                  {labels[cur]}
+                                </span>
+                              );
+                            })()}
+                            {request.downloadedAt && (
+                              <span className={`${styles.adminMetaItem} ${styles.adminMetaDownloaded}`} title={`Téléchargé le ${new Date(request.downloadedAt).toLocaleDateString('fr-FR')}`}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                              </span>
+                            )}
+                            {(request.filePath || request.downloadLink) && (
+                              <span className={`${styles.adminMetaItem} ${styles.adminMetaFile}`}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                {request.filePath ? getFileType(request.filePath) : 'Lien'}
+                              </span>
+                            )}
+                            {request.lastAutoAttempt?.date && (
+                              <span className={styles.autoAttemptBadge} title={`Dernière tentative auto : ${new Date(request.lastAutoAttempt.date).toLocaleString('fr-FR')}`}>
+                                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                {request.lastAutoAttempt.connectors.map((c, i) =>
+                                  c === 'valentine'
+                                    ? <span key={i} className={styles.autoAttemptChip} data-connector="valentine">V</span>
+                                    : <span key={i} className={styles.autoAttemptChip} data-connector="annas">A</span>
+                                )}
+                              </span>
+                            )}
+                            {request.calibrePush?.status && (
+                              <span
+                                className={`${styles.calibrePushBadge} ${request.calibrePush.status === 'success' ? styles.calibrePushSuccess : styles.calibrePushFailed}`}
+                                title={request.calibrePush.status === 'failed' ? `Calibre: ${request.calibrePush.error}` : 'Envoyé dans Calibre-Web'}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className={styles.adminTd} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                            {request.link && (
+                              <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.aIconBtn} title="Voir le livre">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                              </a>
+                            )}
+                            {request.status === 'pending' && (
+                              <button className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`} title="Ajouter le fichier"
+                                onClick={() => { setEditingDownloadLink(request._id); setDownloadLink(request.downloadLink || ''); setFile(null); }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                              </button>
+                            )}
+                            <button
+                              className={styles.aIconBtn}
+                              onClick={e => { e.stopPropagation(); toggleExpand(request._id); toggleTableRow(request._id); }}
+                              title={isExpanded ? 'Réduire' : 'Voir actions'}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                                <polyline points="6 9 12 15 18 9"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className={styles.adminExpandRow}>
+                          <td className={styles.adminExpandCell} colSpan={7}>
+                            <div className={styles.adminExpandPanel}>
+                              {request.status === 'reported' && request.reportReason && (
+                                <div className={styles.reportSection}>
+                                  <div className={styles.reportLabel}>⚠️ {request.reportReason}</div>
+                                  <div className={styles.reportDate}>{new Date(request.reportedAt).toLocaleDateString('fr-FR')}</div>
+                                </div>
+                              )}
+                              {request.cancelReason && request.status === 'canceled' && (
+                                <div className={styles.reportSection}>
+                                  <div className={styles.reportLabel}>Motif : {request.cancelReason}</div>
+                                </div>
+                              )}
+                              {predbResults[request._id] && (
+                                <div className={`${styles.predbResult} ${
+                                  predbResults[request._id].confidence === 'high' ? styles.predbHigh :
+                                  predbResults[request._id].confidence === 'medium' ? styles.predbMedium :
+                                  predbResults[request._id].confidence === 'low' ? styles.predbLow :
+                                  styles.predbUnknown
+                                }`}>
+                                  <span className={styles.predbIcon}>
+                                    {predbResults[request._id].confidence === 'high' && '✓'}
+                                    {predbResults[request._id].confidence === 'medium' && '⚡'}
+                                    {predbResults[request._id].confidence === 'low' && '⏱'}
+                                    {predbResults[request._id].confidence === 'unknown' && '?'}
+                                  </span>
+                                  <span>{predbResults[request._id].message}</span>
+                                  {predbResults[request._id].match?.rssTitle && (
+                                    <div className={styles.predbMatch}>{predbResults[request._id].match.rssTitle}</div>
+                                  )}
+                                </div>
+                              )}
+                              {request.adminComment && (
+                                <div className={styles.existingComment}>
+                                  <span className={styles.commentLabel}>Note admin :</span> {request.adminComment}
+                                </div>
+                              )}
+                              {request.userComment && (
+                                <div className={styles.userCommentAdmin}>
+                                  <span className={styles.commentLabel}>Note utilisateur :</span> {request.userComment}
+                                </div>
+                              )}
+                              {request.statusHistory?.length > 1 && (
+                                <div className={styles.historyBlock}>
+                                  <button
+                                    className={styles.historyToggle}
+                                    onClick={() => setEditingComment(prev => prev === `hist_${request._id}` ? null : `hist_${request._id}`)}
+                                  >
+                                    🕓 Historique {editingComment === `hist_${request._id}` ? '▲' : '▼'}
+                                  </button>
+                                  {editingComment === `hist_${request._id}` && (
+                                    <div className={styles.historyList}>
+                                      {[...request.statusHistory].reverse().map((h, i) => (
+                                        <div key={i} className={styles.historyItem}>
+                                          <span className={styles.historyStatus}>{
+                                            h.status === 'pending' ? '⏳ En attente' :
+                                            h.status === 'completed' ? '✅ Complétée' :
+                                            h.status === 'canceled' ? '❌ Annulée' :
+                                            h.status === 'reported' ? '⚠️ Signalée' : h.status
+                                          }</span>
+                                          <span className={styles.historyDate}>
+                                            {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {h.changedBy && ` · ${h.changedBy}`}
+                                          </span>
+                                          {h.note && <span className={styles.historyNote}>{h.note.replace(/\s*via\s+\S+/gi, '')}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              <div className={styles.statusButtons}>
+                                {(request.downloadLink || request.filePath) && (
+                                  <button
+                                    className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`}
+                                    title={request.filePath ? `Télécharger (${getFileType(request.filePath)})` : 'Ouvrir le lien'}
+                                    onClick={async () => {
+                                      if (request.filePath) {
+                                        try {
+                                          const response = await axiosAdmin.get(`/api/requests/download/${request._id}`, { responseType: 'blob' });
+                                          const url = window.URL.createObjectURL(new Blob([response.data]));
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          const cd = response.headers['content-disposition'] || '';
+                                          const m = cd.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"]*)['"]?;?/i) || cd.match(/filename=['"]([^'"]+)['"]/i);
+                                          a.setAttribute('download', m?.[1] ? decodeURIComponent(m[1].trim()) : request.filePath.split('/').pop());
+                                          document.body.appendChild(a); a.click(); a.remove();
+                                          window.URL.revokeObjectURL(url);
+                                        } catch { toast.error('Erreur lors du téléchargement'); }
+                                      } else { window.open(request.downloadLink, '_blank'); }
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                  </button>
+                                )}
+                                {(request.downloadLink || request.filePath) && (
+                                  <button className={styles.aIconBtn} title="Copier le lien"
+                                    onClick={() => {
+                                      const link = request.filePath ? `${window.location.origin}/api/requests/download/${request._id}` : request.downloadLink;
+                                      navigator.clipboard.writeText(link); toast.success('Lien copié');
+                                    }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                  </button>
+                                )}
+                                {(request.downloadLink || request.filePath) && (
+                                  <button className={styles.aIconBtn} title="Remplacer le fichier"
+                                    onClick={() => { setEditingDownloadLink(request._id); setDownloadLink(request.downloadLink || ''); setFile(null); }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="12 18 12 12"/><polyline points="9 15 12 12 15 15"/></svg>
+                                  </button>
+                                )}
+                                <button className={styles.aIconBtn} title="Chercher sur PreDB"
+                                  onClick={() => handlePredbCheck(request)} disabled={checkingPredb.has(request._id)}>
+                                  {checkingPredb.has(request._id) ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
+                                </button>
+                                {request.status === 'pending' && (
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnValentine}`}
+                                    title="Rechercher sur les connecteurs"
+                                    onClick={() => openConnectorsModal(request)}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                                    </svg>
+                                  </button>
+                                )}
+                                <button className={styles.aIconBtn} title={request.adminComment ? 'Modifier la note admin' : 'Ajouter une note admin'}
+                                  onClick={() => { setCommentModal(request._id); setCommentValue(request.adminComment || ''); }}>
+                                  {request.adminComment
+                                    ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                  }
+                                </button>
+                                <span className={styles.btnDivider}/>
+                                {request.status === 'pending' && (<>
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`} title="Ajouter le fichier"
+                                    onClick={() => { setEditingDownloadLink(request._id); setDownloadLink(request.downloadLink || ''); setFile(null); }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                  </button>
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnDanger}`} title="Annuler la demande"
+                                    onClick={() => setCancelingRequest(request._id)} disabled={updatingStatus === request._id}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  </button>
+                                </>)}
+                                {request.status === 'reported' && (<>
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`} title="Résolu — Compléter"
+                                    onClick={() => handleUpdateStatus(request._id, 'completed')} disabled={updatingStatus === request._id}>
+                                    {updatingStatus === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                  </button>
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnWarning}`} title="Repasser en attente"
+                                    onClick={() => handleUpdateStatus(request._id, 'pending')} disabled={updatingStatus === request._id}>
+                                    {updatingStatus === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.54"/></svg>}
+                                  </button>
+                                  <button className={styles.aIconBtn} title="Remplacer le fichier"
+                                    onClick={() => { setEditingDownloadLink(request._id); setDownloadLink(request.downloadLink || ''); setFile(null); }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="12 18 12 12"/><polyline points="9 15 12 12 15 15"/></svg>
+                                  </button>
+                                </>)}
+                                {(request.status === 'completed' || request.status === 'canceled') && (<>
+                                  <button className={`${styles.aIconBtn} ${styles.aIconBtnWarning}`} title="Repasser en attente"
+                                    onClick={() => handleUpdateStatus(request._id, 'pending')} disabled={updatingStatus === request._id}>
+                                    {updatingStatus === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
+                                  </button>
+                                  {request.status === 'completed' && (
+                                    <button className={`${styles.aIconBtn} ${styles.aIconBtnDanger}`} title="Annuler la demande"
+                                      onClick={() => { setCancelingRequest(request._id); setCancelReason(''); }} disabled={updatingStatus === request._id}>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    </button>
+                                  )}
+                                  {request.status === 'canceled' && (
+                                    <button className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`} title="Réactiver"
+                                      onClick={() => handleUpdateStatus(request._id, 'pending')} disabled={updatingStatus === request._id}>
+                                      {updatingStatus === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.54"/></svg>}
+                                    </button>
+                                  )}
+                                </>)}
+                                <button className={`${styles.aIconBtn} ${styles.aIconBtnDanger}`} title="Supprimer la demande"
+                                  onClick={() => handleDeleteRequest(request._id)} disabled={deletingRequest === request._id}>
+                                  {deletingRequest === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
+                                </button>
+                              </div>
+                              {cancelingRequest === request._id && (
+                                <div className={styles.cancelForm}>
+                                  <input
+                                    type="text"
+                                    value={cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    placeholder="Raison de l'annulation"
+                                    className={styles.cancelInput}
+                                    autoFocus
+                                  />
+                                  <div className={styles.cancelButtons}>
+                                    <button
+                                      className={`${styles.button} ${styles.primary}`}
+                                      onClick={() => handleCancelRequest(request._id)}
+                                      disabled={updatingStatus === request._id}
+                                    >
+                                      {updatingStatus === request._id ? '...' : 'Confirmer'}
+                                    </button>
+                                    <button
+                                      className={styles.button}
+                                      onClick={() => { setCancelingRequest(null); setCancelReason(''); }}
+                                    >
+                                      Annuler
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className={styles.requestsGrid}>
             {paginated.map(request => {
@@ -848,7 +1274,7 @@ function AdminPage() {
                         className={`${styles.calibrePushBadge} ${request.calibrePush.status === 'success' ? styles.calibrePushSuccess : styles.calibrePushFailed}`}
                         title={request.calibrePush.status === 'failed' ? `Calibre: ${request.calibrePush.error}` : 'Envoyé dans Calibre-Web'}
                       >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                       </span>
                     )}
                     {request.link && (
@@ -1097,7 +1523,7 @@ function AdminPage() {
           })}
           </div>
         )}
-        {!loading && requests.length > ITEMS_PER_PAGE && (
+        {!loading && filtered.length > ITEMS_PER_PAGE && (
           <div className={styles.pagination}>
             <button
               className={styles.pageButton}

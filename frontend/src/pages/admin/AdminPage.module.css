@@ -2732,11 +2732,14 @@ body {
 .calibrePushBadge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   font-size: 0.72rem;
   font-weight: 600;
   border-radius: 4px;
   padding: 2px 5px;
+  height: 20px;
+  box-sizing: border-box;
   cursor: default;
   border: 1px solid;
 }
@@ -3145,4 +3148,130 @@ body {
 .systemLogTime {
   color: #6e7681;
   user-select: none;
+}
+
+/* ── View toggle ── */
+.requestsToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.requestsToolbar .refreshButton {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  flex: 1;
+}
+
+.viewToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.viewBtn {
+  padding: 0.55rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.viewBtn:hover {
+  background: var(--color-bg3);
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.viewBtnActive {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Admin table view ── */
+.adminTableWrapper {
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.adminTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.adminTh {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  background: var(--color-bg2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.adminThSortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.adminThSortable:hover {
+  color: var(--color-text);
+}
+
+.adminTableRow {
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.adminTableRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.adminTableRowExpanded {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.adminTd {
+  padding: 0.6rem 0.9rem;
+  vertical-align: middle;
+}
+
+.adminExpandRow {
+  background: var(--color-bg2);
+}
+
+.adminExpandCell {
+  padding: 0;
+}
+
+.adminExpandPanel {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+@media (max-width: 600px) {
+  .adminTableWrapper {
+    overflow-x: auto;
+  }
+
+  .adminTable {
+    min-width: 700px;
+  }
 }

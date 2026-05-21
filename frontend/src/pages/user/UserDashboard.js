@@ -24,6 +24,50 @@ const UserDashboard = () => {
   const [commentModal, setCommentModal] = useState(null); // request._id pour le modal note
   const [commentValue, setCommentValue] = useState('');
   const [expandedHistory, setExpandedHistory] = useState(null);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_user') || 'cards');
+  const [expandedTableRows, setExpandedTableRows] = useState(new Set());
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: 'asc' });
+  const [deleteModal, setDeleteModal] = useState(null); // request object
+  const [editModal, setEditModal]   = useState(null); // request object
+  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '' });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const setView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('ebookrequest_view_user', mode);
+  };
+
+  const toggleSort = (key) => {
+    setSortConfig(prev => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' }
+    );
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (sortConfig.key !== colKey) return (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.3, marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/>
+      </svg>
+    );
+    return sortConfig.dir === 'asc' ? (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/>
+      </svg>
+    ) : (
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: '0.25rem', flexShrink: 0 }}>
+        <line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 19 12 12 19 19"/>
+      </svg>
+    );
+  };
+
+  const toggleTableRow = (id) => {
+    setExpandedTableRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
   const getFileType = (filename) => {
     if (!filename) return '';
     const ext = filename.split('.').pop().toLowerCase();
@@ -104,6 +148,50 @@ const UserDashboard = () => {
     } catch (error) {
       console.error('Erreur lors du signalement:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du signalement');
+    }
+  };
+
+  // Supprimer une demande
+  const handleDeleteRequest = async () => {
+    if (!deleteModal) return;
+    try {
+      await axiosAdmin.delete(`/api/requests/${deleteModal._id}`);
+      setRequests(prev => prev.filter(r => r._id !== deleteModal._id));
+      toast.success('Demande supprimée.');
+      setDeleteModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la suppression.');
+    }
+  };
+
+  // Ouvrir le modal d'édition
+  const openEditModal = (request) => {
+    setEditForm({
+      title:  request.title  || '',
+      author: request.author || '',
+      format: request.format || '',
+      link:   request.link   || '',
+    });
+    setEditModal(request);
+  };
+
+  // Sauvegarder les modifications d'une demande
+  const handleEditRequest = async () => {
+    if (!editModal) return;
+    if (!editForm.title.trim() || !editForm.author.trim()) {
+      toast.error('Le titre et l\'auteur sont obligatoires.');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const { data } = await axiosAdmin.patch(`/api/requests/${editModal._id}/user-edit`, editForm);
+      setRequests(prev => prev.map(r => r._id === editModal._id ? { ...r, ...data.request } : r));
+      toast.success('Demande mise à jour.');
+      setEditModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la modification.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -219,11 +307,24 @@ const UserDashboard = () => {
     );
   }
 
-  const filteredRequests = requests.filter(r => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return r.title?.toLowerCase().includes(q) || r.author?.toLowerCase().includes(q);
-  });
+  const filteredRequests = (() => {
+    const STATUS_ORDER = { reported: 1, completed: 2, pending: 3, canceled: 4 };
+    const base = requests.filter(r => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return r.title?.toLowerCase().includes(q) || r.author?.toLowerCase().includes(q);
+    });
+    if (!sortConfig.key) return base;
+    return [...base].sort((a, b) => {
+      let va, vb;
+      if (sortConfig.key === 'status') { va = STATUS_ORDER[a.status] ?? 9; vb = STATUS_ORDER[b.status] ?? 9; }
+      else if (sortConfig.key === 'createdAt') { va = new Date(a.createdAt); vb = new Date(b.createdAt); }
+      else { va = (a[sortConfig.key] || '').toLowerCase(); vb = (b[sortConfig.key] || '').toLowerCase(); }
+      if (va < vb) return sortConfig.dir === 'asc' ? -1 : 1;
+      if (va > vb) return sortConfig.dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  })();
 
   return (
     <div className={styles.dashboardContainer}>
@@ -288,6 +389,27 @@ const UserDashboard = () => {
         {search && (
           <button className={styles.searchClear} onClick={() => { setSearch(''); setCurrentPage(1); }}>×</button>
         )}
+        <div className={styles.viewToggle}>
+          <button
+            className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+            onClick={() => setView('cards')}
+            title="Vue grille"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </button>
+          <button
+            className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
+            onClick={() => setView('table')}
+            title="Vue tableau"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className={styles.filterBarWrapper}>
@@ -329,6 +451,191 @@ const UserDashboard = () => {
         </div>
       ) : (
         <>
+        {viewMode === 'table' && (
+          <div className={styles.tableWrapper}>
+            <table className={styles.requestsTable}>
+              <thead className={styles.tableHead}>
+                <tr>
+                  {[
+                    { label: 'Titre / Auteur', key: 'title' },
+                    { label: 'Format',         key: 'format' },
+                    { label: 'Statut',         key: 'status' },
+                    { label: 'Date',           key: 'createdAt' },
+                  ].map(({ label, key }) => (
+                    <th key={key} className={`${styles.tableTh} ${styles.tableThSortable}`} onClick={() => toggleSort(key)}>
+                      {label}<SortIcon colKey={key} />
+                    </th>
+                  ))}
+                  <th className={styles.tableTh} style={{ width: '1%', whiteSpace: 'nowrap' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRequests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((request) => {
+                  const isRowExpanded = expandedTableRows.has(request._id);
+                  return (
+                    <React.Fragment key={request._id}>
+                      <tr
+                        className={`${styles.tableRow} ${isRowExpanded ? styles.tableRowExpanded : ''}`}
+                        onClick={() => toggleTableRow(request._id)}
+                      >
+                        <td className={styles.tableTd}>
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{request.title}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{request.author}</div>
+                        </td>
+                        <td className={styles.tableTd}>
+                          {request.format ? <span className={styles.formatBadge}>{request.format.toUpperCase()}</span> : '—'}
+                        </td>
+                        <td className={styles.tableTd}>
+                          <span className={`${styles.tableStatusBadge} ${
+                            request.status === 'completed' ? styles.completedBadge :
+                            request.status === 'canceled' ? styles.canceledBadge :
+                            request.status === 'reported' ? styles.reportedBadge :
+                            styles.pendingBadge
+                          }`}>
+                            {request.status === 'completed' ? 'Terminée' :
+                             request.status === 'canceled' ? 'Annulée' :
+                             request.status === 'reported' ? 'Signalée' : 'En attente'}
+                          </span>
+                        </td>
+                        <td className={styles.tableTd} style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                          {new Date(request.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </td>
+                        <td className={styles.tableTd} onClick={e => e.stopPropagation()}>
+                          <div className={styles.actionIcons}>
+                            {(request.thumbnail || request.description) && (
+                              <button className={styles.iconBtn} onClick={() => setPreviewBook(request)} title="Aperçu du livre">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                </svg>
+                              </button>
+                            )}
+                            {request.link && (
+                              <a href={request.link} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title="Voir plus d'informations">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                  <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                                </svg>
+                              </a>
+                            )}
+                            {request.status === 'completed' && (request.downloadLink || request.filePath) && (
+                              <>
+                                <button
+                                  className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
+                                  onClick={async (e) => { e.preventDefault(); try { await downloadFile(request); } catch { toast.error('Une erreur est survenue lors du téléchargement'); } }}
+                                  disabled={downloadingFile === request._id}
+                                  title={downloadingFile === request._id ? 'Téléchargement...' : 'Télécharger'}
+                                >
+                                  {downloadingFile === request._id ? <span className={styles.spinner} /> : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                  )}
+                                </button>
+                                <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => setReportModal({ isOpen: true, requestId: request._id, requestTitle: request.title })} title="Signaler un problème">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                    <line x1="4" y1="22" x2="4" y2="15"/>
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                            <button className={`${styles.iconBtn} ${styles.iconBtnNote}`} onClick={() => { setCommentModal(request._id); setCommentValue(request.userComment || ''); }} title={request.userComment ? 'Modifier la note' : 'Ajouter une note'}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                {request.userComment ? (
+                                  <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>
+                                ) : (
+                                  <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>
+                                )}
+                              </svg>
+                            </button>
+                            {request.status === 'pending' && (
+                              <button className={`${styles.iconBtn} ${styles.iconBtnEdit}`} onClick={() => openEditModal(request)} title="Modifier la demande">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                              </button>
+                            )}
+                            {['pending', 'canceled'].includes(request.status) && (
+                              <button className={`${styles.iconBtn} ${styles.iconBtnDelete}`} onClick={() => setDeleteModal(request)} title="Supprimer la demande">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"/>
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  <path d="M10 11v6"/><path d="M14 11v6"/>
+                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isRowExpanded && (
+                        <tr className={styles.tableExpandRow}>
+                          <td className={styles.tableExpandCell} colSpan={5}>
+                            <div className={styles.tableExpandPanel}>
+                              {request.adminComment && (
+                                <div className={styles.adminComment}>
+                                  <span className={styles.adminCommentLabel}>Note admin</span>
+                                  <p>{request.adminComment}</p>
+                                </div>
+                              )}
+                              {request.userComment && (
+                                <div className={styles.userCommentDisplay}>
+                                  <span className={styles.userCommentLabel}>Ma note</span>
+                                  <p>{request.userComment}</p>
+                                </div>
+                              )}
+                              {request.status === 'canceled' && request.cancelReason && (
+                                <div className={styles.cancelReason}>
+                                  <span className={styles.cancelReasonLabel}>Motif :</span> {request.cancelReason}
+                                </div>
+                              )}
+                              {request.status === 'reported' && request.reportReason && (
+                                <div className={styles.reportedNotice}>
+                                  <span className={styles.reportedLabel}>Problème signalé</span>
+                                  <p>{request.reportReason}</p>
+                                </div>
+                              )}
+                              {request.statusHistory?.length > 1 && (
+                                <div className={styles.historyBlock}>
+                                  <button className={styles.historyToggle} onClick={() => setExpandedHistory(expandedHistory === request._id ? null : request._id)}>
+                                    Historique {expandedHistory === request._id ? '▲' : '▼'}
+                                  </button>
+                                  {expandedHistory === request._id && (
+                                    <div className={styles.historyList}>
+                                      {[...request.statusHistory].reverse().map((h, i) => (
+                                        <div key={i} className={styles.historyItem}>
+                                          <span className={styles.historyStatus}>{
+                                            h.status === 'pending' ? '⏳ En attente' :
+                                            h.status === 'completed' ? '✅ Complétée' :
+                                            h.status === 'canceled' ? '❌ Annulée' :
+                                            h.status === 'reported' ? '⚠️ Signalée' : h.status
+                                          }</span>
+                                          <span className={styles.historyDate}>
+                                            {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {h.changedBy && <em> · {h.changedBy}</em>}
+                                          </span>
+                                          {h.note && <span className={styles.historyNote}>{h.note.replace(/\s*via\s+\S+/gi, '')}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {viewMode === 'cards' && (
         <div className={styles.requestsGrid}>
           {filteredRequests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((request) => (
             <div key={request._id} className={`${styles.requestCard} ${
@@ -513,6 +820,24 @@ const UserDashboard = () => {
                         </svg>
                       </button>
                     )}
+                    {request.status === 'pending' && (
+                      <button className={`${styles.iconBtn} ${styles.iconBtnEdit}`} onClick={() => openEditModal(request)} title="Modifier la demande">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    )}
+                    {['pending', 'canceled'].includes(request.status) && (
+                      <button className={`${styles.iconBtn} ${styles.iconBtnDelete}`} onClick={() => setDeleteModal(request)} title="Supprimer la demande">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                          <path d="M10 11v6"/><path d="M14 11v6"/>
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
 
                   <span className={styles.requestDate}>
@@ -532,6 +857,7 @@ const UserDashboard = () => {
             </div>
           ))}
         </div>
+        )}
 
         {/* Pagination */}
         {filteredRequests.length > ITEMS_PER_PAGE && (
@@ -556,6 +882,81 @@ const UserDashboard = () => {
           </div>
         )}
         </>
+      )}
+
+      {/* Modal suppression */}
+      {deleteModal && (
+        <div className={styles.modalOverlay} onClick={() => setDeleteModal(null)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2>Supprimer la demande</h2>
+            <p className={styles.modalBookTitle}>« {deleteModal.title} »</p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
+              Cette action est irréversible.
+            </p>
+            <div className={styles.modalButtons}>
+              <button className={styles.modalCancelButton} onClick={() => setDeleteModal(null)}>Annuler</button>
+              <button className={styles.modalDeleteButton} onClick={handleDeleteRequest}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal édition */}
+      {editModal && (
+        <div className={styles.modalOverlay} onClick={() => !editSaving && setEditModal(null)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2>Modifier la demande</h2>
+            <p className={styles.modalBookTitle}>Demande en attente</p>
+            <div className={styles.modalForm}>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Titre *</label>
+                <input
+                  className={styles.editInput}
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Titre du livre"
+                />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Auteur *</label>
+                <input
+                  className={styles.editInput}
+                  value={editForm.author}
+                  onChange={e => setEditForm(f => ({ ...f, author: e.target.value }))}
+                  placeholder="Nom de l'auteur"
+                />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Format</label>
+                <select
+                  className={styles.editInput}
+                  value={editForm.format}
+                  onChange={e => setEditForm(f => ({ ...f, format: e.target.value }))}
+                >
+                  <option value="">— Non précisé —</option>
+                  {['epub', 'pdf', 'mobi'].map(fmt => (
+                    <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Lien</label>
+                <input
+                  className={styles.editInput}
+                  value={editForm.link}
+                  onChange={e => setEditForm(f => ({ ...f, link: e.target.value }))}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+            <div className={styles.modalButtons}>
+              <button className={styles.modalCancelButton} onClick={() => setEditModal(null)} disabled={editSaving}>Annuler</button>
+              <button className={styles.modalSubmitButton} onClick={handleEditRequest} disabled={editSaving || !editForm.title.trim() || !editForm.author.trim()}>
+                {editSaving ? 'Sauvegarde…' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de signalement */}

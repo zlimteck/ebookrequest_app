@@ -627,6 +627,26 @@
   border-color: #10b981;
 }
 
+.iconBtnEdit {
+  border-color: rgba(99,102,241,0.35);
+  color: var(--color-accent);
+}
+
+.iconBtnEdit:hover {
+  background: rgba(99,102,241,0.1);
+  border-color: var(--color-accent);
+}
+
+.iconBtnDelete {
+  border-color: rgba(239,68,68,0.3);
+  color: #ef4444;
+}
+
+.iconBtnDelete:hover {
+  background: rgba(239,68,68,0.08);
+  border-color: #ef4444;
+}
+
 /* Bouton texte compact pour Découvrir */
 .discoverBtn {
   height: 30px;
@@ -949,38 +969,110 @@
 
 .modalCancelButton,
 .modalSubmitButton {
-  padding: 0.65rem 1.5rem;
-  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   border: none;
 }
 
 .modalCancelButton {
-  background: var(--color-bg3);
-  color: var(--color-text);
+  background: transparent;
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
 }
 
 .modalCancelButton:hover {
-  background: var(--color-bg);
+  background: var(--color-bg3);
+  color: var(--color-text);
 }
 
 .modalSubmitButton {
-  background: #9C27B0;
-  color: white;
+  background: none;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
 }
 
 .modalSubmitButton:hover:not(:disabled) {
-  background: #7B1FA2;
-  transform: translateY(-1px);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .modalSubmitButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.modalDeleteButton {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid rgba(239,68,68,0.5);
+  background: none;
+  color: #ef4444;
+}
+
+.modalDeleteButton:hover {
+  background: rgba(239,68,68,0.1);
+}
+
+/* Edit modal form */
+.editFieldRow {
+  margin-bottom: 0.9rem;
+}
+
+.editFieldRow:last-of-type {
+  margin-bottom: 0;
+}
+
+.editLabel {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.editInput {
+  width: 100%;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.875rem;
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  color: var(--color-text);
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+  font-family: inherit;
+  height: 2.2rem;
+}
+
+.editInput[type="text"],
+.editInput[type="url"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+select.editInput {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+}
+
+.editInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
 }
 
 @media (max-width: 768px) {
@@ -994,7 +1086,8 @@
   }
 
   .modalCancelButton,
-  .modalSubmitButton {
+  .modalSubmitButton,
+  .modalDeleteButton {
     width: 100%;
   }
 }
@@ -1082,4 +1175,135 @@
   margin: 0;
   color: var(--color-text);
   line-height: 1.4;
+}
+
+/* ── View toggle ── */
+.viewToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+}
+
+.viewBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.viewBtn:hover {
+  background: var(--color-bg3);
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.viewBtnActive {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Table view ── */
+.tableWrapper {
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.requestsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableHead {
+  background: var(--color-bg2);
+}
+
+.tableTh {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.tableThSortable {
+  cursor: pointer;
+  user-select: none;
+  display: table-cell;
+}
+
+.tableThSortable:hover {
+  color: var(--color-text);
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.tableRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tableRowExpanded {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.tableTd {
+  padding: 0.6rem 0.9rem;
+  vertical-align: middle;
+}
+
+.tableExpandRow {
+  background: var(--color-bg2);
+}
+
+.tableExpandCell {
+  padding: 0;
+}
+
+.tableExpandPanel {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tableStatusBadge {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .tableWrapper {
+    overflow-x: auto;
+  }
+
+  .requestsTable {
+    min-width: 520px;
+  }
 }

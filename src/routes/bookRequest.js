@@ -11,7 +11,8 @@ import {
   reportRequest,
   getRequestQuota,
   updateAdminComment,
-  updateUserComment
+  updateUserComment,
+  editUserRequest
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -83,7 +84,8 @@ router.put('/:id/mark-downloaded', requireAuth, markAsDownloaded);
 // Signaler un problème sur une demande
 router.post('/:id/report', requireAuth, reportRequest);
 
-router.delete('/:id', requireAuth, requireAdmin, deleteRequest);
+router.delete('/:id', requireAuth, deleteRequest);
+router.patch('/:id/user-edit', requireAuth, editUserRequest);
 
 // Commentaire admin sur une demande
 router.patch('/:id/comment', requireAuth, requireAdmin, updateAdminComment);

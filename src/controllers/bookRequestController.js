@@ -551,6 +551,11 @@ export const deleteRequest = async (req, res) => {
       return res.status(403).json({ error: 'Non autorisé.' });
     }
 
+    // Un utilisateur non-admin ne peut supprimer que ses demandes en attente ou annulées
+    if (req.user.role !== 'admin' && !['pending', 'canceled'].includes(request.status)) {
+      return res.status(403).json({ error: 'Vous ne pouvez supprimer que vos demandes en attente ou annulées.' });
+    }
+
     // Créer une notification pour l'utilisateur avant suppression
     if (req.user.role === 'admin' && request.user.toString() !== req.user.id.toString()) {
       try {
@@ -689,6 +694,44 @@ export const updateUserComment = async (req, res) => {
     res.json({ success: true, userComment: request.userComment });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la mise à jour du commentaire.' });
+  }
+};
+
+// Modifier une demande par son propriétaire (seulement si en attente)
+export const editUserRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, author, format, link, description, thumbnail, pageCount } = req.body;
+
+    if (!title?.trim() || !author?.trim()) {
+      return res.status(400).json({ error: 'Le titre et l\'auteur sont obligatoires.' });
+    }
+
+    const request = await BookRequest.findOne({ _id: id, user: req.user.id });
+    if (!request) return res.status(404).json({ error: 'Demande non trouvée.' });
+
+    if (request.status !== 'pending') {
+      return res.status(403).json({ error: 'Seules les demandes en attente peuvent être modifiées.' });
+    }
+
+    const updates = { title: title.trim(), author: author.trim() };
+    if (format !== undefined) updates.format = format;
+    // link est required dans le schema — ne l'écraser que si une valeur non vide est fournie
+    if (link?.trim()) updates.link = link.trim();
+    if (description !== undefined) updates.description = description;
+    if (thumbnail !== undefined) updates.thumbnail = thumbnail;
+    if (pageCount !== undefined) updates.pageCount = pageCount;
+
+    const updated = await BookRequest.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    res.json({ success: true, request: updated });
+  } catch (error) {
+    console.error('editUserRequest error:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la modification de la demande.', details: error.message });
   }
 };
 
