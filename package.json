@@ -1,6 +1,6 @@
 {
   "name": "ebookrequest",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "EbookRequest — gestion de demandes de livres numériques",
   "main": "src/index.js",
   "type": "module",
@@ -9,7 +9,8 @@
     "dev": "nodemon src/index.js",
     "build:frontend": "cd frontend && npm ci && npm run build",
     "build": "npm run build:frontend",
-    "init-admin": "node src/scripts/initAdmin.js"
+    "init-admin": "node src/scripts/initAdmin.js",
+    "migrate-reading-list": "node src/scripts/migrateReadingList.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
