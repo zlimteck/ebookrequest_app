@@ -120,23 +120,68 @@ export async function pushToCalibre(user, filePath, bookTitle) {
     throw new Error(`Upload échoué: HTTP ${uploadRes.status}`);
   }
 
-  // Extraire l'ID du livre depuis la réponse JSON { location: "/admin/book/22" }
-  // ou depuis l'URL finale après redirection (/book/{id})
-  let calibreBookId = null;
+  // Log de la réponse pour diagnostiquer le format selon la version Calibre-Web
   try {
-    // Cas 1 : réponse JSON avec champ location (Calibre-Web >= 0.6.x)
+    const preview = typeof uploadRes.data === 'string'
+      ? uploadRes.data.slice(0, 300)
+      : JSON.stringify(uploadRes.data).slice(0, 300);
+    console.log(`[Calibre] Upload response body: ${preview}`);
+    console.log(`[Calibre] Upload response headers location: ${uploadRes.headers?.location || 'none'}`);
+  } catch {}
+
+  // Extraire l'ID du livre — plusieurs stratégies selon la version Calibre-Web
+  let calibreBookId = null;
+
+  // Cas 1a : JSON objet { location: "/admin/book/22" } ou { location: "/book/22" }
+  try {
     const location = uploadRes.data?.location || uploadRes.headers?.location || '';
-    const m = location.match(/\/book\/(\d+)/);
+    const m = String(location).match(/\/book\/(\d+)/);
     if (m) calibreBookId = parseInt(m[1], 10);
   } catch {}
 
-  // Cas 2 : fallback sur l'URL finale de la requête (redirection suivie)
+  // Cas 1b : JSON tableau [{ location: "/book/22" }] (Calibre-Web Automated)
+  if (!calibreBookId) {
+    try {
+      const arr = Array.isArray(uploadRes.data) ? uploadRes.data : null;
+      if (arr?.length) {
+        const location = arr[0]?.location || arr[0]?.url || '';
+        const m = String(location).match(/\/book\/(\d+)/);
+        if (m) calibreBookId = parseInt(m[1], 10);
+      }
+    } catch {}
+  }
+
+  // Cas 2 : URL finale après redirection suivie
   if (!calibreBookId) {
     try {
       const finalPath = uploadRes.request?.path || '';
       const m = finalPath.match(/\/book\/(\d+)/);
       if (m) calibreBookId = parseInt(m[1], 10);
     } catch {}
+  }
+
+  // Cas 3 : recherche par titre dans Calibre-Web (fallback universel)
+  if (!calibreBookId && bookTitle) {
+    try {
+      const searchRes = await axios.get(`${url}/search/${encodeURIComponent(bookTitle)}`, {
+        headers: { Cookie: cookie },
+        timeout: TIMEOUT,
+        validateStatus: s => s < 500,
+      });
+      if (searchRes.status === 200 && typeof searchRes.data === 'string') {
+        const m = searchRes.data.match(/href="\/book\/(\d+)"/);
+        if (m) {
+          calibreBookId = parseInt(m[1], 10);
+          console.log(`[Calibre] Book ID trouvé via search: ${calibreBookId}`);
+        }
+      }
+    } catch {}
+  }
+
+  if (calibreBookId) {
+    console.log(`[Calibre] Book ID extrait: ${calibreBookId}`);
+  } else {
+    console.warn(`[Calibre] Book ID introuvable — shelf sync impossible`);
   }
 
   // Ajout à l'étagère Kobo si configurée
