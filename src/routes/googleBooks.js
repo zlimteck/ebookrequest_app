@@ -12,6 +12,56 @@ function getCacheKey(q, maxResults) {
   return `${q.toLowerCase().trim()}|${maxResults}`;
 }
 
+/**
+ * Transforme une requête en langage naturel en requête structurée Google Books.
+ * Détecte les patterns : "Titre de Auteur", "Titre par Auteur", "ISBN"
+ * et retourne un tableau de requêtes à essayer dans l'ordre.
+ */
+function buildQueries(q) {
+  const clean = q.trim();
+
+  // ISBN : 10 ou 13 chiffres (éventuellement avec tirets)
+  const isbnClean = clean.replace(/[-\s]/g, '');
+  if (/^\d{10}$/.test(isbnClean) || /^\d{13}$/.test(isbnClean)) {
+    return [`isbn:${isbnClean}`];
+  }
+
+  // Pattern "Titre de/par Auteur" (français)
+  // Le mot après "de/par" doit commencer par une MAJUSCULE (→ nom propre = auteur)
+  // Pas de flag i pour que [A-ZÀ-Ö] reste sensible à la casse
+  const authorSepRe = /^(.+?)\s+(?:[Dd]e|[Pp]ar)\s+([A-ZÀ-Ö].+)$/;
+  const m = clean.match(authorSepRe);
+  if (m) {
+    const title  = m[1].trim();
+    const author = m[2].trim();
+    // Requête structurée en premier, requête brute en fallback
+    return [
+      `intitle:${title} inauthor:${author}`,
+      clean,
+    ];
+  }
+
+  // Pas de pattern détecté → requête brute uniquement
+  return [clean];
+}
+
+async function fetchFromGoogle(queryStr, limit) {
+  const response = await axios.get(
+    'https://www.googleapis.com/books/v1/volumes',
+    {
+      params: {
+        q:          queryStr,
+        maxResults: limit,
+        key:        GOOGLE_BOOKS_API_KEY,
+        printType:  'books',
+        orderBy:    'relevance',
+      },
+      timeout: 8000,
+    }
+  );
+  return response.data.items || [];
+}
+
 // Recherche de livres via Google Books API
 router.get('/search', async (req, res) => {
   try {
@@ -30,23 +80,23 @@ router.get('/search', async (req, res) => {
       return res.json(cached.data);
     }
 
-    const response = await axios.get(
-      'https://www.googleapis.com/books/v1/volumes',
-      {
-        params: {
-          q,
-          maxResults: limit,
-          key: GOOGLE_BOOKS_API_KEY,
-          printType: 'books',
-          orderBy: 'relevance',
-        },
-        timeout: 8000,
-      }
-    );
+    // Construire la liste de requêtes à essayer
+    const queries = buildQueries(q);
+    let rawItems = [];
+
+    for (const queryStr of queries) {
+      rawItems = await fetchFromGoogle(queryStr, limit);
+      if (rawItems.length > 0) break; // Stop dès qu'on a des résultats
+    }
+
+    // Si toujours rien (structured + brute), retry avec la requête brute originale
+    if (rawItems.length === 0 && queries.length > 1) {
+      rawItems = await fetchFromGoogle(q.trim(), limit);
+    }
 
     const toHttps = (url) => url ? url.replace(/^http:\/\//, 'https://') : url;
 
-    const formattedResults = (response.data.items || []).map(book => {
+    const formattedResults = rawItems.map(book => {
       const imageLinks = book.volumeInfo.imageLinks || {};
       return {
         id: book.id,

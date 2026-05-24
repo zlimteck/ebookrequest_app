@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth.js';
 import { updateUserProfile, verifyEmail, getCurrentUser, changePassword, updateAvatar, getUserStats } from '../controllers/userController.js';
 import User from '../models/User.js';
-import { encrypt } from '../services/cryptoService.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
 import { testCalibreConnection, pushToCalibre } from '../services/calibreService.js';
 import BookRequest from '../models/BookRequest.js';
 import path from 'path';
@@ -119,7 +119,16 @@ router.put('/calibre', requireAuth, async (req, res) => {
 // POST /api/users/calibre/test
 router.post('/calibre/test', requireAuth, async (req, res) => {
   try {
-    const { url, username, password } = req.body;
+    let { url, username, password } = req.body;
+
+    // Si aucun mot de passe fourni (déjà sauvegardé), utiliser celui en BDD
+    if (!password) {
+      const user = await User.findById(req.user.id).select('calibreWeb');
+      if (user?.calibreWeb?.password) password = decrypt(user.calibreWeb.password);
+      if (!url      && user?.calibreWeb?.url)      url      = user.calibreWeb.url;
+      if (!username && user?.calibreWeb?.username) username = user.calibreWeb.username;
+    }
+
     const result = await testCalibreConnection({ url, username, password });
     res.json(result);
   } catch (err) {

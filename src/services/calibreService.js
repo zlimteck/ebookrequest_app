@@ -204,32 +204,42 @@ export async function pushToCalibre(user, filePath, bookTitle) {
  * Trouve (ou crée) une étagère par nom et y ajoute le livre.
  */
 async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
+  console.log(`[Calibre] addBookToShelf — étagère: "${shelfName}", bookId: ${bookId}`);
+
   // 1. Trouver l'ID de l'étagère depuis la homepage (liens /shelf/{id})
   const homeRes = await axios.get(`${url}/`, {
     headers: { Cookie: cookie },
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
   });
+  console.log(`[Calibre] Homepage status: ${homeRes.status}`);
 
   let shelfId = null;
+  const foundShelves = [];
   if (homeRes.status === 200 && typeof homeRes.data === 'string') {
     const re = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
     let match;
     while ((match = re.exec(homeRes.data)) !== null) {
-      // Supprimer balises HTML et compteur suffixé (ex: "kobo-sync 0" → "kobo-sync")
       const name = match[2].replace(/<[^>]+>/g, '').replace(/\s+\d+$/, '').trim();
+      foundShelves.push({ id: match[1], name });
       if (name === shelfName) {
         shelfId = parseInt(match[1], 10);
         break;
       }
     }
   }
+  console.log(`[Calibre] Étagères trouvées: ${JSON.stringify(foundShelves)}`);
+  if (shelfId) {
+    console.log(`[Calibre] Étagère "${shelfName}" trouvée → ID ${shelfId}`);
+  } else {
+    console.warn(`[Calibre] Étagère "${shelfName}" introuvable — tentative de création`);
+  }
 
   // 2. Si introuvable, créer l'étagère puis relire la homepage pour récupérer son ID
   if (!shelfId) {
     const params = new URLSearchParams({ title: shelfName, is_public: '0' });
     if (csrfToken) params.append('csrf_token', csrfToken);
-    await axios.post(`${url}/shelf/create`, params.toString(), {
+    const createRes = await axios.post(`${url}/shelf/create`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Cookie: cookie,
@@ -238,6 +248,7 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
       timeout: TIMEOUT,
       validateStatus: s => s < 500,
     });
+    console.log(`[Calibre] POST /shelf/create status: ${createRes.status}`);
 
     // Relire la homepage pour trouver l'ID de la nouvelle étagère
     const recheckRes = await axios.get(`${url}/`, {
@@ -254,9 +265,11 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
       }
     }
     if (!shelfId) throw new Error(`Impossible de créer l'étagère "${shelfName}"`);
+    console.log(`[Calibre] Étagère créée → ID ${shelfId}`);
   }
 
   // 3. Ajouter le livre : POST /shelf/add/{shelf_id}/{book_id}
+  console.log(`[Calibre] POST /shelf/add/${shelfId}/${bookId}`);
   const addParams = csrfToken ? new URLSearchParams({ csrf_token: csrfToken }).toString() : '';
   const addRes = await axios.post(`${url}/shelf/add/${shelfId}/${bookId}`, addParams, {
     headers: {
@@ -267,8 +280,12 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
   });
-
+  console.log(`[Calibre] POST /shelf/add status: ${addRes.status}`);
   if (addRes.status >= 400) {
+    const body = typeof addRes.data === 'string'
+      ? addRes.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+      : JSON.stringify(addRes.data).slice(0, 200);
+    console.error(`[Calibre] Réponse shelf/add: ${body}`);
     throw new Error(`Ajout à l'étagère échoué: HTTP ${addRes.status}`);
   }
 }
