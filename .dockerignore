@@ -1,0 +1,30 @@
+# Environnement & secrets
+.env
+.env.*
+*.env
+
+# Dépendances (réinstallées dans l'image)
+node_modules/
+frontend/node_modules/
+
+# Build local (rebuild dans l'image)
+frontend/build/
+
+# Git
+.git/
+.gitignore
+
+# Uploads locaux
+uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
