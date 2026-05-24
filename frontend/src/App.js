@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useTheme } from './context/ThemeContext';
 import UserForm from './pages/user/UserForm';
 import AdminPage from './pages/admin/AdminPage';
@@ -10,6 +12,7 @@ import VerifyEmail from './pages/auth/VerifyEmail';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import Register from './pages/auth/Register';
+import SetupPage from './pages/auth/SetupPage';
 import UserSettings from './components/UserSettings';
 import ProfilePage from './pages/user/ProfilePage';
 import ReadingPage from './pages/user/ReadingPage';
@@ -17,11 +20,15 @@ import NotificationBell from './components/NotificationBell';
 import NavDrawer from './components/NavDrawer';
 import InstallPWABanner from './components/InstallPWABanner';
 import styles from './styles/Navbar.module.css';
+import axiosAdmin from './axiosAdmin';
 import { checkAuth, logout as authLogout } from './services/authService';
 import useActivityTracker from './hooks/useActivityTracker';
 
 document.body.style.margin = '0';
 document.body.style.padding = '0';
+
+// Flag module-level : le check setup ne s'exécute qu'une fois par chargement de page
+let setupChecked = false;
 
 const getAvatarColor = (username = '') => {
   const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
@@ -32,6 +39,11 @@ const getAvatarColor = (username = '') => {
 
 function App() {
   const navigate = useNavigate();
+  // Stabiliser la référence de navigate pour éviter que useEffect se re-déclenche
+  // à chaque navigation (React Router v6 peut retourner une nouvelle référence)
+  const navigateRef = React.useRef(navigate);
+  React.useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+
   const { theme, toggleTheme } = useTheme();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,11 +54,34 @@ function App() {
 
   useEffect(() => {
     const verifyAuth = async () => {
+      const nav = navigateRef.current;
       const path = window.location.pathname;
+
+      // Vérifier si la configuration initiale est requise (une seule fois par chargement)
+      if (!setupChecked && path !== '/setup') {
+        setupChecked = true;
+        try {
+          const { data } = await axiosAdmin.get('/api/auth/setup-status');
+          if (data.setupRequired) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('role');
+            localStorage.removeItem('username');
+            nav('/setup', { replace: true });
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          // silencieux
+        }
+      }
+
+      // Pages ne nécessitant pas d'authentification
       const isPublicPath =
         path.startsWith('/verify-email/') ||
         path === '/forgot-password' ||
-        path.startsWith('/reset-password/');
+        path.startsWith('/reset-password/') ||
+        path === '/setup' ||
+        path === '/register';
 
       if (isPublicPath) {
         setIsLoading(false);
@@ -64,15 +99,15 @@ function App() {
           const hasVerifyToken = path.includes('verify=') ||
             localStorage.getItem('pendingEmailVerification');
           if (path === '/login' && !hasVerifyToken) {
-            navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+            nav(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
           }
         } else if (!isPublicPath) {
-          navigate('/login', { replace: true });
+          nav('/login', { replace: true });
         }
       } catch (error) {
         console.error('Erreur lors de la vérification de l\'authentification:', error);
         if (!isPublicPath && path !== '/login') {
-          navigate('/login', { replace: true });
+          nav('/login', { replace: true });
         }
       } finally {
         setIsLoading(false);
@@ -80,7 +115,7 @@ function App() {
     };
 
     verifyAuth();
-  }, [navigate]);
+  }, []); // eslint-disable-line
 
   // Écouter les mises à jour d'avatar depuis UserSettings
   useEffect(() => {
@@ -101,7 +136,12 @@ function App() {
   const isForgotPage = location.pathname === '/forgot-password';
   const isResetPage = location.pathname.startsWith('/reset-password/');
   const isRegisterPage = location.pathname === '/register';
+  const isSetupPage = location.pathname === '/setup';
   const token = localStorage.getItem('token');
+
+  if (isSetupPage) {
+    return <SetupPage />;
+  }
 
   if (isRegisterPage) {
     return <Register />;

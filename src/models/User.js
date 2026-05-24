@@ -88,10 +88,11 @@ const userSchema = new mongoose.Schema({
     }
   },
   calibreWeb: {
-    enabled:  { type: Boolean, default: false },
-    url:      { type: String, default: '' },
-    username: { type: String, default: '' },
-    password: { type: String, default: '' },
+    enabled:   { type: Boolean, default: false },
+    url:       { type: String, default: '' },
+    username:  { type: String, default: '' },
+    password:  { type: String, default: '' },
+    shelfName: { type: String, default: '' }, // Étagère Kobo-sync (optionnelle)
   }
 }, {
   timestamps: true

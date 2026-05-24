@@ -1,5 +1,5 @@
 # ── Stage 1 : build React frontend ────────────────────────────────────────────
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -14,9 +14,12 @@ ENV REACT_APP_API_URL=""
 RUN npm run build
 
 # ── Stage 2 : image finale Node.js ────────────────────────────────────────────
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
+
+# Mise à jour des paquets système Alpine (libcrypto3, libssl3, musl…)
+RUN apk upgrade --no-cache
 
 # Dépendances backend uniquement (production)
 COPY package*.json ./

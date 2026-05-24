@@ -50,6 +50,7 @@ const UserSettings = () => {
     username: '',
     password: '',
     hasPassword: false,
+    shelfName: '',
     lastSync: null,
   });
   const [calibreSaving, setCalibreSaving] = useState(false);
@@ -266,7 +267,7 @@ const UserSettings = () => {
 
   // Les name attrs des champs Calibre utilisent des préfixes non-standards
   // pour éviter l'autofill Safari (qui détecte "username"/"password" même hors <form>)
-  const CALIBRE_FIELD_MAP = { 'cweb-url': 'url', 'cweb-user': 'username', 'cweb-pass': 'password' };
+  const CALIBRE_FIELD_MAP = { 'cweb-url': 'url', 'cweb-user': 'username', 'cweb-pass': 'password', 'cweb-shelf': 'shelfName' };
   const handleCalibreChange = (e) => {
     const { name, value, type, checked } = e.target;
     const key = CALIBRE_FIELD_MAP[name] ?? name;
@@ -299,6 +300,7 @@ const UserSettings = () => {
         url: calibre.url,
         username: calibre.username,
         password: calibre.password || undefined,
+        shelfName: calibre.shelfName,
       });
       // Update hasApiKey/hasPassword hints without clearing fields
       setCalibre(prev => ({
@@ -651,6 +653,23 @@ const UserSettings = () => {
               className={styles.fieldInput}
               placeholder={calibre.hasPassword ? '••••••••' : 'Entrez votre mot de passe'}
               autoComplete="new-password"
+            />
+          </div>
+
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>
+              Étagère Kobo-sync
+              <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
+                Optionnel — nom exact de votre étagère Calibre-Web synchronisée avec votre Kobo
+              </span>
+            </label>
+            <input
+              type="text"
+              name="cweb-shelf"
+              value={calibre.shelfName}
+              onChange={handleCalibreChange}
+              className={styles.fieldInput}
+              placeholder="ex : kobo-sync"
             />
           </div>
 

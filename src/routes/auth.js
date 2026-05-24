@@ -9,6 +9,87 @@ import { sendPasswordResetEmail } from '../services/emailService.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
+// ── Setup initial ────────────────────────────────────────────────────────────
+
+// Vérifie si un premier admin doit être créé
+router.get('/setup-status', async (req, res) => {
+  try {
+    const adminExists = await User.findOne({ role: 'admin' });
+    res.json({ setupRequired: !adminExists });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// Création du premier compte admin (bloqué si un admin existe déjà)
+router.post('/setup', async (req, res) => {
+  try {
+    const adminExists = await User.findOne({ role: 'admin' });
+    if (adminExists) {
+      return res.status(403).json({ error: 'Un administrateur existe déjà.' });
+    }
+
+    const { username, email, password } = req.body;
+
+    if (!username?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
+    }
+
+    const passwordStrength = [
+      /[a-z]/.test(password),
+      /[A-Z]/.test(password),
+      /[0-9]/.test(password),
+      /[!@#$%^&*(),.?":{}|<>]/.test(password),
+    ].filter(Boolean).length;
+
+    if (passwordStrength < 3) {
+      return res.status(400).json({ error: 'Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Adresse email invalide.' });
+    }
+
+    const admin = new User({
+      username: username.trim().toLowerCase(),
+      email: email.trim().toLowerCase(),
+      password,
+      role: 'admin',
+      emailVerified: true,
+    });
+
+    await admin.save();
+
+    // Connecter automatiquement après la création
+    const token = jwt.sign(
+      { id: admin._id, role: admin.role },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      role: admin.role,
+      user: {
+        id: admin._id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Ce nom d\'utilisateur ou cet email est déjà utilisé.' });
+    }
+    res.status(500).json({ error: 'Erreur lors de la création du compte.' });
+  }
+});
+
 // Vérifier la validité du token
 router.get('/check-token', requireAuth, async (req, res) => {
   try {

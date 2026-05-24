@@ -1004,7 +1004,7 @@ function AdminPage() {
                                             h.status === 'reported' ? '⚠️ Signalée' : h.status
                                           }</span>
                                           <span className={styles.historyDate}>
-                                            {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(h.changedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                             {h.changedBy && ` · ${h.changedBy}`}
                                           </span>
                                           {h.note && <span className={styles.historyNote}>{h.note.replace(/\s*via\s+\S+/gi, '')}</span>}
@@ -1364,7 +1364,7 @@ function AdminPage() {
                                     h.status === 'reported' ? '⚠️ Signalée' : h.status
                                   }</span>
                                   <span className={styles.historyDate}>
-                                    {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    {new Date(h.changedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(h.changedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                     {h.changedBy && ` · ${h.changedBy}`}
                                   </span>
                                   {h.note && <span className={styles.historyNote}>{h.note.replace(/\s*via\s+\S+/gi, '')}</span>}

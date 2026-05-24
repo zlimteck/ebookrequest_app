@@ -87,6 +87,7 @@ router.get('/calibre', requireAuth, async (req, res) => {
       url:         cfg.url || '',
       username:    cfg.username || '',
       hasPassword: Boolean(cfg.password),
+      shelfName:   cfg.shelfName || '',
       lastSync:    lastSyncDoc?.calibrePush?.pushedAt || null,
     });
   } catch (err) {
@@ -97,14 +98,15 @@ router.get('/calibre', requireAuth, async (req, res) => {
 // PUT /api/users/calibre
 router.put('/calibre', requireAuth, async (req, res) => {
   try {
-    const { enabled, url, username, password } = req.body;
+    const { enabled, url, username, password, shelfName } = req.body;
     const user = await User.findById(req.user.id).select('calibreWeb');
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
     const existing = user.calibreWeb || {};
     const updates = {
-      'calibreWeb.enabled':  enabled !== undefined ? Boolean(enabled) : existing.enabled,
-      'calibreWeb.url':      url !== undefined ? url : existing.url,
-      'calibreWeb.username': username !== undefined ? username : existing.username,
+      'calibreWeb.enabled':    enabled !== undefined ? Boolean(enabled) : existing.enabled,
+      'calibreWeb.url':        url !== undefined ? url : existing.url,
+      'calibreWeb.username':   username !== undefined ? username : existing.username,
+      'calibreWeb.shelfName':  shelfName !== undefined ? shelfName.trim() : (existing.shelfName || ''),
     };
     if (password) updates['calibreWeb.password'] = encrypt(password);
     await User.findByIdAndUpdate(req.user.id, { $set: updates });

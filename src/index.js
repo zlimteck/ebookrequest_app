@@ -96,6 +96,7 @@ const authLimiter = rateLimit({
   message: { error: 'Trop de tentatives, réessayez dans 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/setup-status' || req.path === '/setup',
 });
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -103,6 +104,7 @@ const generalLimiter = rateLimit({
   message: { error: 'Trop de requêtes, ralentissez.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/auth/setup-status' || req.path === '/auth/setup',
 });
 const twoFactorLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
