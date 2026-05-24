@@ -11,22 +11,18 @@ const TIMEOUT = 30000;
  * Calibre-Web uses Flask-WTF → requires a CSRF token extracted from the login page.
  */
 async function getSessionCookie(url, username, password) {
-  // 1. GET /login pour récupérer le CSRF token et le cookie de session initial
   const loginPage = await axios.get(`${url}/login`, {
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
   });
 
-  // Extraire le CSRF token depuis le HTML (<input name="csrf_token" value="...">)
   const csrfMatch = loginPage.data?.match(/name="csrf_token"[^>]*value="([^"]+)"/);
   const csrfToken = csrfMatch ? csrfMatch[1] : null;
 
-  // Récupérer le cookie de session initial (nécessaire pour valider le CSRF)
   const initialCookies = (loginPage.headers['set-cookie'] || [])
     .map(c => c.split(';')[0])
     .join('; ');
 
-  // 2. POST /login avec username, password et csrf_token
   const params = new URLSearchParams();
   params.append('username', username);
   params.append('password', password);
@@ -43,13 +39,11 @@ async function getSessionCookie(url, username, password) {
     timeout: TIMEOUT,
   });
 
-  // Succès = redirection 302 vers / avec nouveau cookie de session
   const setCookie = response.headers['set-cookie'];
   if (!setCookie || setCookie.length === 0) {
     throw new Error('Authentification Calibre-Web échouée : aucun cookie de session reçu');
   }
 
-  // Combiner cookies initiaux + cookies de session post-login
   const allCookies = [
     ...initialCookies.split('; ').filter(Boolean),
     ...setCookie.map(c => c.split(';')[0]),
@@ -59,7 +53,6 @@ async function getSessionCookie(url, username, password) {
 
 /**
  * Push a file to Calibre-Web for the given user.
- * user.calibreWeb fields (apiKey and password) are stored encrypted.
  * Returns { success: true } or throws an Error.
  */
 export async function pushToCalibre(user, filePath, bookTitle) {
@@ -74,9 +67,8 @@ export async function pushToCalibre(user, filePath, bookTitle) {
   // 1. Login → session cookie
   const cookie = await getSessionCookie(url, username, password);
 
-  // 2. Récupérer le CSRF token depuis la page principale (GET /upload = 405)
+  // 2. CSRF token depuis /me
   let csrfToken = null;
-  // Le token CSRF se trouve sur /me (page profil utilisateur)
   try {
     const page = await axios.get(`${url}/me`, {
       headers: { Cookie: cookie },
@@ -90,21 +82,19 @@ export async function pushToCalibre(user, filePath, bookTitle) {
   } catch {}
   if (!csrfToken) console.warn('[Calibre] CSRF token introuvable — upload risque d\'échouer');
 
-  // 3. POST /upload avec le fichier + csrf_token (champ ET header)
+  // 3. POST /upload
   const form = new FormData();
   form.append('btn-upload', fs.createReadStream(filePath), {
     filename: path.basename(filePath),
   });
   if (csrfToken) form.append('csrf_token', csrfToken);
 
-  const uploadHeaders = {
-    ...form.getHeaders(),
-    Cookie: cookie,
-    ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
-  };
-
   const uploadRes = await axios.post(`${url}/upload`, form, {
-    headers: uploadHeaders,
+    headers: {
+      ...form.getHeaders(),
+      Cookie: cookie,
+      ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+    },
     timeout: TIMEOUT,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
@@ -120,81 +110,100 @@ export async function pushToCalibre(user, filePath, bookTitle) {
     throw new Error(`Upload échoué: HTTP ${uploadRes.status}`);
   }
 
-  // Log de la réponse pour diagnostiquer le format selon la version Calibre-Web
-  try {
-    const preview = typeof uploadRes.data === 'string'
-      ? uploadRes.data.slice(0, 300)
-      : JSON.stringify(uploadRes.data).slice(0, 300);
-    console.log(`[Calibre] Upload response body: ${preview}`);
-    console.log(`[Calibre] Upload response headers location: ${uploadRes.headers?.location || 'none'}`);
-  } catch {}
-
-  // Extraire l'ID du livre — plusieurs stratégies selon la version Calibre-Web
+  // 4. Extraire l'ID du livre
   let calibreBookId = null;
+  const locationStr = String(uploadRes.data?.location || uploadRes.headers?.location || '');
 
-  // Cas 1a : JSON objet { location: "/admin/book/22" } ou { location: "/book/22" }
-  try {
-    const location = uploadRes.data?.location || uploadRes.headers?.location || '';
-    const m = String(location).match(/\/book\/(\d+)/);
-    if (m) calibreBookId = parseInt(m[1], 10);
-  } catch {}
+  // Calibre-Web Automated : traitement asynchrone → location = "/tasks"
+  const isCWAAsync = locationStr === '/tasks';
 
-  // Cas 1b : JSON tableau [{ location: "/book/22" }] (Calibre-Web Automated)
-  if (!calibreBookId) {
+  if (!isCWAAsync) {
+    // Cas 1a : JSON { location: "/book/22" } ou { location: "/admin/book/22" }
     try {
-      const arr = Array.isArray(uploadRes.data) ? uploadRes.data : null;
-      if (arr?.length) {
-        const location = arr[0]?.location || arr[0]?.url || '';
-        const m = String(location).match(/\/book\/(\d+)/);
-        if (m) calibreBookId = parseInt(m[1], 10);
-      }
-    } catch {}
-  }
-
-  // Cas 2 : URL finale après redirection suivie
-  if (!calibreBookId) {
-    try {
-      const finalPath = uploadRes.request?.path || '';
-      const m = finalPath.match(/\/book\/(\d+)/);
+      const m = locationStr.match(/\/book\/(\d+)/);
       if (m) calibreBookId = parseInt(m[1], 10);
     } catch {}
-  }
 
-  // Cas 3 : recherche par titre dans Calibre-Web (fallback universel)
-  if (!calibreBookId && bookTitle) {
-    try {
-      const searchRes = await axios.get(`${url}/search/${encodeURIComponent(bookTitle)}`, {
-        headers: { Cookie: cookie },
-        timeout: TIMEOUT,
-        validateStatus: s => s < 500,
-      });
-      if (searchRes.status === 200 && typeof searchRes.data === 'string') {
-        const m = searchRes.data.match(/href="\/book\/(\d+)"/);
-        if (m) {
-          calibreBookId = parseInt(m[1], 10);
-          console.log(`[Calibre] Book ID trouvé via search: ${calibreBookId}`);
+    // Cas 1b : JSON tableau [{ location: "/book/22" }]
+    if (!calibreBookId) {
+      try {
+        const arr = Array.isArray(uploadRes.data) ? uploadRes.data : null;
+        if (arr?.length) {
+          const loc = arr[0]?.location || arr[0]?.url || '';
+          const m = String(loc).match(/\/book\/(\d+)/);
+          if (m) calibreBookId = parseInt(m[1], 10);
         }
-      }
-    } catch {}
-  }
+      } catch {}
+    }
 
-  if (calibreBookId) {
-    console.log(`[Calibre] Book ID extrait: ${calibreBookId}`);
+    // Cas 1c : URL finale après redirection
+    if (!calibreBookId) {
+      try {
+        const finalPath = uploadRes.request?.path || '';
+        const m = finalPath.match(/\/book\/(\d+)/);
+        if (m) calibreBookId = parseInt(m[1], 10);
+      } catch {}
+    }
+
+    // Cas 1d : recherche par titre dans le HTML (fallback)
+    if (!calibreBookId && bookTitle) {
+      try {
+        const searchRes = await axios.get(`${url}/search/${encodeURIComponent(bookTitle)}`, {
+          headers: { Cookie: cookie },
+          timeout: TIMEOUT,
+          validateStatus: s => s < 500,
+        });
+        if (searchRes.status === 200 && typeof searchRes.data === 'string') {
+          const m = searchRes.data.match(/href="\/book\/(\d+)"/);
+          if (m) calibreBookId = parseInt(m[1], 10);
+        }
+      } catch {}
+    }
   } else {
-    console.warn(`[Calibre] Book ID introuvable — shelf sync impossible`);
+    // Calibre-Web Automated : attendre puis lire le flux OPDS (XML pur)
+    console.log('[Calibre] CWA détecté — attente 15s puis lecture OPDS...');
+    await new Promise(r => setTimeout(r, 15000));
+    const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
+    const patterns = [
+      /\/download\/(\d+)\//,
+      /\/book\/(\d+)[/"]/,
+      /calibre:(\d+)/,
+      /\/opds\/book\/(\d+)/,
+    ];
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        const opdsRes = await axios.get(`${url}/opds/new`, {
+          headers: {
+            Authorization: `Basic ${basicAuth}`,
+            Accept: 'application/atom+xml, application/xml, text/xml',
+          },
+          timeout: TIMEOUT,
+          validateStatus: s => s < 500,
+        });
+        if (opdsRes.status === 200 && typeof opdsRes.data === 'string') {
+          for (const pattern of patterns) {
+            const m = opdsRes.data.match(pattern);
+            if (m) { calibreBookId = parseInt(m[1], 10); break; }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Calibre] OPDS erreur: ${err.message}`);
+      }
+      if (calibreBookId) break;
+      if (attempt < 4) await new Promise(r => setTimeout(r, 8000));
+    }
   }
 
-  // Ajout à l'étagère Kobo si configurée
+  // 5. Ajout à l'étagère Kobo si configurée
   if (calibreBookId && cfg.shelfName?.trim()) {
     try {
       await addBookToShelf(url, cookie, csrfToken, cfg.shelfName.trim(), calibreBookId);
       console.log(`[Calibre] Livre ${calibreBookId} ajouté à l'étagère "${cfg.shelfName}"`);
     } catch (err) {
-      // Non-bloquant : l'upload est un succès même si l'ajout à l'étagère échoue
       console.warn(`[Calibre] Ajout étagère échoué: ${err.message}`);
     }
-  } else if (cfg.shelfName?.trim()) {
-    console.warn(`[Calibre] Shelf skippé — impossible d'extraire l'ID du livre après upload`);
+  } else if (!calibreBookId && cfg.shelfName?.trim()) {
+    console.warn('[Calibre] Book ID introuvable — ajout étagère ignoré');
   }
 
   return { success: true, calibreBookId };
@@ -204,42 +213,35 @@ export async function pushToCalibre(user, filePath, bookTitle) {
  * Trouve (ou crée) une étagère par nom et y ajoute le livre.
  */
 async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
-  console.log(`[Calibre] addBookToShelf — étagère: "${shelfName}", bookId: ${bookId}`);
+  // Normalise le nom d'une étagère : retire les suffixes " (N)" ou " N" (compteur de livres)
+  const normalizeName = (raw) =>
+    raw.replace(/<[^>]+>/g, '').replace(/\s+\(\d+\)$/, '').replace(/\s+\d+$/, '').trim();
 
-  // 1. Trouver l'ID de l'étagère depuis la homepage (liens /shelf/{id})
+  // 1. Chercher l'étagère dans la homepage
   const homeRes = await axios.get(`${url}/`, {
     headers: { Cookie: cookie },
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
   });
-  console.log(`[Calibre] Homepage status: ${homeRes.status}`);
 
   let shelfId = null;
-  const foundShelves = [];
   if (homeRes.status === 200 && typeof homeRes.data === 'string') {
     const re = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
     let match;
     while ((match = re.exec(homeRes.data)) !== null) {
-      const name = match[2].replace(/<[^>]+>/g, '').replace(/\s+\d+$/, '').trim();
-      foundShelves.push({ id: match[1], name });
-      if (name === shelfName) {
+      if (normalizeName(match[2]) === shelfName) {
         shelfId = parseInt(match[1], 10);
         break;
       }
     }
   }
-  console.log(`[Calibre] Étagères trouvées: ${JSON.stringify(foundShelves)}`);
-  if (shelfId) {
-    console.log(`[Calibre] Étagère "${shelfName}" trouvée → ID ${shelfId}`);
-  } else {
-    console.warn(`[Calibre] Étagère "${shelfName}" introuvable — tentative de création`);
-  }
 
-  // 2. Si introuvable, créer l'étagère puis relire la homepage pour récupérer son ID
+  // 2. Créer l'étagère si introuvable
   if (!shelfId) {
+    console.log(`[Calibre] Étagère "${shelfName}" introuvable — création...`);
     const params = new URLSearchParams({ title: shelfName, is_public: '0' });
     if (csrfToken) params.append('csrf_token', csrfToken);
-    const createRes = await axios.post(`${url}/shelf/create`, params.toString(), {
+    await axios.post(`${url}/shelf/create`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Cookie: cookie,
@@ -248,9 +250,7 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
       timeout: TIMEOUT,
       validateStatus: s => s < 500,
     });
-    console.log(`[Calibre] POST /shelf/create status: ${createRes.status}`);
 
-    // Relire la homepage pour trouver l'ID de la nouvelle étagère
     const recheckRes = await axios.get(`${url}/`, {
       headers: { Cookie: cookie },
       timeout: TIMEOUT,
@@ -260,16 +260,13 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
       const re2 = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
       let m2;
       while ((m2 = re2.exec(recheckRes.data)) !== null) {
-        const name = m2[2].replace(/<[^>]+>/g, '').replace(/\s+\d+$/, '').trim();
-        if (name === shelfName) { shelfId = parseInt(m2[1], 10); break; }
+        if (normalizeName(m2[2]) === shelfName) { shelfId = parseInt(m2[1], 10); break; }
       }
     }
     if (!shelfId) throw new Error(`Impossible de créer l'étagère "${shelfName}"`);
-    console.log(`[Calibre] Étagère créée → ID ${shelfId}`);
   }
 
-  // 3. Ajouter le livre : POST /shelf/add/{shelf_id}/{book_id}
-  console.log(`[Calibre] POST /shelf/add/${shelfId}/${bookId}`);
+  // 3. Ajouter le livre
   const addParams = csrfToken ? new URLSearchParams({ csrf_token: csrfToken }).toString() : '';
   const addRes = await axios.post(`${url}/shelf/add/${shelfId}/${bookId}`, addParams, {
     headers: {
@@ -280,19 +277,17 @@ async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
   });
-  console.log(`[Calibre] POST /shelf/add status: ${addRes.status}`);
+
   if (addRes.status >= 400) {
     const body = typeof addRes.data === 'string'
       ? addRes.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
       : JSON.stringify(addRes.data).slice(0, 200);
-    console.error(`[Calibre] Réponse shelf/add: ${body}`);
-    throw new Error(`Ajout à l'étagère échoué: HTTP ${addRes.status}`);
+    throw new Error(`Ajout à l'étagère échoué: HTTP ${addRes.status} — ${body}`);
   }
 }
 
 /**
  * Test connectivity to a Calibre-Web instance.
- * calibreConfig fields are in plaintext (pre-save test from frontend).
  * Returns { connected: true } or { connected: false, error: string }.
  */
 export async function testCalibreConnection({ url, username, password }) {
@@ -301,7 +296,6 @@ export async function testCalibreConnection({ url, username, password }) {
 
   const cleanUrl = url.replace(/\/$/, '');
   try {
-    // Si getSessionCookie réussit sans exception, le login est valide
     await getSessionCookie(cleanUrl, username, password);
     return { connected: true };
   } catch (err) {
