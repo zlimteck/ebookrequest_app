@@ -11,6 +11,7 @@ const BookRecommendations = ({ onSelectBook }) => {
   const [message, setMessage] = useState('');
   const [expanded, setExpanded] = useState(true);
   const [rateInfo, setRateInfo] = useState(null);
+  const [aiEnabled, setAiEnabled] = useState(true);
   // { regenerationsUsed, regenerationsMax, regenerationsRemaining, windowResetAt, generatedAt, cached }
 
   const applyResponse = (data) => {
@@ -32,7 +33,9 @@ const BookRecommendations = ({ onSelectBook }) => {
     setError(null);
     try {
       const response = await axiosAdmin.get('/api/recommendations?limit=5');
-      if (response.data.success) {
+      if (response.data.aiEnabled === false) {
+        setAiEnabled(false);
+      } else if (response.data.success) {
         applyResponse(response.data);
       } else {
         setError(response.data.message || 'Erreur lors du chargement des recommandations');
@@ -131,6 +134,27 @@ const BookRecommendations = ({ onSelectBook }) => {
         <div className={styles.loadingContainer}>
           <div className={styles.spinner}></div>
           <p>L'IA joue au devin littéraire...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vue IA non configurée ──
+  if (!aiEnabled) {
+    return (
+      <div className={styles.recommendationsSection}>
+        <div className={styles.header}>
+          <h2 className={styles.title}>
+            <svg className={styles.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Recommandations IA
+          </h2>
+        </div>
+        <div className={styles.errorContainer} style={{ opacity: 0.6 }}>
+          <p className={styles.errorMessage} style={{ color: 'var(--color-text-muted)' }}>
+            Les recommandations IA ne sont pas activées.
+          </p>
         </div>
       </div>
     );

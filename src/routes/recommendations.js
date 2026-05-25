@@ -3,7 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import BookRequest from '../models/BookRequest.js';
 import Recommendation from '../models/Recommendation.js';
 import { generateRecommendations } from '../services/recommendationService.js';
-import { testAIProviderConnection } from '../services/aiProviderService.js';
+import { testAIProviderConnection, isAIConfigured } from '../services/aiProviderService.js';
 
 const router = express.Router();
 
@@ -19,6 +19,15 @@ async function getUserBookRequests(userId) {
 // ── GET /api/recommendations ──────────────────────────────────────────────────
 // Retourne le cache si disponible, génère la première fois (gratuit, sans quota)
 router.get('/', requireAuth, async (req, res) => {
+  if (!isAIConfigured()) {
+    return res.json({
+      success: true,
+      aiEnabled: false,
+      recommendations: [],
+      message: 'Les recommandations IA ne sont pas activées.',
+    });
+  }
+
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 5;
@@ -65,18 +74,27 @@ router.get('/', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
+    // Erreur de configuration IA → réponse neutre, pas une erreur serveur
+    if (/not configured|api key/i.test(error.message)) {
+      return res.json({ success: true, aiEnabled: false, recommendations: [], message: 'Les recommandations IA ne sont pas activées.' });
+    }
     console.error('Erreur recommandations GET:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors du chargement des recommandations',
-      recommendations: [],
-    });
+    res.status(500).json({ success: false, message: 'Erreur lors du chargement des recommandations', recommendations: [] });
   }
 });
 
 // ── POST /api/recommendations/regenerate ─────────────────────────────────────
 // Régénère en consommant 1 quota (max 3 par 7 jours)
 router.post('/regenerate', requireAuth, async (req, res) => {
+  if (!isAIConfigured()) {
+    return res.json({
+      success: true,
+      aiEnabled: false,
+      recommendations: [],
+      message: 'Les recommandations IA ne sont pas activées.',
+    });
+  }
+
   try {
     const userId = req.user.id;
     const limit = 5;
@@ -123,12 +141,11 @@ router.post('/regenerate', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
+    if (/not configured|api key/i.test(error.message)) {
+      return res.json({ success: true, aiEnabled: false, recommendations: [], message: 'Les recommandations IA ne sont pas activées.' });
+    }
     console.error('Erreur recommandations régénération:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la régénération des recommandations',
-      recommendations: [],
-    });
+    res.status(500).json({ success: false, message: 'Erreur lors de la régénération des recommandations', recommendations: [] });
   }
 });
 

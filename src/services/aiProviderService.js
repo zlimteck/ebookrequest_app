@@ -22,6 +22,15 @@ if (AI_PROVIDER === 'openai' && OPENAI_API_KEY) {
 console.log(`AI Provider configured: ${AI_PROVIDER}`);
 
 /**
+ * Returns true if an AI provider is properly configured.
+ */
+export const isAIConfigured = () => {
+  if (AI_PROVIDER === 'openai') return Boolean(OPENAI_API_KEY);
+  if (AI_PROVIDER === 'ollama') return Boolean(OLLAMA_URL && OLLAMA_MODEL);
+  return false;
+};
+
+/**
  * Unified interface for AI text generation
  * @param {string} prompt - The prompt to send to the AI
  * @param {object} options - Generation options (temperature, top_p, top_k, timeout)
