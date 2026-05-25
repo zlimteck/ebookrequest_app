@@ -181,9 +181,36 @@ export async function pushToCalibre(user, filePath, bookTitle) {
           validateStatus: s => s < 500,
         });
         if (opdsRes.status === 200 && typeof opdsRes.data === 'string') {
-          for (const pattern of patterns) {
-            const m = opdsRes.data.match(pattern);
-            if (m) { calibreBookId = parseInt(m[1], 10); break; }
+          const xml = opdsRes.data;
+
+          // Chercher d'abord l'entrée dont le <title> correspond au livre uploadé
+          if (bookTitle) {
+            const titleNorm = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+            let entry;
+            while ((entry = entryRe.exec(xml)) !== null) {
+              const entryXml = entry[1];
+              const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+              if (!titleMatch) continue;
+              const entryTitle = titleMatch[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+              // Correspondance si le titre du feed contient au moins 6 caractères du titre recherché
+              const minLen = Math.min(titleNorm.length, 6);
+              if (entryTitle.includes(titleNorm.slice(0, minLen)) || titleNorm.includes(entryTitle.slice(0, minLen))) {
+                for (const pattern of patterns) {
+                  const m = entryXml.match(pattern);
+                  if (m) { calibreBookId = parseInt(m[1], 10); break; }
+                }
+                if (calibreBookId) break;
+              }
+            }
+          }
+
+          // Fallback : premier ID trouvé dans le feed si pas de correspondance par titre
+          if (!calibreBookId) {
+            for (const pattern of patterns) {
+              const m = xml.match(pattern);
+              if (m) { calibreBookId = parseInt(m[1], 10); break; }
+            }
           }
         }
       } catch (err) {

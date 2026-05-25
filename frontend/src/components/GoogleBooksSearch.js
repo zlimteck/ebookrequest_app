@@ -20,6 +20,7 @@ const NoResults = ({ query }) => (
 
 const GoogleBooksSearch = ({ onSelectBook }) => {
   const [query, setQuery] = useState('');
+  const [author, setAuthor] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,29 +34,27 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
   const dropdownRef = useRef(null);
 
   // Fonction pour effectuer la recherche
-  const searchBooks = async (searchTerm, isAutoSuggest = false) => {
+  const searchBooks = async (searchTerm, authorTerm = '', isAutoSuggest = false) => {
     if (!searchTerm.trim()) {
       if (!isAutoSuggest) setResults([]);
       return;
     }
-    
+
     if (!isAutoSuggest) {
       setSearchQuery(searchTerm);
       setHasSearched(true);
       setShowSuggestions(false);
     }
-    
+
     setIsLoading(true);
     setError('');
-    
+
     try {
-      const response = await axiosAdmin.get('/api/books/search', {
-        params: {
-          q: searchTerm,
-          maxResults: isAutoSuggest ? 4 : 4
-        }
-      });
-      
+      const params = { q: searchTerm, maxResults: 4 };
+      if (authorTerm?.trim()) params.author = authorTerm.trim();
+
+      const response = await axiosAdmin.get('/api/books/search', { params });
+
       if (isAutoSuggest) {
         setSuggestions(response.data || []);
       } else {
@@ -70,35 +69,44 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
       setIsLoading(false);
     }
   };
-  
+
   // Gestionnaire de soumission du formulaire
   const handleSubmit = (e) => {
     e.preventDefault();
-    searchBooks(query.trim(), false);
+    searchBooks(query.trim(), author.trim(), false);
   };
-  
-  // Gestionnaire de saisie avec debounce
+
+  // Debounce sur le titre → suggestions auto
   const handleInputChange = (e) => {
     const value = e.target.value;
     setQuery(value);
-    
-    // Réinitialiser le timeout précédent
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
     if (value.trim().length > 2) {
       setIsTyping(true);
       setShowSuggestions(true);
-      
-      // Définir un nouveau timeout
       searchTimeoutRef.current = setTimeout(() => {
-        searchBooks(value.trim(), true);
+        searchBooks(value.trim(), author.trim(), true);
         setIsTyping(false);
-      }, 500); // Délai de 500ms
+      }, 500);
     } else {
       setShowSuggestions(false);
       setSuggestions([]);
+    }
+  };
+
+  // Debounce sur l'auteur → relance la recherche complète si titre déjà saisi
+  const handleAuthorChange = (e) => {
+    const value = e.target.value;
+    setAuthor(value);
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (query.trim().length >= 3) {
+      searchTimeoutRef.current = setTimeout(() => {
+        searchBooks(query.trim(), value.trim(), false);
+      }, 600);
     }
   };
 
@@ -120,6 +128,7 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
     onSelectBook(bookInfo);
     setResults([]);
     setQuery('');
+    setAuthor('');
   };
 
   // Gestion du clic en dehors du dropdown
@@ -160,9 +169,20 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
               value={query}
               onChange={handleInputChange}
               onFocus={() => query.length > 2 && setShowSuggestions(true)}
-              placeholder="Rechercher un livre par titre, auteur ou ISBN..."
+              placeholder="Titre ou ISBN..."
               className={styles.searchInput}
-              aria-label="Rechercher un livre"
+              aria-label="Titre du livre"
+              autoComplete="off"
+            />
+          </div>
+          <div className={styles.inputWrapper}>
+            <input
+              type="text"
+              value={author}
+              onChange={handleAuthorChange}
+              placeholder="Auteur (optionnel)"
+              className={styles.searchInput}
+              aria-label="Auteur du livre"
               autoComplete="off"
             />
           </div>

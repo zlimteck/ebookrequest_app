@@ -304,6 +304,24 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+@media (max-width: 600px) {
+  .searchInputContainer {
+    flex-wrap: wrap;
+  }
+
+  .inputWrapper {
+    flex: 1 1 100%;
+  }
+
+  .buttonWrapper {
+    flex: 1 1 100%;
+  }
+
+  .searchButton {
+    width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .bookCover {
     width: 55px;

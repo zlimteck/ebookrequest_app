@@ -65,14 +65,14 @@ async function fetchFromGoogle(queryStr, limit) {
 // Recherche de livres via Google Books API
 router.get('/search', async (req, res) => {
   try {
-    const { q, maxResults = 5 } = req.query;
+    const { q, author, maxResults = 5 } = req.query;
 
     if (!q) {
       return res.status(400).json({ message: 'Le paramètre de recherche est requis' });
     }
 
     const limit = Math.min(parseInt(maxResults), 10);
-    const cacheKey = getCacheKey(q, limit);
+    const cacheKey = getCacheKey(author ? `${q}|${author}` : q, limit);
 
     // Retourner le cache si valide
     const cached = searchCache.get(cacheKey);
@@ -80,8 +80,10 @@ router.get('/search', async (req, res) => {
       return res.json(cached.data);
     }
 
-    // Construire la liste de requêtes à essayer
-    const queries = buildQueries(q);
+    // Si auteur fourni séparément → requête structurée directe
+    const queries = author?.trim()
+      ? [`intitle:${q.trim()} inauthor:${author.trim()}`, q.trim()]
+      : buildQueries(q);
     let rawItems = [];
 
     for (const queryStr of queries) {
