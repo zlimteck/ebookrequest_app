@@ -26,6 +26,7 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - Réinitialisation de mot de passe par email
 - Gestion des utilisateurs (rôles, quotas, activation/désactivation)
 - Panel admin avec statistiques et logs
+- Envoi automatique des livres vers Calibre-Web (avec sync étagère Kobo)
 
 ## Déploiement Docker
 
@@ -75,9 +76,7 @@ L'application est accessible sur le port défini dans `PORT` (défaut : `5001`).
 
 ### Créer le compte administrateur
 
-```bash
-docker exec -it ebookrequest node src/scripts/initAdmin.js
-```
+Au premier lancement, ouvre l'application dans ton navigateur — tu seras redirigé automatiquement vers la page `/setup` pour créer le compte administrateur.
 
 ## Structure du projet
 
