@@ -1,14 +1,19 @@
 import mongoose from 'mongoose';
 
 const bookRequestSchema = new mongoose.Schema({
-  user: { 
-    type: mongoose.Schema.Types.ObjectId, 
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true 
+    required: true
   },
-  username: { 
-    type: String, 
-    required: true 
+  username: {
+    type: String,
+    required: true
+  },
+  submittedByAdmin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   },
   author: { 
     type: String, 

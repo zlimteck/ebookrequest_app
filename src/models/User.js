@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const userSchema = new mongoose.Schema({
   username: { 
@@ -64,6 +65,11 @@ const userSchema = new mongoose.Schema({
     default: 10,
     min: 0
   },
+  requestLimitDays: {
+    type: Number,
+    default: 30,
+    min: 1
+  },
   avatar: {
     type: String,
     default: null
@@ -76,7 +82,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     unique: true,
     sparse: true,
-    default: null
+    default: () => crypto.randomBytes(32).toString('hex'),
   },
   twoFactor: {
     enabled: { type: Boolean, default: false },

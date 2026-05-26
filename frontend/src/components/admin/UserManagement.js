@@ -48,7 +48,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10 });
+  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30 });
   const [errors, setErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -154,13 +154,13 @@ const UserManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10 });
+    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30 });
     setErrors({});
     setShowModal(false);
   };
 
   const handleEdit = (user) => {
-    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: user.requestLimit ?? 10 });
+    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: user.requestLimit ?? 10, requestLimitDays: user.requestLimitDays ?? 30 });
     setUserStats(null);
     setShowModal(true);
     axiosAdmin.get(`/api/admin/user-stats/${user._id}`)
@@ -394,9 +394,15 @@ const UserManagement = () => {
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Limite de demandes (30 jours)</label>
+                    <label>Limite de demandes</label>
                     <input type="number" name="requestLimit" value={formData.requestLimit}
                       onChange={handleInputChange} className={styles.formInput} min="0" />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Fenêtre glissante (jours)</label>
+                    <input type="number" name="requestLimitDays" value={formData.requestLimitDays}
+                      onChange={handleInputChange} className={styles.formInput} min="1" />
                   </div>
                 </div>
 
@@ -432,7 +438,7 @@ const UserManagement = () => {
                           <span className={styles.requestStatValue} style={{ color: userStats.recentCount >= (users.find(u => u._id === formData._id)?.requestLimit ?? 10) ? '#ef4444' : 'var(--color-text)' }}>
                             {userStats.recentCount} / {users.find(u => u._id === formData._id)?.requestLimit ?? 10}
                           </span>
-                          <span className={styles.requestStatLabel}>quota 30j</span>
+                          <span className={styles.requestStatLabel}>quota {formData.requestLimitDays ?? 30}j</span>
                         </div>
                       </div>
                     )}

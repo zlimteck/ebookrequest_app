@@ -1,6 +1,6 @@
 import AppriseConfig from '../models/AppriseConfig.js';
 
-const APPRISE_API_URL = process.env.APPRISE_URL || 'http://apprise:8000';
+const APPRISE_API_URL = (process.env.APPRISE_URL || 'http://apprise:8000').replace(/\/notify\/?$/, '');
 
 class AppriseService {
 

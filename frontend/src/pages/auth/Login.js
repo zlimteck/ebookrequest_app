@@ -336,6 +336,11 @@ function Login() {
         <button className={styles.button} type="submit">Se connecter</button>
       </form>
       {message && <div className={styles.message}>{message}</div>}
+      <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <Link to="/register" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none' }}>
+          Vous avez un code d'invitation ? S'inscrire
+        </Link>
+      </div>
     </div>
   );
 }

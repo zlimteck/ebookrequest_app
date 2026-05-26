@@ -34,7 +34,7 @@ const __dirname = path.dirname(__filename);
 // Création d'une nouvelle demande de livre
 export const createBookRequest = async (req, res) => {
   try {
-    const { author, title, link, thumbnail, description, pageCount, format, category } = req.body;
+    const { author, title, link, thumbnail, description, pageCount, format, category, targetUserId } = req.body;
     
     // Validation des champs obligatoires
     if (!author || !title) {
@@ -52,23 +52,37 @@ export const createBookRequest = async (req, res) => {
     }
     
     // Récupérer l'utilisateur complet depuis la base de données
-    const user = await User.findById(req.user.id);
-    if (!user) {
+    const adminUser = await User.findById(req.user.id);
+    if (!adminUser) {
       return res.status(404).json({ error: 'Utilisateur non trouvé.' });
     }
 
-    // Vérification du quota de demandes (30 jours glissants)
+    // Si admin soumet pour un autre user, charger le user cible
+    let user = adminUser;
+    let submittedByAdmin = null;
+    if (adminUser.role === 'admin' && targetUserId && targetUserId !== adminUser._id.toString()) {
+      const targetUser = await User.findById(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Utilisateur cible introuvable.' });
+      }
+      user = targetUser;
+      submittedByAdmin = adminUser._id;
+      console.log(`[Admin] ${adminUser.username} soumet une demande pour ${targetUser.username} : "${title}"`);
+    }
+
+    // Vérification du quota de demandes (jours glissants configurables)
     if (user.role !== 'admin') {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const days = user.requestLimitDays ?? 30;
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - days);
       const recentCount = await BookRequest.countDocuments({
         user: user._id,
-        createdAt: { $gte: thirtyDaysAgo }
+        createdAt: { $gte: windowStart }
       });
       const limit = user.requestLimit ?? 10;
       if (recentCount >= limit) {
         return res.status(429).json({
-          error: `Vous avez atteint votre limite de ${limit} demande(s) sur les 30 derniers jours.`
+          error: `Vous avez atteint votre limite de ${limit} demande(s) sur les ${days} derniers jours.`
         });
       }
     }
@@ -90,6 +104,7 @@ export const createBookRequest = async (req, res) => {
     const newRequest = new BookRequest({
       user: user._id,
       username: user.username,
+      ...(submittedByAdmin && { submittedByAdmin }),
       author,
       title,
       link: link || '',
@@ -738,20 +753,29 @@ export const editUserRequest = async (req, res) => {
 // Quota de demandes de l'utilisateur connecté
 export const getRequestQuota = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
+    const requester = await User.findById(req.user.id);
+    if (!requester) {
       return res.status(404).json({ error: 'Utilisateur non trouvé.' });
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Admin peut consulter le quota d'un autre user
+    let user = requester;
+    if (requester.role === 'admin' && req.query.userId && req.query.userId !== requester._id.toString()) {
+      const target = await User.findById(req.query.userId);
+      if (!target) return res.status(404).json({ error: 'Utilisateur cible introuvable.' });
+      user = target;
+    }
+
+    const days = user.requestLimitDays ?? 30;
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - days);
     const used = await BookRequest.countDocuments({
       user: user._id,
-      createdAt: { $gte: thirtyDaysAgo }
+      createdAt: { $gte: windowStart }
     });
 
     const limit = user.requestLimit ?? 10;
-    res.json({ limit, used, remaining: Math.max(0, limit - used) });
+    res.json({ limit, used, remaining: Math.max(0, limit - used), days });
   } catch (error) {
     console.error('Erreur lors de la récupération du quota:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du quota.' });

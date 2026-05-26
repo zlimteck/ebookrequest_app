@@ -105,6 +105,9 @@ function UserForm() {
   const [availability, setAvailability] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [quota, setQuota] = useState(null);
+  const isAdmin = localStorage.getItem('role') === 'admin';
+  const [users, setUsers] = useState([]);
+  const [targetUserId, setTargetUserId] = useState('');
 
   // Fonction pour vérifier la disponibilité du livre
   const checkAvailability = useCallback(async (title, author) => {
@@ -146,7 +149,9 @@ function UserForm() {
       } else {
         if (isMounted) {
           setIsAuthenticated(true);
-          await Promise.all([fetchExistingRequests(), fetchQuota()]);
+          const promises = [fetchExistingRequests(), fetchQuota()];
+          if (localStorage.getItem('role') === 'admin') promises.push(fetchUsers());
+          await Promise.all(promises);
 
           // Vérifier s'il y a des données pré-remplies depuis la page Découvrir
           if (location.state?.prefillData) {
@@ -179,13 +184,24 @@ function UserForm() {
     };
   }, [navigate, location.state, checkAvailability]);
   
-  // Charger le quota de l'utilisateur
-  const fetchQuota = async () => {
+  // Charger le quota (du user cible si admin a sélectionné quelqu'un)
+  const fetchQuota = async (userId = '') => {
     try {
-      const response = await axiosAdmin.get('/api/requests/quota');
+      const params = userId ? { userId } : {};
+      const response = await axiosAdmin.get('/api/requests/quota', { params });
       setQuota(response.data);
     } catch (error) {
       console.error('Erreur lors du chargement du quota:', error);
+    }
+  };
+
+  // Charger la liste des users (admin uniquement)
+  const fetchUsers = async () => {
+    try {
+      const response = await axiosAdmin.get('/api/admin/users');
+      setUsers(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des utilisateurs:', error);
     }
   };
 
@@ -286,11 +302,9 @@ function UserForm() {
   const handleBookSelect = useCallback((book) => {
     if (!book) return false;
 
-    // Vérifie si ce livre a déjà été demandé
-    if (book.id) {
-      const currentRequests = [...existingRequests];
-
-      const isDuplicate = currentRequests.some(req => {
+    // Vérifie si ce livre a déjà été demandé (ignoré si admin soumet pour un autre user)
+    if (book.id && !targetUserId) {
+      const isDuplicate = existingRequests.some(req => {
         return req.googleBooksId === book.id ||
               (req.title === book.volumeInfo?.title &&
                req.author === book.volumeInfo?.authors?.[0]);
@@ -337,7 +351,13 @@ function UserForm() {
     }
 
     return true;
-  }, [existingRequests, checkAvailability]);
+  }, [existingRequests, checkAvailability, targetUserId]);
+
+  const handleTargetUserChange = (e) => {
+    const userId = e.target.value;
+    setTargetUserId(userId);
+    fetchQuota(userId);
+  };
 
   const handleRemoveBook = () => {
     setSelectedBook(null);
@@ -384,7 +404,8 @@ function UserForm() {
       pageCount: 0,
       format: form.format || '',
       category: form.category || 'ebook',
-      ...(selectedBook?.id && { googleBooksId: selectedBook.id })
+      ...(selectedBook?.id && { googleBooksId: selectedBook.id }),
+      ...(isAdmin && targetUserId && { targetUserId })
     };
     
     // Validation du lien
@@ -415,7 +436,7 @@ function UserForm() {
     }
     try {
       await axiosAdmin.post('/api/requests', requestData);
-      await fetchQuota();
+      await fetchQuota(isAdmin && targetUserId ? targetUserId : '');
       setMessage({
         text: 'Votre demande a été soumise avec succès !',
         type: 'success'
@@ -478,6 +499,29 @@ function UserForm() {
     <div className={`${styles.formContainer} ${styles.requestForm}`}>
       <div className={styles.formCard}>
 
+      {/* ── Sélecteur user (admin uniquement) ── */}
+      {isAdmin && users.length > 0 && (
+        <div className={styles.adminUserSelect}>
+          <label className={styles.adminUserSelectLabel}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Soumettre pour
+          </label>
+          <select
+            value={targetUserId}
+            onChange={handleTargetUserChange}
+            className={styles.adminUserSelectInput}
+          >
+            <option value="">{localStorage.getItem('username') || 'Mon compte'}</option>
+            {users.filter(u => u.role !== 'admin').map(u => (
+              <option key={u._id} value={u._id}>{u.username}{u.email ? ` — ${u.email}` : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* ── Toggle ── */}
       <div className={styles.toggleSearch}>
         <button type="button"
@@ -496,7 +540,13 @@ function UserForm() {
       {quota && (
         <div className={styles.quotaBar}>
           <span className={styles.quotaBarLabel}>
-            {quota.used} demande{quota.used > 1 ? 's' : ''} utilisée{quota.used > 1 ? 's' : ''} sur 30 jours
+            {quota.used} demande{quota.used > 1 ? 's' : ''} utilisée{quota.used > 1 ? 's' : ''}
+            {' '}sur {quota.days ?? 30} jours
+            {isAdmin && targetUserId && users.find(u => u._id === targetUserId) && (
+              <span style={{ color: '#6366f1', marginLeft: '0.4rem' }}>
+                · {users.find(u => u._id === targetUserId).username}
+              </span>
+            )}
           </span>
           <div className={styles.quotaBarTrack}>
             <div className={`${styles.quotaBarFill} ${quota.remaining === 0 ? styles.quotaBarEmpty : quota.remaining <= 2 ? styles.quotaBarLow : styles.quotaBarOk}`}

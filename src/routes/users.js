@@ -99,7 +99,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit avatar isActive'
+      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {
@@ -112,7 +112,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, role, password, requestLimit } = req.body;
+    const { username, email, role, password, requestLimit, requestLimitDays } = req.body;
     
     // Vérifier si l'utilisateur existe
     const user = await User.findById(id);
@@ -167,6 +167,14 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'La limite de demandes doit être un entier positif ou nul.' });
       }
       updates.requestLimit = parsed;
+    }
+
+    if (requestLimitDays !== undefined) {
+      const parsed = parseInt(requestLimitDays, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        return res.status(400).json({ error: 'La fenêtre glissante doit être d\'au moins 1 jour.' });
+      }
+      updates.requestLimitDays = parsed;
     }
     
     if (password && password.length >= 6) {

@@ -55,9 +55,13 @@
   flex-shrink: 0;
 }
 
+.sendInputWrap .sendInput {
+  padding-left: 2.5rem;
+}
+
 .sendInput {
   width: 100%;
-  padding: 0.65rem 0.9rem 0.65rem 2.5rem;
+  padding: 0.65rem 0.9rem;
   background: var(--color-bg3);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -71,6 +75,15 @@
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+select.sendInput {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+  cursor: pointer;
 }
 
 .sendBtn {
@@ -207,6 +220,153 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Onglets ── */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0.25rem;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  font-family: inherit;
+}
+
+.tab:hover { color: var(--color-text); }
+
+.tabActive {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ── Code cell ── */
+.codeCell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.codeValue {
+  font-family: 'SF Mono', 'Fira Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-text);
+}
+
+.copyBtn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.copyBtn:hover { background: var(--color-bg3); color: var(--color-accent); border-color: var(--color-accent); }
+
+/* ── Usage ── */
+.usageBtn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.usageBtn:disabled { cursor: default; }
+
+.usageOk        { color: var(--color-text); font-weight: 500; }
+.usageExhausted { color: #94a3b8; font-weight: 500; }
+
+/* ── Code create form ── */
+.codeCreateForm { width: 100%; }
+
+.codeCreateRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.codeCreateFieldSmall {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 130px;
+  flex-shrink: 0;
+}
+
+.codeCreateFieldGrow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.codeCreateLabel {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+
+/* ── Expanded row ── */
+.expandedRow td {
+  background: var(--color-bg3) !important;
+  padding: 0 !important;
+}
+
+.usedByList {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.usedByTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.25rem;
+}
+
+.usedByItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.83rem;
+}
+
+.usedByUsername { font-weight: 600; color: var(--color-text); }
+.usedByEmail    { color: var(--color-text-muted); }
+.usedByDate     { color: var(--color-text-muted); font-size: 0.78rem; margin-left: auto; white-space: nowrap; }
+
 @media (max-width: 640px) {
   .sendCard { padding: 1rem; }
   .table th:nth-child(3),
@@ -215,4 +375,9 @@
   .table td:nth-child(4),
   .table th:nth-child(5),
   .table td:nth-child(5) { display: none; }
+
+  .codeCreateRow { flex-direction: column; }
+  .codeCreateFieldSmall,
+  .codeCreateFieldGrow { width: 100%; }
+  .codeCreateRow .sendBtn { width: 100%; }
 }
