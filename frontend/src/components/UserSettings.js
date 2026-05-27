@@ -53,6 +53,18 @@ const UserSettings = () => {
     shelfName: '',
     lastSync: null,
   });
+
+  const [appriseGlobalEnabled, setAppriseGlobalEnabled] = useState(false);
+  const [apprisePrefs, setApprisePrefs] = useState({
+    enabled: false,
+    urls: '',
+    notifyOnComplete: true,
+    notifyOnCancel: true,
+    notifyOnAdminComment: true,
+  });
+  const [appriseSaving, setAppriseSaving] = useState(false);
+  const [appriseTesting, setAppriseTesting] = useState(false);
+  const [appriseTestResult, setAppriseTestResult] = useState(null);
   const [calibreSaving, setCalibreSaving] = useState(false);
   const [calibreTesting, setCalibreTesting] = useState(false);
   const [calibreTestResult, setCalibreTestResult] = useState(null);
@@ -64,16 +76,20 @@ const UserSettings = () => {
       try {
         const response = await axiosAdmin.get('/api/users/me');
         if (response.data.success) {
+          const u = response.data.user;
           setUser(prev => ({
             ...prev,
-            ...response.data.user,
+            ...u,
             notificationPreferences: {
-              email: { enabled: response.data.user.notificationPreferences?.email?.enabled || false },
-              push: { enabled: response.data.user.notificationPreferences?.push?.enabled !== false }
+              email: { enabled: u.notificationPreferences?.email?.enabled || false },
+              push: { enabled: u.notificationPreferences?.push?.enabled !== false }
             }
           }));
-          if (response.data.user.avatar) setAvatar(response.data.user.avatar);
-          setTwoFactorEnabled(response.data.user.twoFactor?.enabled || false);
+          if (u.avatar) setAvatar(u.avatar);
+          setTwoFactorEnabled(u.twoFactor?.enabled || false);
+          if (u.notificationPreferences?.apprise) {
+            setApprisePrefs(prev => ({ ...prev, ...u.notificationPreferences.apprise }));
+          }
         }
       } catch (error) {
         toast.error('Erreur lors du chargement de votre profil');
@@ -97,9 +113,16 @@ const UserSettings = () => {
         // silencieux
       }
     };
+    const fetchAppriseStatus = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/apprise/status');
+        setAppriseGlobalEnabled(res.data.enabled || false);
+      } catch { /* silencieux */ }
+    };
     fetchUserData();
     fetchOpdsToken();
     fetchCalibreConfig();
+    fetchAppriseStatus();
   }, []);
 
   useEffect(() => {
@@ -333,6 +356,33 @@ const UserSettings = () => {
     }
   };
 
+  const handleSaveApprise = async () => {
+    setAppriseSaving(true);
+    try {
+      await axiosAdmin.put('/api/users/profile', {
+        notificationPreferences: { apprise: apprisePrefs }
+      });
+      toast.success('Préférences Apprise enregistrées');
+    } catch {
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setAppriseSaving(false);
+    }
+  };
+
+  const handleTestApprise = async () => {
+    setAppriseTesting(true);
+    setAppriseTestResult(null);
+    try {
+      const res = await axiosAdmin.post('/api/apprise/test-user');
+      setAppriseTestResult({ type: 'success', message: res.data.message || 'Notification de test envoyée !' });
+    } catch (err) {
+      setAppriseTestResult({ type: 'error', message: err.response?.data?.message || 'Erreur lors du test' });
+    } finally {
+      setAppriseTesting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -511,6 +561,110 @@ const UserSettings = () => {
             </div>
           )}
         </div>
+
+      </form>
+
+      {/* ── Apprise personnel (hors <form> pour éviter le bug de focus Safari) ── */}
+      {localStorage.getItem('role') !== 'admin' && appriseGlobalEnabled ? (
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            Notifications Apprise
+          </h2>
+
+          {/* Toggle activation */}
+          <div className={styles.toggleRow}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Activer les notifications Apprise</p>
+                <p className={styles.toggleDesc}>Reçois tes notifications via Pushover, Discord, Telegram…</p>
+              </div>
+            </div>
+            <label className={styles.switch}>
+              <input type="checkbox" checked={apprisePrefs.enabled}
+                onChange={e => setApprisePrefs(p => ({ ...p, enabled: e.target.checked }))} />
+              <span className={styles.slider} />
+            </label>
+          </div>
+
+          {apprisePrefs.enabled && (<>
+            {/* URLs personnelles */}
+            <div style={{ marginTop: '1rem' }}>
+              <label className={styles.fieldLabel}>
+                Tes URLs Apprise <span style={{ opacity: 0.5, fontWeight: 400 }}>(une par ligne)</span>
+              </label>
+              <textarea
+                className={styles.fieldTextarea || styles.fieldInput}
+                rows={3}
+                placeholder={'pover://userKey@apiToken\ndiscord://webhook_id/webhook_token'}
+                value={apprisePrefs.urls}
+                onChange={e => setApprisePrefs(p => ({ ...p, urls: e.target.value }))}
+                spellCheck={false}
+                style={{ fontFamily: 'monospace', fontSize: '0.82rem', resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
+              />
+              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.35rem 0 0' }}>
+                Voir la <a href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>documentation Apprise</a> pour les formats d'URL.
+              </p>
+            </div>
+
+            {/* Événements */}
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+              <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 0.6rem' }}>
+                Événements
+              </p>
+              {[
+                { key: 'notifyOnComplete',     label: 'Livre disponible au téléchargement' },
+                { key: 'notifyOnCancel',        label: 'Demande annulée' },
+                { key: 'notifyOnAdminComment',  label: 'Commentaire d\'un administrateur' },
+              ].map(ev => (
+                <label key={ev.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!apprisePrefs[ev.key]}
+                    onChange={e => setApprisePrefs(p => ({ ...p, [ev.key]: e.target.checked }))}
+                    style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.855rem', color: 'var(--color-text)' }}>{ev.label}</span>
+                </label>
+              ))}
+            </div>
+          </>)}
+
+          <div className={styles.cardActions} style={{ marginTop: '1rem' }}>
+            {apprisePrefs.enabled && apprisePrefs.urls?.trim() && (
+              <button type="button" className={styles.btnOutline} onClick={handleTestApprise} disabled={appriseTesting}>
+                {appriseTesting ? 'Envoi…' : 'Tester'}
+              </button>
+            )}
+            <button type="button" className={styles.btnPrimary} onClick={handleSaveApprise} disabled={appriseSaving}>
+              {appriseSaving ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+          {appriseTestResult && (
+            <div className={`${styles.alert} ${appriseTestResult.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+              {appriseTestResult.type === 'success'
+                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              }
+              {appriseTestResult.message}
+            </div>
+          )}
+        </div>
+      ) : localStorage.getItem('role') !== 'admin' ? (
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            Notifications Apprise
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: 0 }}>
+            Apprise n'est pas activé sur cette instance. Contactez votre administrateur.
+          </p>
+        </div>
+      ) : null}
 
         {/* ── Catalogue OPDS ── */}
         <div className={styles.settingsCard}>
@@ -817,8 +971,6 @@ const UserSettings = () => {
             </div>
           )}
         </div>
-
-      </form>
 
     </div>
   );

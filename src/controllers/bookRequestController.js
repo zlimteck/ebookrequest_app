@@ -175,6 +175,9 @@ export const createBookRequest = async (req, res) => {
       } catch (e) {
         console.error('Erreur notification auto-completion:', e.message);
       }
+      // Apprise admin global + Apprise personnel user
+      appriseService.notifyBookCompleted(newRequest).catch(() => {});
+      appriseService.notifyUserBookCompleted(user, newRequest).catch(() => {});
       return res.status(201).json(newRequest);
     }
 
@@ -182,14 +185,7 @@ export const createBookRequest = async (req, res) => {
     downloadWithFallback(title, author, newRequest._id.toString(), newRequest.category);
 
     // Envoyer une notification Apprise pour la nouvelle demande
-    try {
-      await appriseService.sendNotification(
-        '📚 Nouvelle demande d\'Ebook',
-        `👤 ${user.username} a demandé un nouveau livre :\n\n📖 Titre: ${title}\n✍️ Auteur: ${author}${link ? '\n🔗 Lien: ' + link : ''}`
-      );
-    } catch (appriseError) {
-      console.error('Erreur lors de l\'envoi de la notification Apprise:', appriseError);
-    }
+    appriseService.notifyNewBookRequest({ title, author, link }, user).catch(() => {});
 
     // Envoyer des emails + push web aux admins
     try {
@@ -321,6 +317,11 @@ export const updateRequestStatus = async (req, res) => {
         body: `Votre demande "${currentRequest.title}" a été annulée.`,
         url: '/dashboard'
       }).catch(() => {});
+      appriseService.notifyBookCanceled(currentRequest, reason).catch(() => {});
+      // Notif Apprise personnelle de l'user
+      User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
+        if (u) appriseService.notifyUserBookCanceled(u, currentRequest, reason).catch(() => {});
+      }).catch(() => {});
     } else {
       updateFields.cancelReason = undefined;
     }
@@ -352,6 +353,11 @@ export const updateRequestStatus = async (req, res) => {
           title: '✅ Livre disponible !',
           body: `"${currentRequest.title}" est prêt au téléchargement.`,
           url: '/dashboard'
+        }).catch(() => {});
+        appriseService.notifyBookCompleted(currentRequest).catch(() => {});
+        // Notif Apprise personnelle de l'user
+        User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
+          if (u) appriseService.notifyUserBookCompleted(u, currentRequest).catch(() => {});
         }).catch(() => {});
       }
     }
@@ -533,7 +539,13 @@ export const addDownloadLink = async (req, res) => {
         body: `"${request.title}" est prêt au téléchargement.`,
         url: '/dashboard'
       }).catch(() => {});
+
+      // Apprise personnel de l'user
+      appriseService.notifyUserBookCompleted(user, request).catch(() => {});
     }
+
+    // Apprise admin global (indépendant de l'existence de l'user)
+    appriseService.notifyBookCompleted(request).catch(() => {});
 
     // Post-completion hooks (non-blocking) — only if file is present
     if (request.filePath) {
@@ -669,12 +681,13 @@ export const updateAdminComment = async (req, res) => {
       }).catch(() => {});
     }
 
-    // Notifier l'utilisateur par email si un commentaire est défini
+    // Notifier l'utilisateur par email + Apprise si un commentaire est défini
     if (comment?.trim()) {
       try {
         const user = await User.findById(request.user);
         if (user) {
           await sendAdminCommentEmail(user, request, comment);
+          appriseService.notifyUserAdminComment(user, request, comment).catch(() => {});
         }
       } catch (emailError) {
         console.error('Erreur lors de l\'envoi de l\'email de commentaire:', emailError);
@@ -706,6 +719,11 @@ export const updateUserComment = async (req, res) => {
 
     request.userComment = comment ?? '';
     await request.save();
+
+    if (comment?.trim()) {
+      appriseService.notifyUserComment(request, comment).catch(() => {});
+    }
+
     res.json({ success: true, userComment: request.userComment });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la mise à jour du commentaire.' });
@@ -816,15 +834,7 @@ export const reportRequest = async (req, res) => {
 
     await request.save();
 
-    // Envoyer une notification Apprise aux admins
-    try {
-      await appriseService.sendNotification(
-        '⚠️ Signalement d\'un problème',
-        `📚 Livre: ${request.title}\n👤 Utilisateur: ${request.username}\n⚠️ Raison: ${reason}`
-      );
-    } catch (appriseError) {
-      console.error('Erreur lors de l\'envoi de la notification Apprise:', appriseError);
-    }
+    appriseService.notifyReport(request, reason).catch(() => {});
 
     res.json({
       success: true,

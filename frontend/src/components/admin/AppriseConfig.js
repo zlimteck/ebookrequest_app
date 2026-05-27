@@ -15,8 +15,22 @@ const AppriseConfig = () => {
   const [config, setConfig] = useState({
     enabled: false,
     appriseUrls: '',
-    notifyOnNewRequest: true
+    notifyOnNewRequest: true,
+    notifyOnComplete:   true,
+    notifyOnCancel:     true,
+    notifyOnComment:    true,
+    notifyOnReport:     true,
+    notifyOnNewUser:    false,
   });
+
+  const NOTIFY_EVENTS = [
+    { key: 'notifyOnNewRequest', label: 'Nouvelle demande de livre' },
+    { key: 'notifyOnComplete',   label: 'Livre complété (disponible)' },
+    { key: 'notifyOnCancel',     label: 'Demande annulée' },
+    { key: 'notifyOnComment',    label: 'Commentaire utilisateur' },
+    { key: 'notifyOnReport',     label: 'Signalement d\'un problème' },
+    { key: 'notifyOnNewUser',    label: 'Nouvel utilisateur inscrit' },
+  ];
   const [loading, setLoading] = useState(true);
   const [testResult, setTestResult] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -110,20 +124,19 @@ const AppriseConfig = () => {
         </div>
 
         {config.enabled && (
-          <div className={styles.toggleRow}>
-            <div className={styles.toggleInfo}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
-              <div>
-                <p className={styles.toggleLabel}>Nouvelles demandes</p>
-                <p className={styles.toggleDesc}>Notification à chaque nouvelle demande de livre</p>
-              </div>
-            </div>
-            <label className={styles.switch}>
-              <input type="checkbox" name="notifyOnNewRequest" checked={config.notifyOnNewRequest} onChange={handleChange} />
-              <span className={styles.slider} />
-            </label>
+          <div className={styles.eventsGrid}>
+            {NOTIFY_EVENTS.map(ev => (
+              <label key={ev.key} className={styles.eventRow}>
+                <input
+                  type="checkbox"
+                  name={ev.key}
+                  checked={!!config[ev.key]}
+                  onChange={handleChange}
+                  className={styles.eventCheckbox}
+                />
+                <span className={styles.eventLabel}>{ev.label}</span>
+              </label>
+            ))}
           </div>
         )}
       </div>

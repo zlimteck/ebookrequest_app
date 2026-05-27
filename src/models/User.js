@@ -42,6 +42,13 @@ const userSchema = new mongoose.Schema({
     },
     push: {
       enabled: { type: Boolean, default: true }
+    },
+    apprise: {
+      enabled:             { type: Boolean, default: false },
+      urls:                { type: String,  default: '' },
+      notifyOnComplete:    { type: Boolean, default: true },
+      notifyOnCancel:      { type: Boolean, default: true },
+      notifyOnAdminComment:{ type: Boolean, default: true },
     }
   },
   emailVerified: {

@@ -411,6 +411,36 @@ input:focus + .slider {
   to { transform: rotate(360deg); }
 }
 
+/* ── Events grid ── */
+.eventsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.eventCheckbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.eventLabel {
+  font-size: 0.855rem;
+  color: var(--color-text);
+}
+
 @media (max-width: 768px) {
   .settingsCard {
     padding: 1.1rem;
@@ -424,5 +454,9 @@ input:focus + .slider {
   .btnTest {
     width: 100%;
     justify-content: center;
+  }
+
+  .eventsGrid {
+    grid-template-columns: 1fr;
   }
 }

@@ -57,11 +57,13 @@ export const updateUserProfile = async (req, res) => {
       }
     }
     
-    // Mettre à jour les préférences de notification si fournies
+    // Mettre à jour les préférences de notification si fournies (deep merge par sous-objet)
     if (notificationPreferences) {
+      const existing = req.user.notificationPreferences || {};
       updates.notificationPreferences = {
-        ...req.user.notificationPreferences,
-        ...notificationPreferences
+        email:   { ...existing.email,   ...(notificationPreferences.email   || {}) },
+        push:    { ...existing.push,    ...(notificationPreferences.push    || {}) },
+        apprise: { ...existing.apprise, ...(notificationPreferences.apprise || {}) },
       };
     }
     

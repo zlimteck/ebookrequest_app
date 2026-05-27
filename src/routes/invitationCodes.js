@@ -5,6 +5,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import InvitationCode from '../models/InvitationCode.js';
 import User from '../models/User.js';
 import { sendVerificationEmail } from '../services/emailService.js';
+import appriseService from '../services/appriseService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
@@ -166,6 +167,7 @@ router.post('/register', async (req, res) => {
     await invCode.save();
 
     console.log(`[InvitationCode] ${user.username} inscrit via le code ${invCode.code}`);
+    appriseService.notifyNewUser(user.username, normalizedEmail).catch(() => {});
 
     const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 

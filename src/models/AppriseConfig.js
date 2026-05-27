@@ -10,10 +10,12 @@ const appriseConfigSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  notifyOnNewRequest: {
-    type: Boolean,
-    default: true
-  },
+  notifyOnNewRequest: { type: Boolean, default: true },
+  notifyOnComplete:   { type: Boolean, default: true },
+  notifyOnCancel:     { type: Boolean, default: true },
+  notifyOnComment:    { type: Boolean, default: true },
+  notifyOnReport:     { type: Boolean, default: true },
+  notifyOnNewUser:    { type: Boolean, default: false },
   configuredBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

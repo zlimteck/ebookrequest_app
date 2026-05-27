@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import BookRequest from '../models/BookRequest.js';
 import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
+import appriseService from './appriseService.js';
 
 // ─── Helpers de matching (dupliqués ici pour éviter une dépendance circulaire) ─
 
@@ -45,6 +47,20 @@ function extractVolumeNumber(title) {
 }
 
 /**
+ * Envoie les notifications Apprise (admin global + user personnel) après une complétion automatique.
+ */
+async function notifyCompletion(bookRequest) {
+  try {
+    appriseService.notifyBookCompleted(bookRequest).catch(() => {});
+    const User = mongoose.model('User');
+    const user = await User.findById(bookRequest.user).select('username notificationPreferences');
+    if (user) appriseService.notifyUserBookCompleted(user, bookRequest).catch(() => {});
+  } catch (e) {
+    console.error('[Orchestrateur] Erreur notification Apprise:', e.message);
+  }
+}
+
+/**
  * Téléchargement automatique avec fallback :
  *   1. Valentine (si activé)
  *   2. Anna's Archive (si activé et Valentine n'a rien trouvé)
@@ -62,6 +78,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
     const afterValentine = await BookRequest.findById(requestId).lean();
     if (afterValentine?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Valentine a complété "${title}"`);
+      await notifyCompletion(afterValentine);
       return;
     }
 
@@ -132,6 +149,13 @@ export async function downloadWithFallback(title, author, requestId, category = 
 
     await downloadFromAnnas(best.md5, requestId, best.format);
     connectorsTried.push('annas-archive');
+
+    // Vérifier si Anna's Archive a complété la demande
+    const afterAnnas = await BookRequest.findById(requestId).lean();
+    if (afterAnnas?.status === 'completed') {
+      console.log(`[Orchestrateur] ✓ Anna's Archive a complété "${title}"`);
+      await notifyCompletion(afterAnnas);
+    }
 
   } catch (err) {
     console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
