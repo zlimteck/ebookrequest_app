@@ -245,6 +245,11 @@ const UserManagement = () => {
                   {user.isActive === false && (
                     <span className={styles.disabledBadge}>Désactivé</span>
                   )}
+                  {user.valentine?.username && (
+                    <span className={styles.valentineBadge} title={`Compte Valentine : ${user.valentine.username}`}>
+                      <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" style={{ height: '12px', width: 'auto', display: 'block' }} />
+                    </span>
+                  )}
                 </div>
                 <div className={styles.userEmail}>{user.email}</div>
               </div>

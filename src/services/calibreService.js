@@ -61,7 +61,8 @@ export async function pushToCalibre(user, filePath, bookTitle) {
 
   const url = cfg.url.replace(/\/$/, '');
   const username = cfg.username;
-  const password = decrypt(cfg.password);
+  const raw = cfg.password || '';
+  const password = decrypt(raw) ?? raw; // fallback si ancien mot de passe en clair
   if (!username || !password) throw new Error('Identifiants Calibre-Web manquants ou illisibles');
 
   // 1. Login → session cookie

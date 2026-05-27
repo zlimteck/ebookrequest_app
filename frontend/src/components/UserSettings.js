@@ -71,6 +71,11 @@ const UserSettings = () => {
   const [calibreSyncing, setCalibreSyncing] = useState(false);
   const [calibreSyncResult, setCalibreSyncResult] = useState(null);
 
+  const [valentine, setValentine] = useState({ username: '', password: '', hasPassword: false });
+  const [valentineSaving, setValentineSaving] = useState(false);
+  const [valentineTesting, setValentineTesting] = useState(false);
+  const [valentineTestResult, setValentineTestResult] = useState(null);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -119,10 +124,17 @@ const UserSettings = () => {
         setAppriseGlobalEnabled(res.data.enabled || false);
       } catch { /* silencieux */ }
     };
+    const fetchValentineConfig = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/users/valentine');
+        setValentine(prev => ({ ...prev, username: res.data.username || '', hasPassword: res.data.hasPassword || false }));
+      } catch { /* silencieux */ }
+    };
     fetchUserData();
     fetchOpdsToken();
     fetchCalibreConfig();
     fetchAppriseStatus();
+    fetchValentineConfig();
   }, []);
 
   useEffect(() => {
@@ -353,6 +365,50 @@ const UserSettings = () => {
       setCalibreSyncResult({ error: err.response?.data?.error || err.message });
     } finally {
       setCalibreSyncing(false);
+    }
+  };
+
+  const handleValentineSave = async () => {
+    setValentineSaving(true);
+    setValentineTestResult(null);
+    try {
+      await axiosAdmin.put('/api/users/valentine', {
+        username: valentine.username,
+        ...(valentine.password ? { password: valentine.password } : {}),
+      });
+      setValentine(prev => ({ ...prev, password: '', hasPassword: !!(prev.hasPassword || prev.password) }));
+      toast.success('Compte Valentine enregistré');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde');
+    } finally {
+      setValentineSaving(false);
+    }
+  };
+
+  const handleValentineTest = async () => {
+    setValentineTesting(true);
+    setValentineTestResult(null);
+    try {
+      const res = await axiosAdmin.post('/api/users/valentine/test', {
+        username: valentine.username,
+        password: valentine.password || '••••••••',
+      });
+      setValentineTestResult({ type: 'success', message: res.data.message || 'Connexion réussie !' });
+    } catch (err) {
+      setValentineTestResult({ type: 'error', message: err.response?.data?.error || 'Connexion impossible' });
+    } finally {
+      setValentineTesting(false);
+    }
+  };
+
+  const handleValentineDelete = async () => {
+    if (!window.confirm('Supprimer votre compte Valentine personnel ? Le compte admin sera utilisé à la place.')) return;
+    try {
+      await axiosAdmin.put('/api/users/valentine', { username: '', password: '' });
+      setValentine({ username: '', password: '', hasPassword: false });
+      toast.success('Compte Valentine supprimé');
+    } catch {
+      toast.error('Erreur lors de la suppression');
     }
   };
 
@@ -665,6 +721,65 @@ const UserSettings = () => {
           </p>
         </div>
       ) : null}
+
+        {/* ── Valentine ── */}
+        {localStorage.getItem('role') !== 'admin' && (
+          <div className={styles.settingsCard}>
+            <h2 className={styles.sectionTitle}>
+              <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" style={{ height: '16px', width: 'auto' }} />
+              Compte Valentine
+            </h2>
+            <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '0 0 1rem' }}>
+              Utilisez votre propre compte <a href="https://valentine.wtf" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>valentine.wtf</a> pour les téléchargements automatiques. Sans compte personnel, le compte administrateur est utilisé.
+            </p>
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Identifiant</label>
+              <input
+                type="text"
+                className={styles.fieldInput}
+                autoComplete="off"
+                value={valentine.username}
+                onChange={e => { setValentine(p => ({ ...p, username: e.target.value })); setValentineTestResult(null); }}
+                placeholder="Votre identifiant valentine.wtf"
+              />
+            </div>
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Mot de passe</label>
+              <input
+                type="password"
+                className={styles.fieldInput}
+                autoComplete="new-password"
+                value={valentine.password}
+                onChange={e => { setValentine(p => ({ ...p, password: e.target.value })); setValentineTestResult(null); }}
+                placeholder={valentine.hasPassword ? '••••••••' : 'Mot de passe'}
+              />
+            </div>
+            <div className={styles.cardActions}>
+              {(valentine.username || valentine.hasPassword) && (
+                <button type="button" className={styles.btnOutline} onClick={handleValentineTest} disabled={valentineTesting}>
+                  {valentineTesting ? 'Test…' : 'Tester'}
+                </button>
+              )}
+              <button type="button" className={styles.btnPrimary} onClick={handleValentineSave} disabled={valentineSaving}>
+                {valentineSaving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+              {valentine.hasPassword && (
+                <button type="button" className={styles.btnDanger} onClick={handleValentineDelete}>
+                  Supprimer
+                </button>
+              )}
+            </div>
+            {valentineTestResult && (
+              <div className={`${styles.alert} ${valentineTestResult.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+                {valentineTestResult.type === 'success'
+                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                }
+                {valentineTestResult.message}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Catalogue OPDS ── */}
         <div className={styles.settingsCard}>

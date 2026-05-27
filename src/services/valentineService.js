@@ -9,6 +9,7 @@ import Notification from '../models/Notification.js';
 import { sendBookCompletedEmail } from './emailService.js';
 import { sendPushToUser } from './webPushService.js';
 import { runPostCompletionHooks } from './postCompletionHooks.js';
+import { decrypt } from './cryptoService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,7 +64,9 @@ const BASE_HEADERS = {
 
 async function getConfig() {
   const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-  return doc || { enabled: false, url: DEFAULT_URL, username: '', password: '' };
+  if (!doc) return { enabled: false, url: DEFAULT_URL, username: '', password: '' };
+  const raw = doc.password || '';
+  return { ...doc, password: decrypt(raw) ?? raw }; // fallback si ancien mot de passe en clair
 }
 
 /** Parse Set-Cookie headers into a key/value object. */
@@ -259,7 +262,7 @@ export async function testConnectionValentine(username, password) {
  * @param {string} author
  * @param {string} requestId - MongoDB ObjectId of the BookRequest
  */
-export async function downloadFromValentine(title, author, requestId, category = 'ebook') {
+export async function downloadFromValentine(title, author, requestId, category = 'ebook', userCredentials = null) {
   try {
     const isMangaOrComic = category === 'comic' || category === 'manga' ||
       /\b(manga|manhwa|manhua|comic|tome\s*\d+|vol\.?\s*\d+|t\d{2}\b)/i.test(title);
@@ -270,19 +273,29 @@ export async function downloadFromValentine(title, author, requestId, category =
     }
 
     const config = await getConfig();
-    if (!config.enabled || !config.username || !config.password) {
-      console.log('[Valentine] Désactivé ou config incomplète, skip.');
+    if (!config.enabled) {
+      console.log('[Valentine] Désactivé, skip.');
+      return;
+    }
+
+    // Priorité : credentials personnels du user → fallback config globale admin
+    const username = userCredentials?.username || config.username;
+    const password = userCredentials?.password || config.password;
+
+    if (!username || !password) {
+      console.log('[Valentine] Config incomplète (pas de credentials), skip.');
       return;
     }
 
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+    const accountLabel = userCredentials ? `[compte user]` : `[compte admin]`;
 
     // ── Login ──────────────────────────────────────────────────────────────
     let cookies;
     try {
-      cookies = await login(baseUrl, config.username, config.password);
+      cookies = await login(baseUrl, username, password);
     } catch (err) {
-      console.error('[Valentine] Erreur de connexion:', err.message);
+      console.error(`[Valentine] ${accountLabel} Erreur de connexion:`, err.message);
       return;
     }
 

@@ -106,6 +106,10 @@ const userSchema = new mongoose.Schema({
     username:  { type: String, default: '' },
     password:  { type: String, default: '' },
     shelfName: { type: String, default: '' }, // Étagère Kobo-sync (optionnelle)
+  },
+  valentine: {
+    username: { type: String, default: '' },
+    password: { type: String, default: '' }, // chiffré via cryptoService
   }
 }, {
   timestamps: true

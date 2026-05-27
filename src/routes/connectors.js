@@ -4,6 +4,7 @@ import ConnectorSettings from '../models/ConnectorSettings.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
 import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
     };
 
     if (password && password !== '••••••••') {
-      update.password = password;
+      update.password = encrypt(password);
     }
     if (!password && !_hasPassword) {
       update.password = '';
@@ -76,7 +77,8 @@ router.post('/valentine/test', requireAuth, requireAdmin, async (req, res) => {
     let realPassword = password;
     if (password === '••••••••') {
       const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-      realPassword = doc?.password || '';
+      const raw = doc?.password || '';
+      realPassword = decrypt(raw) ?? raw; // fallback si ancien mot de passe en clair
     }
     if (!realPassword) {
       return res.status(400).json({ error: 'Mot de passe non renseigné' });

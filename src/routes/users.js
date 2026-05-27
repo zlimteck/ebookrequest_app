@@ -99,7 +99,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive'
+      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive valentine.username'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {

@@ -200,6 +200,16 @@
   color: #ef4444;
 }
 
+.valentineBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 1rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(99, 102, 241, 0.12);
+}
+
 /* Bouton désactiver */
 .deactivateBtn {
   width: 32px;

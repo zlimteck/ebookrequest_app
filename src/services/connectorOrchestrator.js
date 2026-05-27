@@ -3,6 +3,7 @@ import BookRequest from '../models/BookRequest.js';
 import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
 import appriseService from './appriseService.js';
+import { decrypt } from './cryptoService.js';
 
 // ─── Helpers de matching (dupliqués ici pour éviter une dépendance circulaire) ─
 
@@ -67,11 +68,28 @@ async function notifyCompletion(bookRequest) {
  *
  * Non bloquant — toutes les erreurs sont capturées.
  */
-export async function downloadWithFallback(title, author, requestId, category = 'ebook') {
+export async function downloadWithFallback(title, author, requestId, category = 'ebook', userId = null) {
   const connectorsTried = [];
   try {
+    // ── Récupérer les credentials Valentine personnels du user (si disponibles) ─
+    let userValentineCredentials = null;
+    if (userId) {
+      try {
+        const User = mongoose.model('User');
+        const user = await User.findById(userId).select('valentine');
+        const raw = user?.valentine?.password || '';
+        const pw = decrypt(raw) ?? raw;
+        if (user?.valentine?.username && pw) {
+          userValentineCredentials = { username: user.valentine.username, password: pw };
+          console.log(`[Orchestrateur] Utilisation du compte Valentine personnel de l'user ${userId}`);
+        }
+      } catch (e) {
+        console.error('[Orchestrateur] Erreur récupération credentials Valentine user:', e.message);
+      }
+    }
+
     // ── 1. Tentative Valentine ───────────────────────────────────────────────
-    await downloadFromValentine(title, author, requestId, category);
+    await downloadFromValentine(title, author, requestId, category, userValentineCredentials);
     connectorsTried.push('valentine');
 
     // Vérifier si Valentine a complété la demande

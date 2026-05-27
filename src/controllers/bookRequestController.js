@@ -182,7 +182,7 @@ export const createBookRequest = async (req, res) => {
     }
 
     // Tentative de téléchargement automatique — Valentine puis Anna's Archive (non bloquant)
-    downloadWithFallback(title, author, newRequest._id.toString(), newRequest.category);
+    downloadWithFallback(title, author, newRequest._id.toString(), newRequest.category, user._id.toString());
 
     // Envoyer une notification Apprise pour la nouvelle demande
     appriseService.notifyNewBookRequest({ title, author, link }, user).catch(() => {});

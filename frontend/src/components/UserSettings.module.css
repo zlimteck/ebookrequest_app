@@ -65,6 +65,11 @@
   flex-shrink: 0;
 }
 
+.sectionTitle img {
+  flex-shrink: 0;
+  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%);
+}
+
 .divider {
   height: 1px;
   background: var(--color-border);

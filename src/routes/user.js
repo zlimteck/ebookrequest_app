@@ -191,4 +191,67 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
   }
 });
 
+// ── Valentine routes (credentials personnels user) ────────────────────────────
+
+// GET /api/users/valentine
+router.get('/valentine', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('valentine');
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    res.json({
+      username:    user.valentine?.username || '',
+      hasPassword: Boolean(user.valentine?.password),
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/users/valentine
+router.put('/valentine', requireAuth, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findById(req.user.id).select('valentine');
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    const updates = {};
+    if (username !== undefined) updates['valentine.username'] = username.trim();
+    if (password)               updates['valentine.password'] = encrypt(password);
+    // Si username vide → supprimer les credentials
+    if (username?.trim() === '' && !password) {
+      updates['valentine.username'] = '';
+      updates['valentine.password'] = '';
+    }
+
+    await User.findByIdAndUpdate(req.user.id, { $set: updates });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/users/valentine/test
+router.post('/valentine/test', requireAuth, async (req, res) => {
+  try {
+    const { testConnectionValentine } = await import('../services/valentineService.js');
+    let { username, password } = req.body;
+
+    if (!password || password === '••••••••') {
+      const user = await User.findById(req.user.id).select('valentine');
+      const raw = user?.valentine?.password || '';
+      password = decrypt(raw) ?? raw;
+      if (!username) username = user?.valentine?.username || '';
+    }
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
+    }
+
+    await testConnectionValentine(username.trim(), password);
+    res.json({ success: true, message: 'Connexion réussie — valentine.wtf' });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible' });
+  }
+});
+
 export default router;
