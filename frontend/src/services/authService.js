@@ -13,6 +13,7 @@ export const checkAuth = async () => {
       localStorage.removeItem('token');
       localStorage.removeItem('role');
       localStorage.removeItem('username');
+      localStorage.removeItem('hasValentine');
       return { isAuthenticated: false };
     }
 

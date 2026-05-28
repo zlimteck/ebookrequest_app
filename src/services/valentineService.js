@@ -254,6 +254,40 @@ export async function testConnectionValentine(username, password) {
 }
 
 /**
+ * Récupère le quota de téléchargements restants depuis la homepage valentine.wtf.
+ * @param {string} username
+ * @param {string} password
+ * @returns {{ remaining: number|null, total: number|null, label: string|null }}
+ */
+export async function getValentineQuota(username, password) {
+  const baseUrl = DEFAULT_URL;
+  const cookies = await login(baseUrl, username, password);
+
+  const homeRes = await axios.get(`${baseUrl}/`, {
+    headers: {
+      ...BASE_HEADERS,
+      Cookie: cookieHeader(cookies),
+    },
+    timeout: 15000,
+  });
+
+  const html = homeRes.data || '';
+
+  // Cherche <span data-hover="tooltip" title="X téléchargements restants sur Y">X</span>
+  const titleMatch = html.match(/data-hover=["']tooltip["'][^>]+title=["']([^"']*restants[^"']*)["']/i)
+                  || html.match(/title=["']([^"']*restants[^"']*)["'][^>]+data-hover=["']tooltip["']/i);
+
+  if (!titleMatch) return { remaining: null, total: null, label: null };
+
+  const label = titleMatch[1].trim(); // ex: "47 téléchargements restants sur 50"
+
+  const remaining = parseInt(label.match(/^(\d+)/)?.[1] ?? '', 10) || null;
+  const total     = parseInt(label.match(/sur\s+(\d+)/i)?.[1] ?? '', 10) || null;
+
+  return { remaining, total, label };
+}
+
+/**
  * Search valentine.wtf for a book and download it automatically.
  * Completes the BookRequest when done.
  * Non-blocking — never throws.

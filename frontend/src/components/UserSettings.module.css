@@ -408,13 +408,13 @@ input:focus + .slider {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   background: none;
   border: 1px solid var(--color-accent);
   color: var(--color-accent);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
 }
@@ -430,13 +430,13 @@ input:focus + .slider {
 }
 
 .btnDanger {
-  padding: 0.4rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   background: none;
   border: 1px solid rgba(239,68,68,0.4);
   color: #ef4444;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -503,4 +503,25 @@ input:focus + .slider {
     padding: 0.55rem 1.25rem;
     font-size: 0.875rem;
   }
+}
+
+.valentineQuotaBar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  padding: 0.45rem 0;
+  margin-bottom: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.valentineQuotaBar strong {
+  color: var(--color-accent, #a78bfa);
+  font-variant-numeric: tabular-nums;
+}
+
+.valentineQuotaBar span {
+  opacity: 0.7;
 }

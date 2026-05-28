@@ -163,8 +163,8 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 
     if (requestLimit !== undefined) {
       const parsed = parseInt(requestLimit, 10);
-      if (isNaN(parsed) || parsed < 0) {
-        return res.status(400).json({ error: 'La limite de demandes doit être un entier positif ou nul.' });
+      if (isNaN(parsed) || parsed < -1) {
+        return res.status(400).json({ error: 'La limite de demandes doit être un entier positif, 0, ou -1 (illimité).' });
       }
       updates.requestLimit = parsed;
     }

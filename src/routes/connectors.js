@@ -1,7 +1,8 @@
 import express from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
-import { testConnectionValentine, searchOnValentine, downloadFromValentineById } from '../services/valentineService.js';
+import { testConnectionValentine, searchOnValentine, downloadFromValentineById, getValentineQuota } from '../services/valentineService.js';
+import { invalidateAdminEmailPrefsCache } from '../controllers/bookRequestController.js';
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
 import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
@@ -17,12 +18,13 @@ router.get('/valentine/next-scan', requireAuth, requireAdmin, (req, res) => {
 router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
     let doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-    if (!doc) doc = { service: 'valentine', enabled: false, url: 'https://valentine.wtf', username: '', password: '', cronInterval: 6 };
+    if (!doc) doc = { service: 'valentine', enabled: false, url: 'https://valentine.wtf', username: '', password: '', cronInterval: 6, valentineFallbackToAdmin: false };
     res.json({
       ...doc,
       password: doc.password ? '••••••••' : '',
       _hasPassword: !!doc.password,
       cronInterval: doc.cronInterval || 6,
+      valentineFallbackToAdmin: doc.valentineFallbackToAdmin ?? false,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -32,13 +34,14 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/valentine ─────────────────────────────────────────────
 router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, url, username, password, _hasPassword, cronInterval } = req.body;
+    const { enabled, url, username, password, _hasPassword, cronInterval, valentineFallbackToAdmin } = req.body;
 
     const update = {
       enabled: !!enabled,
       url: url?.trim() || 'https://valentine.wtf',
       username: username?.trim() || '',
       cronInterval: Number(cronInterval) || 6,
+      valentineFallbackToAdmin: !!valentineFallbackToAdmin,
     };
 
     if (password && password !== '••••••••') {
@@ -87,6 +90,22 @@ router.post('/valentine/test', requireAuth, requireAdmin, async (req, res) => {
     res.json({ success: true, message: 'Connexion réussie — valentine.wtf' });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible' });
+  }
+});
+
+// ── GET /api/connectors/valentine/quota ───────────────────────────────────────
+router.get('/valentine/quota', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
+    if (!doc?.enabled || !doc?.username || !doc?.password) {
+      return res.status(400).json({ error: 'Valentine non configuré ou désactivé' });
+    }
+    const raw = doc.password || '';
+    const password = decrypt(raw) ?? raw;
+    const quota = await getValentineQuota(doc.username, password);
+    res.json(quota);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la récupération du quota' });
   }
 });
 
@@ -155,6 +174,36 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/connectors/email ─────────────────────────────────────────────────
+router.get('/email', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    let doc = await ConnectorSettings.findOne({ service: 'email' }).lean();
+    if (!doc) doc = { emailEnabled: true, notifyOnNewRequest: true };
+    res.json({
+      enabled:           doc.emailEnabled ?? true,
+      notifyOnNewRequest: doc.notifyOnNewRequest ?? true,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/email ─────────────────────────────────────────────────
+router.put('/email', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, notifyOnNewRequest } = req.body;
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'email' },
+      { emailEnabled: !!enabled, notifyOnNewRequest: !!notifyOnNewRequest },
+      { upsert: true, new: true }
+    );
+    invalidateAdminEmailPrefsCache();
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
   }
 });
 

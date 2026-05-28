@@ -203,11 +203,16 @@
 .valentineBadge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0.15rem 0.55rem;
   border-radius: 1rem;
   white-space: nowrap;
   flex-shrink: 0;
   background: rgba(99, 102, 241, 0.12);
+}
+
+.valentineBadge img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%);
 }
 
 /* Bouton désactiver */

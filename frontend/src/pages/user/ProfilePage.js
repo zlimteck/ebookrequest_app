@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './ProfilePage.module.css';
-
-const getAvatarColor = (username = '') => {
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-};
+import { getAvatarColor } from '../../utils/avatarColor';
 
 const ProfilePage = () => {
   const [data, setData] = useState(null);
@@ -79,7 +73,7 @@ const ProfilePage = () => {
           {user.avatar ? (
             <img src={user.avatar} alt={user.username} className={styles.avatar} />
           ) : (
-            <div className={styles.avatarLetter} style={{ background: getAvatarColor(user.username) }}>
+            <div className={styles.avatarLetter} style={{ background: getAvatarColor({ role: user.role, hasValentine: localStorage.getItem('hasValentine') === 'true' }) }}>
               {user.username[0]?.toUpperCase()}
             </div>
           )}

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './AdminPage.module.css';
 import { toast } from 'react-toastify';
-import AppriseConfig from '../../components/admin/AppriseConfig';
+import NotificationsConfig from '../../components/admin/NotificationsConfig';
 import UserManagement from '../../components/admin/UserManagement';
 import StatsDashboard from '../../components/admin/StatsDashboard';
 import BestsellerManagement from '../../components/admin/BestsellerManagement';
@@ -95,6 +95,7 @@ function AdminPage() {
   const [valentineResults, setValentineResults] = useState(null);
   const [valentineLoading, setValentineLoading] = useState(false);
   const [valentineDownloading, setValentineDownloading] = useState(null);
+  const [valentineModalQuota, setValentineModalQuota] = useState(null);
   const [annasResults, setAnnasResults] = useState(null);
   const [annasLoading, setAnnasLoading] = useState(false);
   const [annasDownloading, setAnnasDownloading] = useState(null);
@@ -148,6 +149,10 @@ function AdminPage() {
     setValentineResults(null);
     setAnnasResults(null);
     setValentineDownloading(null);
+    setValentineModalQuota(null);
+    axiosAdmin.get('/api/connectors/valentine/quota')
+      .then(res => setValentineModalQuota(res.data))
+      .catch(() => {});
   };
 
   const closeConnectorsModal = () => {
@@ -158,6 +163,7 @@ function AdminPage() {
     setAnnasLoading(false);
     setValentineDownloading(null);
     setAnnasDownloading(null);
+    setValentineModalQuota(null);
   };
 
   const runConnectorsSearch = async (query) => {
@@ -540,7 +546,7 @@ function AdminPage() {
       case 'stats':
         return <StatsDashboard />;
       case 'pushover':
-        return <AppriseConfig />;
+        return <NotificationsConfig />;
       case 'users':
         return <UserManagement />;
       case 'bestsellers':
@@ -1594,7 +1600,7 @@ function AdminPage() {
     },
     {
       id: 'pushover',
-      label: 'Apprise',
+      label: 'Notifications',
       icon: (
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -1958,7 +1964,16 @@ function AdminPage() {
                     <div className={styles.connectorsSectionHeader}>
                       <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorsSectionLogo} />
                       <span>Valentine.wtf</span>
-                      {valentineLoading && <span className={styles.spinner} style={{marginLeft:'auto'}} />}
+                      {valentineLoading
+                        ? <span className={styles.spinner} style={{ marginLeft: 'auto' }} />
+                        : valentineModalQuota && !valentineModalQuota.error && (
+                          <span className={styles.connectorQuotaInfo}>
+                            <strong>{valentineModalQuota.remaining ?? '—'}</strong>
+                            {valentineModalQuota.total != null && ` / ${valentineModalQuota.total}`}
+                            {' '}restants
+                          </span>
+                        )
+                      }
                     </div>
                     {valentineResults === null ? null : valentineResults.length === 0 ? (
                       <div className={styles.fileBrowserEmpty}>Aucun résultat</div>

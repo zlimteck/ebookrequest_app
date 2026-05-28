@@ -230,6 +230,28 @@ router.put('/valentine', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/users/valentine/quota
+router.get('/valentine/quota', requireAuth, async (req, res) => {
+  try {
+    const { getValentineQuota } = await import('../services/valentineService.js');
+    const user = await User.findById(req.user.id).select('valentine');
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    const raw = user?.valentine?.password || '';
+    const password = decrypt(raw) ?? raw;
+    const username = user?.valentine?.username || '';
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Aucun compte Valentine configuré' });
+    }
+
+    const quota = await getValentineQuota(username, password);
+    res.json(quota);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la récupération du quota' });
+  }
+});
+
 // POST /api/users/valentine/test
 router.post('/valentine/test', requireAuth, async (req, res) => {
   try {

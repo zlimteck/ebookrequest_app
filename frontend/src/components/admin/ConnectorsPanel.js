@@ -58,6 +58,7 @@ function ValentineCard() {
     password: '',
     _hasPassword: false,
     cronInterval: 6,
+    valentineFallbackToAdmin: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,17 +67,29 @@ function ValentineCard() {
   const [alert, setAlert] = useState(null);
   const [nextScanAt, setNextScanAt] = useState(null);
   const countdown = useCountdown(nextScanAt);
+  const [quota, setQuota] = useState(null);
+  const [quotaFetchedAt, setQuotaFetchedAt] = useState(null);
 
   useEffect(() => {
     axiosAdmin.get('/api/connectors/valentine')
-      .then(res => setConfig({
-        enabled: res.data.enabled ?? false,
-        url: res.data.url || 'https://valentine.wtf',
-        username: res.data.username || '',
-        password: res.data.password || '',
-        _hasPassword: res.data._hasPassword ?? false,
-        cronInterval: res.data.cronInterval || 6,
-      }))
+      .then(res => {
+        const cfg = {
+          enabled: res.data.enabled ?? false,
+          url: res.data.url || 'https://valentine.wtf',
+          username: res.data.username || '',
+          password: res.data.password || '',
+          _hasPassword: res.data._hasPassword ?? false,
+          cronInterval: res.data.cronInterval || 6,
+          valentineFallbackToAdmin: res.data.valentineFallbackToAdmin ?? false,
+        };
+        setConfig(cfg);
+        // Auto-fetch quota si activé et mot de passe configuré
+        if (cfg.enabled && cfg._hasPassword) {
+          axiosAdmin.get('/api/connectors/valentine/quota')
+            .then(qRes => { setQuota(qRes.data); setQuotaFetchedAt(new Date()); })
+            .catch(() => {});
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
 
@@ -131,6 +144,7 @@ function ValentineCard() {
     }
   };
 
+
   if (loading) return (
     <div className={styles.card}>
       <div className={styles.cardLoading}><div className={styles.spinner} /></div>
@@ -166,6 +180,15 @@ function ValentineCard() {
           </svg>
           Prochain scan dans <strong>{countdown}</strong>
           <span className={styles.nextScanInterval}>(toutes les {config.cronInterval}h)</span>
+        </div>
+      )}
+      {config.enabled && quota && !quota.error && (
+        <div className={styles.nextScan}>
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="8 17 12 21 16 17"/><line x1="12" y1="3" x2="12" y2="21"/>
+          </svg>
+          Quota : <strong>{quota.remaining ?? '—'}</strong>
+          {quota.total != null && <span className={styles.nextScanInterval}>/ {quota.total} restants</span>}
         </div>
       )}
 
@@ -229,6 +252,23 @@ function ValentineCard() {
           )}
         </div>
 
+        <label className={styles.toggleOptionRow}>
+          <input
+            type="checkbox"
+            className={styles.toggleOptionCheckbox}
+            checked={config.valentineFallbackToAdmin}
+            onChange={async e => {
+              const updated = { ...config, valentineFallbackToAdmin: e.target.checked };
+              setConfig(updated);
+              try { await axiosAdmin.put('/api/connectors/valentine', updated); } catch { /* silencieux */ }
+            }}
+          />
+          <div className={styles.toggleOptionInfo}>
+            <span className={styles.toggleOptionLabel}>Fallback vers ce compte si quota user épuisé</span>
+            <p className={styles.toggleOptionDesc}>Si un user a son propre compte Valentine et que son quota est épuisé, retente avec le compte admin avant de passer à Anna's Archive.</p>
+          </div>
+        </label>
+
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
             {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
@@ -253,6 +293,7 @@ function ValentineCard() {
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
+
       </form>
     </div>
   );

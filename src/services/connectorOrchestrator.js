@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import BookRequest from '../models/BookRequest.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
 import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
 import appriseService from './appriseService.js';
@@ -93,11 +94,27 @@ export async function downloadWithFallback(title, author, requestId, category = 
     connectorsTried.push('valentine');
 
     // Vérifier si Valentine a complété la demande
-    const afterValentine = await BookRequest.findById(requestId).lean();
+    let afterValentine = await BookRequest.findById(requestId).lean();
     if (afterValentine?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Valentine a complété "${title}"`);
       await notifyCompletion(afterValentine);
       return;
+    }
+
+    // ── 1b. Fallback vers le compte Valentine admin (si user avait ses propres creds) ─
+    if (userValentineCredentials) {
+      const valentineDoc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
+      if (valentineDoc?.valentineFallbackToAdmin && valentineDoc?.enabled && valentineDoc?.username && valentineDoc?.password) {
+        console.log(`[Orchestrateur] Quota Valentine user épuisé — fallback vers le compte admin pour "${title}"`);
+        await downloadFromValentine(title, author, requestId, category, null);
+        connectorsTried.push('valentine-admin-fallback');
+        afterValentine = await BookRequest.findById(requestId).lean();
+        if (afterValentine?.status === 'completed') {
+          console.log(`[Orchestrateur] ✓ Valentine (admin fallback) a complété "${title}"`);
+          await notifyCompletion(afterValentine);
+          return;
+        }
+      }
     }
 
     // ── 2. Fallback Anna's Archive ───────────────────────────────────────────

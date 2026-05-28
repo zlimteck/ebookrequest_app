@@ -1,23 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
+import { getAvatarColor } from '../../utils/avatarColor';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import styles from './UserManagement.module.css';
 
-const getAvatarColor = (username) => {
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-};
 
 const UserAvatar = ({ user }) => {
   if (user.avatar) {
     return <img src={user.avatar} alt={user.username} className={styles.avatarImg} />;
   }
   return (
-    <div className={styles.avatar} style={{ background: getAvatarColor(user.username) }}>
+    <div className={styles.avatar} style={{ background: getAvatarColor({ role: user.role, hasValentine: !!user.valentine?.username }) }}>
       {user.username.charAt(0).toUpperCase()}
     </div>
   );
@@ -48,7 +43,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30 });
+  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false });
   const [errors, setErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -139,6 +134,8 @@ const UserManagement = () => {
     try {
       const userData = { ...formData };
       if (!userData.password) delete userData.password;
+      if (userData.unlimitedRequests) userData.requestLimit = -1;
+      delete userData.unlimitedRequests;
       if (userData._id) {
         await axiosAdmin.put(`/api/admin/users/${userData._id}`, userData);
         toast.success('Utilisateur mis à jour');
@@ -154,13 +151,14 @@ const UserManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30 });
+    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false });
     setErrors({});
     setShowModal(false);
   };
 
   const handleEdit = (user) => {
-    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: user.requestLimit ?? 10, requestLimitDays: user.requestLimitDays ?? 30 });
+    const unlimited = (user.requestLimit ?? 10) < 0;
+    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited });
     setUserStats(null);
     setShowModal(true);
     axiosAdmin.get(`/api/admin/user-stats/${user._id}`)
@@ -247,7 +245,7 @@ const UserManagement = () => {
                   )}
                   {user.valentine?.username && (
                     <span className={styles.valentineBadge} title={`Compte Valentine : ${user.valentine.username}`}>
-                      <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" style={{ height: '12px', width: 'auto', display: 'block' }} />
+                      <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" style={{ height: '14px', width: 'auto' }} />
                     </span>
                   )}
                 </div>
@@ -400,8 +398,23 @@ const UserManagement = () => {
 
                   <div className={styles.formGroup}>
                     <label>Limite de demandes</label>
-                    <input type="number" name="requestLimit" value={formData.requestLimit}
-                      onChange={handleInputChange} className={styles.formInput} min="0" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <input
+                        type="number" name="requestLimit" value={formData.requestLimit}
+                        onChange={handleInputChange} className={styles.formInput} min="1"
+                        disabled={formData.unlimitedRequests}
+                        style={{ flex: 1, opacity: formData.unlimitedRequests ? 0.4 : 1 }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.unlimitedRequests}
+                          onChange={e => setFormData(p => ({ ...p, unlimitedRequests: e.target.checked }))}
+                          style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }}
+                        />
+                        Illimité
+                      </label>
+                    </div>
                   </div>
 
                   <div className={styles.formGroup}>
@@ -440,10 +453,10 @@ const UserManagement = () => {
                           <span className={styles.requestStatLabel}>en attente</span>
                         </div>
                         <div className={styles.requestStatItem}>
-                          <span className={styles.requestStatValue} style={{ color: userStats.recentCount >= (users.find(u => u._id === formData._id)?.requestLimit ?? 10) ? '#ef4444' : 'var(--color-text)' }}>
-                            {userStats.recentCount} / {users.find(u => u._id === formData._id)?.requestLimit ?? 10}
+                          <span className={styles.requestStatValue} style={{ color: !formData.unlimitedRequests && userStats.recentCount >= (users.find(u => u._id === formData._id)?.requestLimit ?? 10) ? '#ef4444' : 'var(--color-text)' }}>
+                            {userStats.recentCount}{formData.unlimitedRequests ? '' : ` / ${users.find(u => u._id === formData._id)?.requestLimit ?? 10}`}
                           </span>
-                          <span className={styles.requestStatLabel}>quota {formData.requestLimitDays ?? 30}j</span>
+                          <span className={styles.requestStatLabel}>quota {formData.unlimitedRequests ? '∞' : `${formData.requestLimitDays ?? 30}j`}</span>
                         </div>
                       </div>
                     )}

@@ -796,6 +796,18 @@ body {
   letter-spacing: -0.03em;
 }
 
+.connectorQuotaInfo {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.connectorQuotaInfo strong {
+  color: var(--color-accent, #a78bfa);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Valentine logo ── */
 .valentineLogo {
   width: 13px;

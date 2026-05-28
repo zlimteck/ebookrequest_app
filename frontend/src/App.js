@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { getAvatarColor } from './utils/avatarColor';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useTheme } from './context/ThemeContext';
@@ -30,12 +31,6 @@ document.body.style.padding = '0';
 // Flag module-level : le check setup ne s'exécute qu'une fois par chargement de page
 let setupChecked = false;
 
-const getAvatarColor = (username = '') => {
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-};
 
 function App() {
   const navigate = useNavigate();
@@ -228,7 +223,7 @@ function App() {
               {avatar ? (
                 <img src={avatar} alt={username} className={styles.navAvatarImg} />
               ) : (
-                <span className={styles.navAvatarLetter} style={{ background: getAvatarColor(username) }}>
+                <span className={styles.navAvatarLetter} style={{ background: getAvatarColor({ role, hasValentine: localStorage.getItem('hasValentine') === 'true' }) }}>
                   {username[0]?.toUpperCase()}
                 </span>
               )}

@@ -37,8 +37,10 @@ const userSchema = new mongoose.Schema({
   },
   notificationPreferences: {
     email: {
-      enabled: { type: Boolean, default: false },
-      bookCompleted: { type: Boolean, default: true }
+      enabled:      { type: Boolean, default: false },
+      bookCompleted:{ type: Boolean, default: true },
+      bookCanceled: { type: Boolean, default: true },
+      adminComment: { type: Boolean, default: true },
     },
     push: {
       enabled: { type: Boolean, default: true }
@@ -70,7 +72,7 @@ const userSchema = new mongoose.Schema({
   requestLimit: {
     type: Number,
     default: 10,
-    min: 0
+    min: -1   // -1 = illimité
   },
   requestLimitDays: {
     type: Number,

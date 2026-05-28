@@ -6,21 +6,14 @@ import { compressImage } from '../utils/imageCompressor';
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed } from '../serviceWorkerRegistration';
 import TwoFactorSetup from './TwoFactorSetup';
 
-const getAvatarColor = (username) => {
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
+import { getAvatarColor } from '../utils/avatarColor';
 
 const UserSettings = () => {
   const [user, setUser] = useState({
     email: '',
     username: '',
     notificationPreferences: {
-      email: { enabled: false },
+      email: { enabled: false, bookCompleted: true, bookCanceled: true, adminComment: true },
       push: { enabled: true }
     }
   });
@@ -75,6 +68,8 @@ const UserSettings = () => {
   const [valentineSaving, setValentineSaving] = useState(false);
   const [valentineTesting, setValentineTesting] = useState(false);
   const [valentineTestResult, setValentineTestResult] = useState(null);
+  const [valentineQuota, setValentineQuota] = useState(null);
+  const [valentineQuotaFetchedAt, setValentineQuotaFetchedAt] = useState(null);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -86,7 +81,12 @@ const UserSettings = () => {
             ...prev,
             ...u,
             notificationPreferences: {
-              email: { enabled: u.notificationPreferences?.email?.enabled || false },
+              email: {
+                enabled:       u.notificationPreferences?.email?.enabled || false,
+                bookCompleted: u.notificationPreferences?.email?.bookCompleted !== false,
+                bookCanceled:  u.notificationPreferences?.email?.bookCanceled  !== false,
+                adminComment:  u.notificationPreferences?.email?.adminComment  !== false,
+              },
               push: { enabled: u.notificationPreferences?.push?.enabled !== false }
             }
           }));
@@ -127,7 +127,18 @@ const UserSettings = () => {
     const fetchValentineConfig = async () => {
       try {
         const res = await axiosAdmin.get('/api/users/valentine');
-        setValentine(prev => ({ ...prev, username: res.data.username || '', hasPassword: res.data.hasPassword || false }));
+        const username = res.data.username || '';
+        const hasPassword = res.data.hasPassword || false;
+        setValentine(prev => ({ ...prev, username, hasPassword }));
+        localStorage.setItem('hasValentine', hasPassword ? 'true' : 'false');
+        // Auto-fetch quota si des identifiants sont enregistrés
+        if (hasPassword) {
+          try {
+            const qRes = await axiosAdmin.get('/api/users/valentine/quota');
+            setValentineQuota(qRes.data);
+            setValentineQuotaFetchedAt(new Date());
+          } catch { /* silencieux */ }
+        }
       } catch { /* silencieux */ }
     };
     fetchUserData();
@@ -272,13 +283,18 @@ const UserSettings = () => {
     const { name, value, type, checked } = e.target;
     if (name.startsWith('notificationPreferences.')) {
       const [, prefKey, subKey] = name.split('.');
-      setUser(prev => ({
-        ...prev,
-        notificationPreferences: {
-          ...prev.notificationPreferences,
-          [prefKey]: { ...prev.notificationPreferences?.[prefKey], [subKey]: type === 'checkbox' ? checked : value }
-        }
-      }));
+      const val = type === 'checkbox' ? checked : value;
+      setUser(prev => {
+        const updatedPrefKey = { ...prev.notificationPreferences?.[prefKey], [subKey]: val };
+        if (prefKey === 'email') handleSaveEmailPrefs(updatedPrefKey);
+        return {
+          ...prev,
+          notificationPreferences: {
+            ...prev.notificationPreferences,
+            [prefKey]: updatedPrefKey,
+          }
+        };
+      });
     } else {
       setUser(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     }
@@ -406,11 +422,14 @@ const UserSettings = () => {
     try {
       await axiosAdmin.put('/api/users/valentine', { username: '', password: '' });
       setValentine({ username: '', password: '', hasPassword: false });
+      setValentineQuota(null);
+      localStorage.setItem('hasValentine', 'false');
       toast.success('Compte Valentine supprimé');
     } catch {
       toast.error('Erreur lors de la suppression');
     }
   };
+
 
   const handleSaveApprise = async () => {
     setAppriseSaving(true);
@@ -443,15 +462,22 @@ const UserSettings = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const response = await axiosAdmin.put('/api/users/profile', {
-        email: user.email,
-        notificationPreferences: user.notificationPreferences
-      });
-      if (response.data.success) toast.success('Paramètres enregistrés');
+      const response = await axiosAdmin.put('/api/users/profile', { email: user.email });
+      if (response.data.success) toast.success('Adresse email mise à jour');
     } catch (error) {
       toast.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveEmailPrefs = async (updatedPrefs) => {
+    try {
+      await axiosAdmin.put('/api/users/profile', {
+        notificationPreferences: { email: updatedPrefs }
+      });
+    } catch {
+      toast.error('Erreur lors de la sauvegarde');
     }
   };
 
@@ -464,7 +490,7 @@ const UserSettings = () => {
     );
   }
 
-  const avatarColor = getAvatarColor(user.username || '?');
+  const avatarColor = getAvatarColor({ role: user.role, hasValentine: !!(valentine.hasPassword || valentine.username) });
 
   return (
     <div className={styles.pageWrapper}>
@@ -552,17 +578,39 @@ const UserSettings = () => {
             Notifications
           </h2>
 
-          <div className={styles.toggleRow}>
-            <div className={styles.toggleInfo}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-              </svg>
-              <div>
-                <p className={styles.toggleLabel}>Notifications par email</p>
-                <p className={styles.toggleDesc}>Reçois un email quand un livre est prêt</p>
+          <div className={styles.toggleRow} style={user.notificationPreferences.email.enabled ? { alignItems: 'flex-start' } : {}}>
+            <div className={styles.toggleInfo} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon} style={{ flexShrink: 0 }}>
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+                <div>
+                  <p className={styles.toggleLabel}>Notifications par email</p>
+                  <p className={styles.toggleDesc}>Reçois un email pour les événements sélectionnés</p>
+                </div>
               </div>
+              {user.notificationPreferences.email.enabled && (
+                <div style={{ marginTop: '0.65rem', paddingLeft: '1.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {[
+                    { name: 'notificationPreferences.email.bookCompleted', label: 'Livre disponible au téléchargement' },
+                    { name: 'notificationPreferences.email.bookCanceled',  label: 'Demande annulée' },
+                    { name: 'notificationPreferences.email.adminComment',  label: 'Commentaire d\'un administrateur' },
+                  ].map(ev => (
+                    <label key={ev.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        name={ev.name}
+                        checked={!!user.notificationPreferences.email[ev.name.split('.')[2]]}
+                        onChange={handleInputChange}
+                        style={{ accentColor: 'var(--color-accent)', width: 14, height: 14, flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>{ev.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-            <label className={styles.switch}>
+            <label className={styles.switch} style={{ marginTop: '0.15rem', flexShrink: 0 }}>
               <input
                 type="checkbox"
                 name="notificationPreferences.email.enabled"
@@ -732,6 +780,15 @@ const UserSettings = () => {
             <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '0 0 1rem' }}>
               Utilisez votre propre compte <a href="https://valentine.wtf" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>valentine.wtf</a> pour les téléchargements automatiques. Sans compte personnel, le compte administrateur est utilisé.
             </p>
+            {valentineQuota && !valentineQuota.error && (
+              <div className={styles.valentineQuotaBar}>
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="8 17 12 21 16 17"/><line x1="12" y1="3" x2="12" y2="21"/>
+                </svg>
+                Quota : <strong>{valentineQuota.remaining ?? '—'}</strong>
+                {valentineQuota.total != null && <span>/ {valentineQuota.total} restants</span>}
+              </div>
+            )}
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>Identifiant</label>
               <input

@@ -664,9 +664,10 @@
   color: #8b949e;
 }
 
-.quotaCountOk  { color: var(--color-success, #4fcf7f); }
-.quotaCountLow { color: #f59e0b; }
-.quotaCountEmpty { color: var(--color-danger, #ff4f4f); }
+.quotaCountOk        { color: var(--color-success, #4fcf7f); }
+.quotaCountLow       { color: #f59e0b; }
+.quotaCountEmpty     { color: var(--color-danger, #ff4f4f); }
+.quotaCountUnlimited { color: var(--color-accent, #a78bfa); }
 
 .quotaBarTrack {
   height: 6px;
@@ -682,9 +683,10 @@
   transition: width 0.4s ease;
 }
 
-.quotaBarOk    { background: var(--color-success, #4fcf7f); }
-.quotaBarLow   { background: #f59e0b; }
-.quotaBarEmpty { background: var(--color-danger, #ff4f4f); }
+.quotaBarOk       { background: var(--color-success, #4fcf7f); }
+.quotaBarLow      { background: #f59e0b; }
+.quotaBarEmpty    { background: var(--color-danger, #ff4f4f); }
+.quotaBarUnlimited { background: var(--color-accent, #a78bfa); opacity: 0.5; }
 
 .quotaFooter {
   display: flex;

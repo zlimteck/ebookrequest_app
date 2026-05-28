@@ -105,6 +105,7 @@ function UserForm() {
   const [availability, setAvailability] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [quota, setQuota] = useState(null);
+  const [valentineQuota, setValentineQuota] = useState(null);
   const isAdmin = localStorage.getItem('role') === 'admin';
   const [users, setUsers] = useState([]);
   const [targetUserId, setTargetUserId] = useState('');
@@ -151,6 +152,12 @@ function UserForm() {
           setIsAuthenticated(true);
           const promises = [fetchExistingRequests(), fetchQuota()];
           if (localStorage.getItem('role') === 'admin') promises.push(fetchUsers());
+          // Quota Valentine personnel (silencieux — absent si pas de compte)
+          if (localStorage.getItem('role') !== 'admin') {
+            axiosAdmin.get('/api/users/valentine/quota')
+              .then(r => { if (isMounted) setValentineQuota(r.data); })
+              .catch(() => {});
+          }
           await Promise.all(promises);
 
           // Vérifier s'il y a des données pré-remplies depuis la page Découvrir
@@ -537,6 +544,24 @@ function UserForm() {
       </div>
 
       {/* ── Quota compact ── */}
+      {valentineQuota && !valentineQuota.error && (
+        <div className={styles.quotaBar}>
+          <span className={styles.quotaBarLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine"
+              style={{ height: '11px', width: 'auto', filter: 'brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%)' }} />
+            Valentine
+          </span>
+          {valentineQuota.total != null && (
+            <div className={styles.quotaBarTrack}>
+              <div className={`${styles.quotaBarFill} ${valentineQuota.remaining === 0 ? styles.quotaBarEmpty : valentineQuota.remaining <= 5 ? styles.quotaBarLow : styles.quotaBarOk}`}
+                style={{ width: `${Math.round(((valentineQuota.total - valentineQuota.remaining) / valentineQuota.total) * 100)}%` }} />
+            </div>
+          )}
+          <span className={`${styles.quotaBarCount} ${valentineQuota.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.remaining <= 5 ? styles.quotaCountLow : styles.quotaCountOk}`}>
+            {valentineQuota.remaining ?? '—'}{valentineQuota.total != null && ` / ${valentineQuota.total}`} restant{valentineQuota.remaining > 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
       {quota && (
         <div className={styles.quotaBar}>
           <span className={styles.quotaBarLabel}>
@@ -549,11 +574,11 @@ function UserForm() {
             )}
           </span>
           <div className={styles.quotaBarTrack}>
-            <div className={`${styles.quotaBarFill} ${quota.remaining === 0 ? styles.quotaBarEmpty : quota.remaining <= 2 ? styles.quotaBarLow : styles.quotaBarOk}`}
-              style={{ width: `${quota.limit > 0 ? Math.round((quota.used / quota.limit) * 100) : 100}%` }} />
+            <div className={`${styles.quotaBarFill} ${quota.unlimited ? styles.quotaBarUnlimited : quota.remaining === 0 ? styles.quotaBarEmpty : quota.remaining <= 2 ? styles.quotaBarLow : styles.quotaBarOk}`}
+              style={{ width: quota.unlimited ? '100%' : `${Math.round((quota.used / quota.limit) * 100)}%` }} />
           </div>
-          <span className={`${styles.quotaBarCount} ${quota.remaining === 0 ? styles.quotaCountEmpty : quota.remaining <= 2 ? styles.quotaCountLow : styles.quotaCountOk}`}>
-            {quota.remaining} / {quota.limit} restante{quota.remaining > 1 ? 's' : ''}
+          <span className={`${styles.quotaBarCount} ${quota.unlimited ? styles.quotaCountUnlimited : quota.remaining === 0 ? styles.quotaCountEmpty : quota.remaining <= 2 ? styles.quotaCountLow : styles.quotaCountOk}`}>
+            {quota.unlimited ? '∞ Illimité' : `${quota.remaining} / ${quota.limit} restante${quota.remaining > 1 ? 's' : ''}`}
           </span>
         </div>
       )}

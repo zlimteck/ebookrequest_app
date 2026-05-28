@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import styles from './NavDrawer.module.css';
+import { getAvatarColor } from '../utils/avatarColor';
 
 const NAV_ITEMS = [
   {
@@ -97,14 +98,7 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout 
 
   const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
-  // Couleur avatar
-  const getAvatarColor = (name) => {
-    const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
-  const color = getAvatarColor(username || '?');
+  const color = getAvatarColor({ role, hasValentine: localStorage.getItem('hasValentine') === 'true' });
 
   return (
     <>

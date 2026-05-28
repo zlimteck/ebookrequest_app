@@ -22,7 +22,22 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
   }
 };
 import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail } from '../services/emailService.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
+
+// Récupère les préférences email admin (mis en cache 60s pour éviter les requêtes répétées)
+let _adminEmailPrefsCache = null;
+let _adminEmailPrefsCacheAt = 0;
+async function getAdminEmailPrefs() {
+  if (_adminEmailPrefsCache && Date.now() - _adminEmailPrefsCacheAt < 60000) return _adminEmailPrefsCache;
+  const doc = await ConnectorSettings.findOne({ service: 'email' }).lean();
+  _adminEmailPrefsCache = { enabled: doc?.emailEnabled ?? true, notifyOnNewRequest: doc?.notifyOnNewRequest ?? true };
+  _adminEmailPrefsCacheAt = Date.now();
+  return _adminEmailPrefsCache;
+}
+
+// Invalide le cache quand les préférences sont modifiées
+export function invalidateAdminEmailPrefsCache() { _adminEmailPrefsCache = null; }
 import { runPostCompletionHooks } from '../services/postCompletionHooks.js';
 import path from 'path';
 import fs from 'fs';
@@ -80,7 +95,7 @@ export const createBookRequest = async (req, res) => {
         createdAt: { $gte: windowStart }
       });
       const limit = user.requestLimit ?? 10;
-      if (recentCount >= limit) {
+      if (limit >= 0 && recentCount >= limit) {
         return res.status(429).json({
           error: `Vous avez atteint votre limite de ${limit} demande(s) sur les ${days} derniers jours.`
         });
@@ -149,7 +164,8 @@ export const createBookRequest = async (req, res) => {
     // ── Si auto-complété : notifier l'utilisateur, pas les admins ────────────
     if (isAutoCompleted) {
       try {
-        if (user.emailVerified && user.email) {
+        const prefs = user.notificationPreferences?.email;
+        if (user.emailVerified && user.email && prefs?.enabled !== false && prefs?.bookCompleted !== false) {
           await sendBookCompletedEmail(user, newRequest);
         }
       } catch (e) {
@@ -193,13 +209,16 @@ export const createBookRequest = async (req, res) => {
 
       if (admins.length > 0) {
         // Emails aux admins avec email vérifié
-        const adminsWithEmail = admins.filter(a => a.emailVerified && a.email);
-        if (adminsWithEmail.length > 0) {
-          await Promise.allSettled(
-            adminsWithEmail.map(admin =>
-              sendNewRequestToAdminsEmail(admin, newRequest, user.username)
-            )
-          );
+        const adminPrefs = await getAdminEmailPrefs();
+        if (adminPrefs.enabled && adminPrefs.notifyOnNewRequest) {
+          const adminsWithEmail = admins.filter(a => a.emailVerified && a.email);
+          if (adminsWithEmail.length > 0) {
+            await Promise.allSettled(
+              adminsWithEmail.map(admin =>
+                sendNewRequestToAdminsEmail(admin, newRequest, user.username)
+              )
+            );
+          }
         }
 
         // Web push à tous les admins
@@ -301,11 +320,10 @@ export const updateRequestStatus = async (req, res) => {
         updateFields.canceledAt = new Date();
         try {
           const requestWithUser = await BookRequest.findById(id).populate('user', 'email username notificationPreferences');
-          if (requestWithUser?.user?.email) {
-            await sendRequestCanceledEmail(requestWithUser.user, {
-              ...requestWithUser.toObject(),
-              cancelReason: reason
-            });
+          const u = requestWithUser?.user;
+          const prefs = u?.notificationPreferences?.email;
+          if (u?.email && prefs?.enabled !== false && prefs?.bookCanceled !== false) {
+            await sendRequestCanceledEmail(u, { ...requestWithUser.toObject(), cancelReason: reason });
           }
         } catch (emailError) {
           console.error('Erreur lors de l\'envoi de l\'email d\'annulation:', emailError);
@@ -525,10 +543,10 @@ export const addDownloadLink = async (req, res) => {
         }
 
         // Envoyer l'email de notification
-        await sendBookCompletedEmail(user, {
-          ...request.toObject(),
-          downloadLink: downloadUrl
-        });
+        const prefs = user.notificationPreferences?.email;
+        if (prefs?.enabled !== false && prefs?.bookCompleted !== false) {
+          await sendBookCompletedEmail(user, { ...request.toObject(), downloadLink: downloadUrl });
+        }
       } catch (emailError) {
         console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
       }
@@ -686,7 +704,10 @@ export const updateAdminComment = async (req, res) => {
       try {
         const user = await User.findById(request.user);
         if (user) {
-          await sendAdminCommentEmail(user, request, comment);
+          const prefs = user.notificationPreferences?.email;
+          if (prefs?.enabled !== false && prefs?.adminComment !== false) {
+            await sendAdminCommentEmail(user, request, comment);
+          }
           appriseService.notifyUserAdminComment(user, request, comment).catch(() => {});
         }
       } catch (emailError) {
@@ -793,7 +814,8 @@ export const getRequestQuota = async (req, res) => {
     });
 
     const limit = user.requestLimit ?? 10;
-    res.json({ limit, used, remaining: Math.max(0, limit - used), days });
+    const unlimited = limit < 0;
+    res.json({ limit, used, remaining: unlimited ? null : Math.max(0, limit - used), days, unlimited });
   } catch (error) {
     console.error('Erreur lors de la récupération du quota:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du quota.' });
