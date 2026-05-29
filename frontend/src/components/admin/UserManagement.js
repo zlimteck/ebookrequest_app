@@ -363,7 +363,7 @@ const UserManagement = () => {
             </div>
 
             <div className={styles.modalBody}>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
                     <label>Nom d'utilisateur *</label>
@@ -382,6 +382,7 @@ const UserManagement = () => {
                   <div className={styles.formGroup}>
                     <label>Mot de passe {formData._id ? '(vide = inchangé)' : '*'}</label>
                     <input type="password" name="password" value={formData.password} onChange={handleInputChange}
+                      autoComplete="new-password"
                       className={`${styles.formInput} ${errors.password ? styles.inputError : ''}`} placeholder="••••••••" />
                     {errors.password && <span className={styles.errorText}>{errors.password}</span>}
                   </div>

@@ -83,7 +83,22 @@
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+.statusDotOk,
+.statusDotError {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusDotOk    { background: #10b981; box-shadow: 0 0 4px rgba(16,185,129,0.5); }
+.statusDotError { background: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,0.5); }
 
 .cardDesc {
   margin: 0;

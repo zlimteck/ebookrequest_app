@@ -4,7 +4,7 @@ import ConnectorSettings from '../models/ConnectorSettings.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById, getValentineQuota } from '../services/valentineService.js';
 import { invalidateAdminEmailPrefsCache } from '../controllers/bookRequestController.js';
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
-import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
+import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas, pingAnnasArchive } from '../services/annasArchiveService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
@@ -150,6 +150,16 @@ router.put('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
     res.json({ enabled: doc.enabled, url: doc.url });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── GET /api/connectors/annasarchive/ping ────────────────────────────────────
+router.get('/annasarchive/ping', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await pingAnnasArchive();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
   }
 });
 

@@ -230,3 +230,25 @@
 .drawerLogout:hover {
   background: rgba(239, 68, 68, 0.08);
 }
+
+.drawerVersion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.drawerGithub {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  transition: opacity 0.15s;
+}
+
+.drawerGithub:hover {
+  opacity: 0.8;
+}
