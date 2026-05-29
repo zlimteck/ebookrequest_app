@@ -263,7 +263,6 @@ const StatsDashboard = () => {
       {stats.flareSolverr !== undefined && (
         <div className={styles.groupCard}>
           <div className={styles.groupHeader}>
-            {/* Shield / proxy icon */}
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
@@ -274,14 +273,63 @@ const StatsDashboard = () => {
             </span>
           </div>
           {stats.flareSolverr.connected && stats.flareSolverr.version && (
-            <p className={styles.groupSubInfo}>
-              Version : <strong>{stats.flareSolverr.version}</strong>
-            </p>
+            <p className={styles.groupSubInfo}>Version : <strong>{stats.flareSolverr.version}</strong></p>
           )}
           {!stats.flareSolverr.connected && (
-            <p className={styles.groupError}>
-              Service inaccessible — les téléchargements via Anna's Archive seront indisponibles.
-            </p>
+            <p className={styles.groupError}>Service inaccessible — les téléchargements via Anna's Archive seront indisponibles.</p>
+          )}
+        </div>
+      )}
+
+      {stats.appriseServer !== undefined && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <h3>Apprise</h3>
+            <span className={`${styles.groupStatusBadge} ${stats.appriseServer.reachable ? styles.groupStatusConnected : styles.groupStatusDisconnected}`}>
+              <span className={`${styles.statusDot} ${stats.appriseServer.reachable ? styles.connected : styles.disconnected}`}></span>
+              {stats.appriseServer.reachable ? 'Serveur actif' : 'Inaccessible'}
+            </span>
+          </div>
+          {!stats.appriseServer.reachable && (
+            <p className={styles.groupError}>Serveur Apprise inaccessible — les notifications push seront indisponibles.</p>
+          )}
+        </div>
+      )}
+
+      {(stats.valentineConnector?.enabled || stats.annasArchive?.enabled) && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8H6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"/>
+            </svg>
+            <h3>Connecteurs</h3>
+          </div>
+
+          {stats.valentineConnector?.enabled && (
+            <div className={styles.connectorStatusRow}>
+              <span className={`${styles.statusDot} ${stats.valentineConnector.connected ? styles.connected : styles.disconnected}`} />
+              <span className={styles.connectorStatusName}>Valentine.wtf</span>
+              <span className={styles.connectorStatusInfo}>
+                {stats.valentineConnector.connected
+                  ? stats.valentineConnector.quota
+                    ? `Quota : ${stats.valentineConnector.quota.remaining ?? '—'}${stats.valentineConnector.quota.total != null ? ` / ${stats.valentineConnector.quota.total}` : ''} téléch. restants`
+                    : 'Connecté'
+                  : 'Erreur de connexion'}
+              </span>
+            </div>
+          )}
+
+          {stats.annasArchive?.enabled && (
+            <div className={styles.connectorStatusRow}>
+              <span className={`${styles.statusDot} ${stats.annasArchive.connected ? styles.connected : styles.disconnected}`} />
+              <span className={styles.connectorStatusName}>Anna's Archive</span>
+              <span className={styles.connectorStatusInfo}>
+                {stats.annasArchive.connected ? 'Joignable' : 'Inaccessible'}
+              </span>
+            </div>
           )}
         </div>
       )}

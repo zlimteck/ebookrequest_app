@@ -26,7 +26,7 @@ services:
       - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-      - APPRISE_URL=${APPRISE_URL}
+      - APPRISE_URL=${APPRISE_URL:-http://apprise:8000}
       - RSS_FEED_URL=${RSS_FEED_URL}
       - AI_PROVIDER=${AI_PROVIDER}
       - OPENAI_MODEL=${OPENAI_MODEL}
@@ -37,6 +37,19 @@ services:
       - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  apprise:
+    image: caronc/apprise:latest
+    container_name: apprise
+    restart: unless-stopped
+    environment:
+      - APPRISE_STATEFUL_MODE=simple
+      - APPRISE_WORKER_COUNT=1
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${APPRISE_CONFIG_PATH:-./apprise-config}:/config
+    ports:
+      - "8000:8000"
+
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr

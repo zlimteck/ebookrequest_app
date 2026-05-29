@@ -551,3 +551,34 @@
   word-break: break-word;
 }
 
+/* Rangées connecteurs dans la card "Connecteurs" */
+.connectorStatusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.connectorStatusRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.connectorStatusRow:first-of-type {
+  padding-top: 0;
+}
+
+.connectorStatusName {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.connectorStatusInfo {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+

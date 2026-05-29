@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import axios from 'axios';
 import { testAIProviderConnection, getProviderInfo } from '../services/aiProviderService.js';
 import AIRequestLog from '../models/AIRequestLog.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
+import { getValentineQuota } from '../services/valentineService.js';
+import { pingAnnasArchive, getAnnasArchiveConfig } from '../services/annasArchiveService.js';
+import { decrypt } from '../services/cryptoService.js';
 
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
@@ -12,6 +16,39 @@ async function checkFlareSolverr() {
     return { connected: true, version };
   } catch {
     return { connected: false, version: null };
+  }
+}
+
+async function checkValentineConnector() {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
+    if (!doc?.enabled || !doc?.username || !doc?.password) return { enabled: false, connected: false, quota: null };
+    const password = decrypt(doc.password) ?? doc.password;
+    const quota = await getValentineQuota(doc.username, password);
+    return { enabled: true, connected: true, quota };
+  } catch {
+    return { enabled: true, connected: false, quota: null };
+  }
+}
+
+async function checkAnnasArchiveConnector() {
+  try {
+    const config = await getAnnasArchiveConfig();
+    if (!config?.enabled) return { enabled: false, connected: false };
+    await pingAnnasArchive();
+    return { enabled: true, connected: true };
+  } catch {
+    return { enabled: true, connected: false };
+  }
+}
+
+async function checkAppriseServer() {
+  try {
+    const appriseUrl = (process.env.APPRISE_URL || 'http://apprise:8000').replace(/\/notify\/?$/, '');
+    await axios.get(`${appriseUrl}/status`, { timeout: 4000, validateStatus: s => s < 500 });
+    return { reachable: true };
+  } catch {
+    return { reachable: false };
   }
 }
 
@@ -56,9 +93,12 @@ export const getAdminStats = async (req, res) => {
       : 0;
 
     // Vérifier le statut du provider IA configuré
-    const [aiProviderStatus, flareSolverrStatus] = await Promise.all([
+    const [aiProviderStatus, flareSolverrStatus, valentineConnectorStatus, annasArchiveStatus, appriseServerStatus] = await Promise.all([
       testAIProviderConnection(),
       checkFlareSolverr(),
+      checkValentineConnector(),
+      checkAnnasArchiveConnector(),
+      checkAppriseServer(),
     ]);
     const providerInfo = getProviderInfo();
 
@@ -194,6 +234,18 @@ export const getAdminStats = async (req, res) => {
         flareSolverr: {
           connected: flareSolverrStatus.connected,
           version: flareSolverrStatus.version,
+        },
+        valentineConnector: {
+          enabled: valentineConnectorStatus.enabled,
+          connected: valentineConnectorStatus.connected,
+          quota: valentineConnectorStatus.quota,
+        },
+        annasArchive: {
+          enabled: annasArchiveStatus.enabled,
+          connected: annasArchiveStatus.connected,
+        },
+        appriseServer: {
+          reachable: appriseServerStatus.reachable,
         }
       }
     });

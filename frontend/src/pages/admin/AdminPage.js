@@ -811,7 +811,12 @@ function AdminPage() {
         {loading ? (
           <div className={styles.loading}>Chargement des demandes...</div>
         ) : filtered.length === 0 ? (
-          <div className={styles.noResults}>Aucune demande trouvée{userFilter ? ` pour "${userFilter}"` : ''}</div>
+          <div className={styles.noResults}>
+            <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            <span>Aucune demande trouvée{userFilter ? ` pour « ${userFilter} »` : ''}</span>
+          </div>
         ) : viewMode === 'table' ? (
           <div className={styles.adminTableWrapper}>
             <table className={styles.adminTable}>
@@ -1655,8 +1660,7 @@ function AdminPage() {
       label: 'Connecteurs',
       icon: (
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          <path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8H6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"/>
         </svg>
       )
     },
