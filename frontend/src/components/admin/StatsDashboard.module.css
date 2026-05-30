@@ -1,8 +1,9 @@
 .statsContainer {
-  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
   width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -136,7 +137,6 @@
   border-radius: var(--radius);
   padding: 1.5rem;
   border: 1px solid var(--color-border);
-  margin-top: 1.25rem;
 }
 
 .completionRate h3 {
@@ -241,7 +241,6 @@
   border: 1px solid var(--color-border);
   width: 100%;
   box-sizing: border-box;
-  margin-bottom: 1.5rem;
 }
 
 .chartCardWide h3 {
@@ -291,7 +290,6 @@
   border-radius: var(--radius);
   padding: 1.5rem;
   border: 1px solid var(--color-border);
-  margin-bottom: 1.5rem;
 }
 
 .topUsersCard h3 {
@@ -411,7 +409,6 @@
   border-radius: var(--radius);
   padding: 1.5rem;
   border: 1px solid var(--color-border);
-  margin-bottom: 1.25rem;
 }
 
 .groupHeader {

@@ -1,10 +1,28 @@
 import mongoose from 'mongoose';
 import BookRequest from '../models/BookRequest.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
+import DownloadLog from '../models/DownloadLog.js';
 import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
 import appriseService from './appriseService.js';
 import { decrypt } from './cryptoService.js';
+
+async function logDownload({ bookRequest, connector, success, error = null, triggeredBy = 'auto' }) {
+  try {
+    await DownloadLog.create({
+      bookRequestId: bookRequest._id || bookRequest,
+      title:        bookRequest.title   || '',
+      author:       bookRequest.author  || '',
+      username:     bookRequest.username || '',
+      connector,
+      success,
+      error: error ? String(error).slice(0, 500) : null,
+      triggeredBy,
+    });
+  } catch (e) {
+    console.error('[DownloadLog] Erreur écriture log:', e.message);
+  }
+}
 
 // ─── Helpers de matching (dupliqués ici pour éviter une dépendance circulaire) ─
 
@@ -71,6 +89,7 @@ async function notifyCompletion(bookRequest) {
  */
 export async function downloadWithFallback(title, author, requestId, category = 'ebook', userId = null) {
   const connectorsTried = [];
+  const bookRequest = await BookRequest.findById(requestId).lean();
   try {
     // ── Récupérer les credentials Valentine personnels du user (si disponibles) ─
     let userValentineCredentials = null;
@@ -97,6 +116,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
     let afterValentine = await BookRequest.findById(requestId).lean();
     if (afterValentine?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Valentine a complété "${title}"`);
+      await logDownload({ bookRequest: bookRequest || afterValentine, connector: 'valentine', success: true });
       await notifyCompletion(afterValentine);
       return;
     }
@@ -111,6 +131,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
         afterValentine = await BookRequest.findById(requestId).lean();
         if (afterValentine?.status === 'completed') {
           console.log(`[Orchestrateur] ✓ Valentine (admin fallback) a complété "${title}"`);
+          await logDownload({ bookRequest: bookRequest || afterValentine, connector: 'valentine', success: true });
           await notifyCompletion(afterValentine);
           return;
         }
@@ -148,6 +169,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
 
     if (!results.length) {
       console.log(`[Orchestrateur] Aucun résultat Anna's Archive pour "${title}"`);
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'valentine', success: false, error: 'Aucun résultat trouvé' });
       return;
     }
 
@@ -176,6 +198,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
 
     if (!scored.length) {
       console.log(`[Orchestrateur] Anna's Archive : aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Aucun résultat avec auteur compatible' });
       return;
     }
 
@@ -189,11 +212,15 @@ export async function downloadWithFallback(title, author, requestId, category = 
     const afterAnnas = await BookRequest.findById(requestId).lean();
     if (afterAnnas?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Anna's Archive a complété "${title}"`);
+      await logDownload({ bookRequest: bookRequest || afterAnnas, connector: 'annasarchive', success: true });
       await notifyCompletion(afterAnnas);
+    } else {
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Téléchargement Anna\'s Archive échoué' });
     }
 
   } catch (err) {
     console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
+    await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'valentine', success: false, error: err.message }).catch(() => {});
   } finally {
     if (connectorsTried.length) {
       try {
