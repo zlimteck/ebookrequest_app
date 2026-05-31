@@ -1,12 +1,18 @@
 import express from 'express';
+import { createRequire } from 'module';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+
+const require       = createRequire(import.meta.url);
+const { version: APP_VERSION } = require('../../package.json');
 
 const router = express.Router();
 
 const GITHUB_REPO = 'zlimteck/ebookrequest_app';
-const CACHE_TTL = 60 * 60 * 1000; // 1h
+const CACHE_TTL   = 60 * 60 * 1000; // 1h
 
-let cache = { data: null, fetchedAt: 0 };
+let cache            = { data: null, fetchedAt: 0 };
+let updateCache      = { data: null, fetchedAt: 0 };
+const UPDATE_TTL     = 24 * 60 * 60 * 1000; // 24h
 
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -45,6 +51,46 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Erreur récupération releases:', err);
     if (cache.data) return res.json(cache.data);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── Vérification de mise à jour ──────────────────────────────────────────────
+router.get('/update-check', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const now = Date.now();
+
+    if (updateCache.data && now - updateCache.fetchedAt < UPDATE_TTL) {
+      return res.json(updateCache.data);
+    }
+
+    const response = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+      { headers: { 'User-Agent': 'ebookrequest-app', Accept: 'application/vnd.github+json' } }
+    );
+
+    if (!response.ok) {
+      if (updateCache.data) return res.json(updateCache.data);
+      return res.status(502).json({ error: 'Impossible de contacter GitHub.' });
+    }
+
+    const release    = await response.json();
+    const latestTag  = release.tag_name?.replace(/^v/, '') || '';
+    const current    = APP_VERSION.replace(/^v/, '');
+
+    const payload = {
+      currentVersion: current,
+      latestVersion:  latestTag,
+      updateAvailable: latestTag && latestTag !== current,
+      releaseUrl:     release.html_url,
+      releaseName:    release.name || release.tag_name,
+    };
+
+    updateCache = { data: payload, fetchedAt: now };
+    res.json(payload);
+  } catch (err) {
+    console.error('Erreur update-check:', err);
+    if (updateCache.data) return res.json(updateCache.data);
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });

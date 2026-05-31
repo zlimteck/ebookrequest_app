@@ -4,7 +4,62 @@ import { markNotificationAsSeen, getUnseenNotifications } from '../controllers/n
 import BookRequest from '../models/BookRequest.js';
 import Notification from '../models/Notification.js';
 
+const HISTORY_DAYS = 7;
+
 const router = express.Router();
+
+// Historique des notifications (vues + non vues, 7 derniers jours)
+router.get('/history', requireAuth, async (req, res) => {
+  try {
+    const userId  = req.user.id;
+    const since   = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000);
+
+    const [completed, canceled, comments, standalone] = await Promise.all([
+      BookRequest.find({ user: userId, status: 'completed', updatedAt: { $gte: since } })
+        .select('title author notifications updatedAt').sort({ updatedAt: -1 }).limit(30),
+      BookRequest.find({ user: userId, status: 'canceled', updatedAt: { $gte: since } })
+        .select('title author notifications cancelReason updatedAt').sort({ updatedAt: -1 }).limit(30),
+      BookRequest.find({ user: userId, adminComment: { $exists: true, $ne: '' }, updatedAt: { $gte: since } })
+        .select('title author adminComment notifications updatedAt').sort({ updatedAt: -1 }).limit(30),
+      Notification.find({ user: userId, type: { $ne: 'new_request' }, createdAt: { $gte: since } })
+        .sort({ createdAt: -1 }).limit(30),
+    ]);
+
+    const items = [
+      ...completed.map(r => ({
+        type: 'completed', request: r,
+        seen: r.notifications?.completed?.seen ?? false,
+        date: r.notifications?.completed?.seenAt || r.updatedAt,
+      })),
+      ...canceled.map(r => ({
+        type: 'canceled', request: r,
+        seen: r.notifications?.canceled?.seen ?? false,
+        date: r.notifications?.canceled?.seenAt || r.updatedAt,
+      })),
+      ...comments.map(r => ({
+        type: 'adminComment', request: r,
+        seen: r.notifications?.adminComment?.seen ?? false,
+        date: r.notifications?.adminComment?.seenAt || r.updatedAt,
+      })),
+      ...standalone.map(n => ({
+        type: n.type, standalone: true, notification: n,
+        seen: n.seen ?? false,
+        date: n.seenAt || n.createdAt,
+      })),
+    ];
+
+    // Non lues en premier, puis par date décroissante
+    items.sort((a, b) => {
+      if (a.seen !== b.seen) return a.seen ? 1 : -1;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    res.json({ success: true, notifications: items });
+  } catch (error) {
+    console.error('Erreur historique notifications:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // Marquer une notification comme vue
 router.post('/:requestId/seen', requireAuth, async (req, res) => {

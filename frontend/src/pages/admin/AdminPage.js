@@ -54,8 +54,10 @@ const ClockIcon = () => (
 
 function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'requests';
+  const activeTab   = searchParams.get('tab') || 'requests';
+  const highlightId = searchParams.get('highlight');
   const setActiveTab = (tab) => setSearchParams({ tab }, { replace: true });
+  const cardRefs    = useRef({});
   const [showPushoverConfig, setShowPushoverConfig] = useState(false);
   const [pushoverConfig, setPushoverConfig] = useState(null);
   const [requests, setRequests] = useState([]);
@@ -448,6 +450,13 @@ function AdminPage() {
       fetchAdminLogs();
     }
   }, [filter, activeTab]);
+
+  // Scroll vers la demande mise en surbrillance
+  useEffect(() => {
+    if (!highlightId || activeTab !== 'requests') return;
+    const el = cardRefs.current[highlightId];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightId, requests, activeTab]);
 
   // Fermer le dropdown mobile au clic extérieur
   useEffect(() => {
@@ -852,7 +861,8 @@ function AdminPage() {
                   return (
                     <React.Fragment key={request._id}>
                       <tr
-                        className={`${styles.adminTableRow} ${isExpanded ? styles.adminTableRowExpanded : ''}`}
+                        ref={el => { cardRefs.current[request._id] = el; }}
+                        className={`${styles.adminTableRow} ${isExpanded ? styles.adminTableRowExpanded : ''} ${highlightId === request._id ? styles.cardHighlight : ''}`}
                         onClick={() => { toggleExpand(request._id); toggleTableRow(request._id); }}
                       >
                         <td className={styles.adminTd}>
@@ -1183,7 +1193,9 @@ function AdminPage() {
                 || !!predbResults[request._id];
 
               return (
-              <div key={request._id} className={`${styles.requestCard} ${
+              <div key={request._id}
+                ref={el => { cardRefs.current[request._id] = el; }}
+                className={`${styles.requestCard} ${highlightId === request._id ? styles.cardHighlight : ''} ${
                 request.status === 'completed' ? styles.cardCompleted :
                 request.status === 'canceled' ? styles.cardCanceled :
                 request.status === 'reported' ? styles.cardReported :

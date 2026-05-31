@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -14,6 +14,9 @@ const UserDashboard = () => {
   const filterBarRef = useRef(null);
   const filterScrollRestore = useRef(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightId  = searchParams.get('highlight');
+  const cardRefs     = useRef({});
   const [downloadingFile, setDownloadingFile] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, requestId: null, requestTitle: '' });
   const [reportReason, setReportReason] = useState('');
@@ -288,6 +291,23 @@ const UserDashboard = () => {
     }
   }, [filter, currentPage]);
 
+  // ── Scroll vers la demande mise en surbrillance ─────────────────────────
+  useEffect(() => {
+    if (!highlightId || !requests.length) return;
+    const idx = requests.findIndex(r => r._id === highlightId);
+    if (idx === -1) return;
+    // S'assurer que le filtre est sur "all" pour que la demande soit visible
+    setFilter('all');
+    const targetPage = Math.floor(idx / ITEMS_PER_PAGE) + 1;
+    setCurrentPage(targetPage);
+  }, [highlightId, requests]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const el = cardRefs.current[highlightId];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightId, currentPage]);
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
       day: '2-digit',
@@ -475,7 +495,8 @@ const UserDashboard = () => {
                   return (
                     <React.Fragment key={request._id}>
                       <tr
-                        className={`${styles.tableRow} ${isRowExpanded ? styles.tableRowExpanded : ''}`}
+                        ref={el => { cardRefs.current[request._id] = el; }}
+                        className={`${styles.tableRow} ${isRowExpanded ? styles.tableRowExpanded : ''} ${highlightId === request._id ? styles.cardHighlight : ''}`}
                         onClick={() => toggleTableRow(request._id)}
                       >
                         <td className={styles.tableTd}>
@@ -638,7 +659,9 @@ const UserDashboard = () => {
         {viewMode === 'cards' && (
         <div className={styles.requestsGrid}>
           {filteredRequests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((request) => (
-            <div key={request._id} className={`${styles.requestCard} ${
+            <div key={request._id}
+              ref={el => { cardRefs.current[request._id] = el; }}
+              className={`${styles.requestCard} ${highlightId === request._id ? styles.cardHighlight : ''} ${
               request.status === 'completed' ? styles.cardCompleted :
               request.status === 'canceled' ? styles.cardCanceled :
               request.status === 'reported' ? styles.cardReported :
