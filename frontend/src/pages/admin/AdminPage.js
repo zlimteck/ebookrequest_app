@@ -451,12 +451,20 @@ function AdminPage() {
     }
   }, [filter, activeTab]);
 
-  // Scroll vers la demande mise en surbrillance
+  // Scroll + pagination vers la demande mise en surbrillance
+  useEffect(() => {
+    if (!highlightId || activeTab !== 'requests' || !requests.length) return;
+    const idx = requests.findIndex(r => r._id === highlightId);
+    if (idx === -1) return;
+    const targetPage = Math.floor(idx / ITEMS_PER_PAGE) + 1;
+    setCurrentPage(targetPage);
+  }, [highlightId, requests, activeTab]); // eslint-disable-line
+
   useEffect(() => {
     if (!highlightId || activeTab !== 'requests') return;
     const el = cardRefs.current[highlightId];
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [highlightId, requests, activeTab]);
+  }, [highlightId, currentPage, activeTab]);
 
   // Fermer le dropdown mobile au clic extérieur
   useEffect(() => {

@@ -8,6 +8,16 @@ const { version: APP_VERSION } = require('../../package.json');
 const router = express.Router();
 
 const GITHUB_REPO = 'zlimteck/ebookrequest_app';
+
+// Compare deux versions semver — retourne > 0 si b est plus récent que a
+function semverGt(a, b) {
+  const parse = v => v.replace(/^v/, '').split('-')[0].split('.').map(Number);
+  const [aMaj = 0, aMin = 0, aPat = 0] = parse(a);
+  const [bMaj = 0, bMin = 0, bPat = 0] = parse(b);
+  if (bMaj !== aMaj) return bMaj - aMaj;
+  if (bMin !== aMin) return bMin - aMin;
+  return bPat - aPat;
+}
 const CACHE_TTL   = 60 * 60 * 1000; // 1h
 
 let cache            = { data: null, fetchedAt: 0 };
@@ -79,11 +89,11 @@ router.get('/update-check', requireAuth, requireAdmin, async (req, res) => {
     const current    = APP_VERSION.replace(/^v/, '');
 
     const payload = {
-      currentVersion: current,
-      latestVersion:  latestTag,
-      updateAvailable: latestTag && latestTag !== current,
-      releaseUrl:     release.html_url,
-      releaseName:    release.name || release.tag_name,
+      currentVersion:  current,
+      latestVersion:   latestTag,
+      updateAvailable: latestTag ? semverGt(current, latestTag) > 0 : false,
+      releaseUrl:      release.html_url,
+      releaseName:     release.name || release.tag_name,
     };
 
     updateCache = { data: payload, fetchedAt: now };

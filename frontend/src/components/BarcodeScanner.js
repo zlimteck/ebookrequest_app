@@ -16,6 +16,13 @@ const BarcodeScanner = ({ onDetected, onClose }) => {
 
   useEffect(() => {
     if (!videoRef.current) return;
+
+    // La caméra nécessite HTTPS (sauf localhost)
+    if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+      setError('Le scanner nécessite une connexion HTTPS. Accédez à l\'application via https://');
+      return;
+    }
+
     const reader = readerRef.current;
 
     reader.reset();
