@@ -8,20 +8,28 @@
 
 Application web de gestion de demandes de livres numériques. Les utilisateurs soumettent des demandes, suivent leur statut et téléchargent leurs livres. Les administrateurs gèrent les demandes, les utilisateurs et les notifications.
 
+> 🇫🇷 Projet développé par et pour la communauté francophone. Interface, documentation et support entièrement en français.
+>
+> Si le projet vous est utile, une ⭐ sur GitHub fait toujours plaisir et aide à le faire connaître !
+
 ## Stack
 
 - **Frontend** — React, React Router, Chart.js, Axios
 - **Backend** — Node.js, Express, MongoDB (Mongoose), JWT
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
 - **IA** — OpenAI / Ollama (recommandations, descriptions)
-- **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr)
+- **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
 ## Fonctionnalités
 
 **Demandes**
 - Soumission et suivi de demandes de livres
-- Recherche via Google Books API avec auto-complétion des métadonnées
+- Recherche via Google Books API avec auto-complétion des métadonnées :
+  - **Par titre ou ISBN** — recherche directe ou par code ISBN-10/13
+  - **Par auteur** — résultats filtrés en français, triés du plus récent au plus ancien
+  - **Auteur + Titre combinés** — saisir `Prénom Nom Titre du livre` sans séparateur (ex : `Virginie Grimaldi D'autres printemps`)
+  - **Scan de code-barres** — scanner l'ISBN directement depuis la caméra de l'appareil
 - Vérification de disponibilité à la soumission (flux PreDB)
 - Quota de demandes configurable par utilisateur (nombre + fenêtre glissante en jours)
 - Soumission admin au nom d'un autre utilisateur
@@ -29,7 +37,8 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 **Téléchargement**
 - Téléchargement automatique via Valentine, avec fallback Anna's Archive
 - Recherche manuelle sur les connecteurs depuis le panel admin
-- Envoi automatique des livres vers Calibre-Web (avec sync étagère Kobo)
+- Envoi automatique du fichier vers Calibre-Web à la complétion d'une demande
+- Synchronisation automatique de l'étagère Kobo dans Calibre-Web (le livre apparaît directement sur la liseuse)
 
 **Utilisateurs & accès**
 - Inscription par invitation email ou code d'invitation (usage limité, expiration configurable)
@@ -173,9 +182,37 @@ npx web-push generate-vapid-keys
 | Variable | Description |
 |---|---|
 | `GOOGLE_BOOKS_API_KEY` | Clé API Google Books (recherche et métadonnées) |
-| `APPRISE_URL` | URL du service Apprise pour les notifications (ex : `http://192.168.1.x:8621`). Ne pas ajouter `/notify` — le chemin est ajouté automatiquement. **Apprise doit être hébergé séparément** — il n'est pas inclus dans le `docker-compose.yml` fourni. Voir [github.com/caronc/apprise-api](https://github.com/caronc/apprise-api). |
+| `APPRISE_URL` | URL du service Apprise pour les notifications. Par défaut `http://apprise:8000` (conteneur inclus dans le `docker-compose.yml`). Supprimer le service `apprise` du compose si vous hébergez déjà Apprise ailleurs, et renseigner son URL ici. Ne pas ajouter `/notify` — le chemin est ajouté automatiquement. Voir [github.com/caronc/apprise-api](https://github.com/caronc/apprise-api). |
+| `APPRISE_CONFIG_PATH` | Chemin local vers le dossier de configuration Apprise (défaut : `./apprise-config`). Nécessaire si `APPRISE_STATEFUL_MODE=simple` est activé sur le conteneur Apprise. |
+| `TZ` | Fuseau horaire des conteneurs (ex : `Europe/Paris`). Utile pour que les logs s'affichent à la bonne heure. |
 | `FLARESOLVERR_URL` | URL du service FlareSolverr pour contourner les protections Cloudflare (défaut : `http://flaresolverr:8191`) |
 | `RSS_FEED_URL` | URL du flux RSS (PreDB) utilisé pour vérifier si un livre est récemment sorti et estimer sa disponibilité au moment de la demande (défaut : `https://predb.me/?cats=books-ebooks&rss=1`) |
+
+Le service `apprise` inclus dans le `docker-compose.yml` utilise une configuration de base. Voici les variables d'environnement utiles à ajouter directement sur le service `apprise` selon vos besoins :
+
+| Variable | Description |
+|---|---|
+| `APPRISE_STATEFUL_MODE=simple` | Active la persistance des configurations Apprise dans un fichier. Sans ça, les URLs configurées sont perdues au redémarrage du conteneur. Recommandé si vous utilisez le panel de configuration d'Apprise. |
+| `APPRISE_ADMIN=y` | Active l'interface d'administration web d'Apprise (accessible sur le port exposé). Permet de gérer les configurations via une UI. |
+| `APPRISE_WORKER_COUNT=1` | Nombre de workers pour le traitement des notifications. La valeur par défaut peut consommer plus de ressources inutilement sur un petit serveur. |
+
+Exemple de configuration avancée du service `apprise` :
+
+```yaml
+apprise:
+  image: caronc/apprise:latest
+  container_name: apprise
+  environment:
+    - APPRISE_STATEFUL_MODE=simple
+    - APPRISE_WORKER_COUNT=1
+    - APPRISE_ADMIN=y
+    - TZ=Europe/Paris
+  volumes:
+    - /chemin/vers/apprise/config:/config
+  ports:
+    - "8000:8000"
+  restart: unless-stopped
+```
 
 ### Lancer l'application
 

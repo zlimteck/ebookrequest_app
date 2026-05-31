@@ -691,7 +691,11 @@ const UserSettings = () => {
             </div>
             <label className={styles.switch}>
               <input type="checkbox" checked={apprisePrefs.enabled}
-                onChange={e => setApprisePrefs(p => ({ ...p, enabled: e.target.checked }))} />
+                onChange={async e => {
+                  const updated = { ...apprisePrefs, enabled: e.target.checked };
+                  setApprisePrefs(updated);
+                  try { await axiosAdmin.put('/api/users/profile', { notificationPreferences: { apprise: updated } }); } catch { /* silencieux */ }
+                }} />
               <span className={styles.slider} />
             </label>
           </div>
@@ -728,7 +732,11 @@ const UserSettings = () => {
               ].map(ev => (
                 <label key={ev.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem', cursor: 'pointer' }}>
                   <input type="checkbox" checked={!!apprisePrefs[ev.key]}
-                    onChange={e => setApprisePrefs(p => ({ ...p, [ev.key]: e.target.checked }))}
+                    onChange={async e => {
+                      const updated = { ...apprisePrefs, [ev.key]: e.target.checked };
+                      setApprisePrefs(updated);
+                      try { await axiosAdmin.put('/api/users/profile', { notificationPreferences: { apprise: updated } }); } catch { /* silencieux */ }
+                    }}
                     style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }} />
                   <span style={{ fontSize: '0.855rem', color: 'var(--color-text)' }}>{ev.label}</span>
                 </label>

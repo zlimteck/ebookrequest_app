@@ -69,6 +69,7 @@ function ValentineCard() {
   const countdown = useCountdown(nextScanAt);
   const [quota, setQuota] = useState(null);
   const [quotaFetchedAt, setQuotaFetchedAt] = useState(null);
+  const [valentineStatus, setValentineStatus] = useState(null); // 'ok' | 'error' | null
 
   useEffect(() => {
     axiosAdmin.get('/api/connectors/valentine')
@@ -86,8 +87,8 @@ function ValentineCard() {
         // Auto-fetch quota si activé et mot de passe configuré
         if (cfg.enabled && cfg._hasPassword) {
           axiosAdmin.get('/api/connectors/valentine/quota')
-            .then(qRes => { setQuota(qRes.data); setQuotaFetchedAt(new Date()); })
-            .catch(() => {});
+            .then(qRes => { setQuota(qRes.data); setQuotaFetchedAt(new Date()); setValentineStatus('ok'); })
+            .catch(() => { setValentineStatus('error'); });
         }
       })
       .catch(() => {})
@@ -159,7 +160,12 @@ function ValentineCard() {
             <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorLogoValentine} />
           </div>
           <div>
-            <p className={styles.cardName}>Valentine.wtf</p>
+            <p className={styles.cardName}>
+              Valentine.wtf
+              {valentineStatus && (
+                <span className={valentineStatus === 'ok' ? styles.statusDotOk : styles.statusDotError} title={valentineStatus === 'ok' ? 'Connecté' : 'Connexion échouée'} />
+              )}
+            </p>
             <p className={styles.cardDesc}>Télécharge automatiquement les ebooks demandés depuis valentine.wtf.</p>
           </div>
         </div>
@@ -304,14 +310,23 @@ function AnnasArchiveCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [annasStatus, setAnnasStatus] = useState(null); // 'ok' | 'error' | null
 
   useEffect(() => {
     axiosAdmin.get('/api/connectors/annasarchive')
-      .then(res => setConfig({
-        enabled: res.data.enabled ?? false,
-        url: res.data.url || 'https://annas-archive.pk',
-        lang: res.data.lang || '',
-      }))
+      .then(res => {
+        const cfg = {
+          enabled: res.data.enabled ?? false,
+          url: res.data.url || 'https://annas-archive.pk',
+          lang: res.data.lang || '',
+        };
+        setConfig(cfg);
+        if (cfg.enabled) {
+          axiosAdmin.get('/api/connectors/annasarchive/ping')
+            .then(() => setAnnasStatus('ok'))
+            .catch(() => setAnnasStatus('error'));
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -348,7 +363,12 @@ function AnnasArchiveCard() {
             <span className={styles.annasLogoLetter}>A</span>
           </div>
           <div>
-            <p className={styles.cardName}>Anna's Archive</p>
+            <p className={styles.cardName}>
+              Anna's Archive
+              {annasStatus && (
+                <span className={annasStatus === 'ok' ? styles.statusDotOk : styles.statusDotError} title={annasStatus === 'ok' ? 'Joignable' : 'Inaccessible'} />
+              )}
+            </p>
             <p className={styles.cardDesc}>Recherche et téléchargement automatique via Anna's Archive. Utilise FlareSolverr pour contourner la protection DDoS. Fallback automatique si Valentine ne trouve pas le livre.</p>
           </div>
         </div>

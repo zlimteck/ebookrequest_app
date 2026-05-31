@@ -1,10 +1,12 @@
 import express from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
+import BookRequest from '../models/BookRequest.js';
+import DownloadLog from '../models/DownloadLog.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById, getValentineQuota } from '../services/valentineService.js';
 import { invalidateAdminEmailPrefsCache } from '../controllers/bookRequestController.js';
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
-import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas } from '../services/annasArchiveService.js';
+import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas, pingAnnasArchive } from '../services/annasArchiveService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
@@ -127,8 +129,12 @@ router.post('/valentine/download-request', requireAuth, requireAdmin, async (req
   if (!requestId || !ebookId) return res.status(400).json({ error: 'requestId et ebookId requis' });
   try {
     const result = await downloadFromValentineById(requestId, ebookId);
+    const br = await BookRequest.findById(requestId).lean();
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: true, triggeredBy: 'admin' });
     res.json({ success: true, ...result });
   } catch (err) {
+    const br = await BookRequest.findById(requestId).lean().catch(() => null);
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });
@@ -153,6 +159,16 @@ router.put('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/connectors/annasarchive/ping ────────────────────────────────────
+router.get('/annasarchive/ping', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await pingAnnasArchive();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /api/connectors/annasarchive/search?q=... ─────────────────────────────
 router.get('/annasarchive/search', requireAuth, requireAdmin, async (req, res) => {
   const q = (req.query.q || '').trim();
@@ -171,8 +187,12 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
   if (!md5 || !requestId) return res.status(400).json({ error: 'md5 et requestId requis' });
   try {
     const result = await downloadFromAnnas(md5, requestId, format || null);
+    const br = await BookRequest.findById(requestId).lean();
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: true, triggeredBy: 'admin' });
     res.json({ success: true, ...result });
   } catch (err) {
+    const br = await BookRequest.findById(requestId).lean().catch(() => null);
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });

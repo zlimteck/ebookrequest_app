@@ -190,7 +190,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 320px;
+  width: 360px;
   background: var(--color-bg2);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -218,25 +218,67 @@
   font-size: 0.8rem;
   padding: 0;
   font-weight: 500;
+  font-family: inherit;
   transition: opacity 0.2s;
 }
 
-.bellClearAll:hover {
-  opacity: 0.75;
+.bellClearAll:hover { opacity: 0.75; }
+
+/* ── Filtres catégories ── */
+.bellCategories {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
 }
 
+.bellCategories::-webkit-scrollbar { display: none; }
+
+.bellCategoryChip {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bellCategoryChip:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+.bellCategoryActive {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.bellCategoryActive:hover {
+  background: rgba(99, 102, 241, 0.18);
+}
+
+/* ── Liste ── */
 .bellEmpty {
   padding: 1.5rem 1rem;
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .bellList {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 360px;
+  max-height: 340px;
   overflow-y: auto;
 }
 
@@ -244,23 +286,31 @@
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  padding: 0.75rem 1rem;
+  padding: 0.7rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
   transition: background 0.15s;
 }
 
-.bellItem:last-child {
-  border-bottom: none;
-}
+.bellItem:last-child { border-bottom: none; }
+.bellItem:hover      { background: rgba(255, 255, 255, 0.04); }
 
-.bellItem:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
+.bellItemUnread { background: rgba(99, 102, 241, 0.04); }
+.bellItemRead   { opacity: 0.55; }
+.bellItemRead:hover { opacity: 0.8; }
 
 .bellItemIcon {
   font-size: 1rem;
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+.bellItemBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .bellItemText {
@@ -271,28 +321,42 @@
   word-break: break-word;
 }
 
-.bellDismiss {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 1.2rem;
-  line-height: 1;
-  padding: 0 0.1rem;
-  flex-shrink: 0;
-  border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
+.bellItemLink {
+  font-size: 0.78rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  width: fit-content;
 }
 
-.bellDismiss:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+.bellItemLink:hover { text-decoration: underline; }
+
+/* ── Bouton marquer comme lu ── */
+.bellMarkRead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  margin-top: 1px;
+}
+
+.bellMarkRead:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 @media (max-width: 480px) {
   .bellDropdown {
-    width: 280px;
-    right: -50px;
+    width: 300px;
+    right: -40px;
   }
 }
 

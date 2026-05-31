@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { getAdminStats } from '../controllers/adminController.js';
+import { getAdminStats, getServicesHealth } from '../controllers/adminController.js';
+import DownloadLog from '../models/DownloadLog.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getLogBuffer, subscribeToLogs, unsubscribeFromLogs } from '../services/logBuffer.js';
 import BookRequest from '../models/BookRequest.js';
@@ -58,6 +59,28 @@ router.get('/logs/system/stream', (req, res) => {
 router.use(requireAuth);
 router.use(requireAdmin);
 router.get('/stats', getAdminStats);
+router.get('/health', getServicesHealth);
+
+router.get('/download-logs', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 50);
+    const { connector, success } = req.query;
+
+    const filter = {};
+    if (connector) filter.connector = connector;
+    if (success !== undefined) filter.success = success === 'true';
+
+    const [logs, total] = await Promise.all([
+      DownloadLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      DownloadLog.countDocuments(filter),
+    ]);
+
+    res.json({ logs, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // Stats d'un utilisateur spécifique pour le modal admin
 router.get('/user-stats/:userId', async (req, res) => {

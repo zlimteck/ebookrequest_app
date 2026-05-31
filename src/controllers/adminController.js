@@ -1,7 +1,19 @@
 import mongoose from 'mongoose';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { testAIProviderConnection, getProviderInfo } from '../services/aiProviderService.js';
 import AIRequestLog from '../models/AIRequestLog.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
+import { getValentineQuota } from '../services/valentineService.js';
+import { pingAnnasArchive, getAnnasArchiveConfig } from '../services/annasArchiveService.js';
+import { testCalibreConnection } from '../services/calibreService.js';
+import { decrypt } from '../services/cryptoService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
@@ -9,9 +21,85 @@ async function checkFlareSolverr() {
   try {
     const res = await axios.get(FLARESOLVERR_URL, { timeout: 4000 });
     const version = res.data?.version || null;
-    return { connected: true, version };
+    return { connected: true, version, error: null };
+  } catch (err) {
+    return { connected: false, version: null, error: err.message };
+  }
+}
+
+async function checkValentineConnector() {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
+    if (!doc?.enabled || !doc?.username || !doc?.password) return { enabled: false, connected: false, quota: null, error: null };
+    const password = decrypt(doc.password) ?? doc.password;
+    const quota = await getValentineQuota(doc.username, password);
+    return { enabled: true, connected: true, quota, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, quota: null, error: err.message };
+  }
+}
+
+async function checkAnnasArchiveConnector() {
+  try {
+    const config = await getAnnasArchiveConfig();
+    if (!config?.enabled) return { enabled: false, connected: false, error: null };
+    await pingAnnasArchive();
+    return { enabled: true, connected: true, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, error: err.message };
+  }
+}
+
+async function checkAppriseServer() {
+  try {
+    const appriseUrl = (process.env.APPRISE_URL || 'http://apprise:8000').replace(/\/notify\/?$/, '');
+    const res = await axios.get(`${appriseUrl}/status`, { timeout: 4000, validateStatus: () => true });
+    if (res.status >= 500) throw new Error(`HTTP ${res.status}`);
+    return { reachable: true, error: null };
+  } catch (err) {
+    return { reachable: false, error: err.message || err.code || 'Connexion impossible' };
+  }
+}
+
+async function checkCalibreWeb() {
+  try {
+    const User = mongoose.model('User');
+    const admin = await User.findOne({ role: 'admin', 'calibreWeb.enabled': true }).lean();
+    if (!admin?.calibreWeb?.enabled || !admin?.calibreWeb?.url) return { enabled: false, connected: false, error: null };
+    const password = decrypt(admin.calibreWeb.password) ?? admin.calibreWeb.password;
+    const result = await testCalibreConnection({
+      url: admin.calibreWeb.url,
+      username: admin.calibreWeb.username,
+      password,
+    });
+    return { enabled: true, connected: result.connected, url: admin.calibreWeb.url, error: result.error || null };
+  } catch (err) {
+    return { enabled: true, connected: false, error: err.message };
+  }
+}
+
+function getUploadsStats() {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) return { totalSize: 0, fileCount: 0 };
+    let totalSize = 0;
+    let fileCount = 0;
+    const walk = (dir) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.isFile()) {
+          const stat = fs.statSync(fullPath);
+          totalSize += stat.size;
+          fileCount++;
+        }
+      }
+    };
+    walk(UPLOADS_DIR);
+    return { totalSize, fileCount };
   } catch {
-    return { connected: false, version: null };
+    return { totalSize: 0, fileCount: 0 };
   }
 }
 
@@ -55,12 +143,8 @@ export const getAdminStats = async (req, res) => {
       ? Math.round((completedRequests / totalRequests) * 100)
       : 0;
 
-    // Vérifier le statut du provider IA configuré
-    const [aiProviderStatus, flareSolverrStatus] = await Promise.all([
-      testAIProviderConnection(),
-      checkFlareSolverr(),
-    ]);
     const providerInfo = getProviderInfo();
+    const uploadsStats = getUploadsStats();
 
     // Statistiques des requêtes IA
     const totalAIRequests = await AIRequestLog.countDocuments({});
@@ -156,15 +240,6 @@ export const getAdminStats = async (req, res) => {
           reported: reportedRequests,
           completionRate: completionRate
         },
-        aiProvider: {
-          connected: aiProviderStatus.connected,
-          provider: providerInfo.provider,
-          url: aiProviderStatus.url,
-          model: aiProviderStatus.model,
-          modelAvailable: aiProviderStatus.modelAvailable,
-          availableModels: aiProviderStatus.availableModels || [],
-          error: aiProviderStatus.error || null
-        },
         aiRequests: {
           total: totalAIRequests,
           successful: successfulAIRequests,
@@ -191,9 +266,9 @@ export const getAdminStats = async (req, res) => {
           successRate: valentineSuccessRate,
           stuck: valentineStuck
         },
-        flareSolverr: {
-          connected: flareSolverrStatus.connected,
-          version: flareSolverrStatus.version,
+        uploads: {
+          totalSize: uploadsStats.totalSize,
+          fileCount: uploadsStats.fileCount,
         }
       }
     });
@@ -203,5 +278,62 @@ export const getAdminStats = async (req, res) => {
       success: false,
       error: 'Erreur lors de la récupération des statistiques administratives'
     });
+  }
+};
+
+// Santé des services
+export const getServicesHealth = async (req, res) => {
+  try {
+    const providerInfo = getProviderInfo();
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive] = await Promise.all([
+      testAIProviderConnection(),
+      checkFlareSolverr(),
+      checkAppriseServer(),
+      checkCalibreWeb(),
+      checkValentineConnector(),
+      checkAnnasArchiveConnector(),
+    ]);
+
+    res.json({
+      success: true,
+      checkedAt: new Date().toISOString(),
+      services: {
+        aiProvider: {
+          connected: aiStatus.connected,
+          provider: providerInfo.provider,
+          model: aiStatus.model || providerInfo.model || null,
+          modelAvailable: aiStatus.modelAvailable ?? null,
+          error: aiStatus.error || null,
+        },
+        flareSolverr: {
+          connected: flareSolverr.connected,
+          version: flareSolverr.version || null,
+          error: flareSolverr.error || null,
+        },
+        apprise: {
+          reachable: apprise.reachable,
+          error: apprise.error || null,
+        },
+        calibreWeb: {
+          enabled: calibreWeb.enabled,
+          connected: calibreWeb.connected,
+          url: calibreWeb.url || null,
+          error: calibreWeb.error || null,
+        },
+        valentine: {
+          enabled: valentine.enabled,
+          connected: valentine.connected,
+          quota: valentine.quota || null,
+          error: valentine.error || null,
+        },
+        annasArchive: {
+          enabled: annasArchive.enabled,
+          connected: annasArchive.connected,
+          error: annasArchive.error || null,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erreur lors de la vérification des services' });
   }
 };

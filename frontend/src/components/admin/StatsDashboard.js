@@ -83,6 +83,16 @@ const StatsDashboard = () => {
     );
   }
 
+  const formatSize = (bytes) => {
+    if (bytes === 0) return { value: '0', unit: 'o' };
+    const units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return {
+      value: (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1),
+      unit: units[i],
+    };
+  };
+
   const tooltipBase = {
     backgroundColor: 'rgba(30, 41, 59, 0.95)',
     titleFont: { size: 12, weight: '600' },
@@ -144,30 +154,7 @@ const StatsDashboard = () => {
   return (
     <div className={styles.statsContainer}>
 
-      <div className={styles.groupCard}>
-        <div className={styles.groupHeader}>
-          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          <h3>Utilisateurs</h3>
-          <span className={styles.groupTotalBadge}>{stats.users.total} au total</span>
-        </div>
-        <div className={styles.groupGrid}>
-          <div className={styles.groupStat}>
-            <span className={styles.groupValue}>{stats.users.active ?? '—'}</span>
-            <span className={styles.groupLabel}>actifs ce mois</span>
-          </div>
-          <div className={styles.groupStat}>
-            <span className={styles.groupValue}>{stats.users.new ?? '—'}</span>
-            <span className={styles.groupLabel}>nouveaux ce mois</span>
-          </div>
-          <div className={styles.groupStat}>
-            <span className={styles.groupValue}>{stats.users.withPending ?? '—'}</span>
-            <span className={styles.groupLabel}>avec demandes en attente</span>
-          </div>
-        </div>
-      </div>
-
+      {/* 1. Demandes */}
       <div className={styles.groupCard}>
         <div className={styles.groupHeader}>
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -196,103 +183,67 @@ const StatsDashboard = () => {
         </div>
       </div>
 
-      {(() => {
-        const ai = stats.aiProvider;
-        const providerLabels = {
-          openai: 'OpenAI',
-          ollama: 'Ollama',
-        };
-        const label = providerLabels[ai?.provider] || ai?.provider || 'IA';
-        const avgTime = stats.aiRequests?.avgResponseTime
-          ? `${(stats.aiRequests.avgResponseTime / 1000).toFixed(1)}s`
-          : '—';
-        return (
-          <div className={styles.groupCard}>
-            <div className={styles.groupHeader}>
-              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/>
-              </svg>
-              <h3>{label}</h3>
-              <span className={`${styles.groupStatusBadge} ${ai?.connected ? styles.groupStatusConnected : styles.groupStatusDisconnected}`}>
-                <span className={`${styles.statusDot} ${ai?.connected ? styles.connected : styles.disconnected}`}></span>
-                {ai?.connected ? 'Connecté' : 'Déconnecté'}
-              </span>
-            </div>
-            {ai?.connected && ai.model && (
-              <p className={styles.groupSubInfo}>
-                Modèle : <strong>{ai.model}</strong>
-                {ai.provider === 'ollama' && (
-                  ai.modelAvailable
-                    ? <span className={styles.groupSubOk}> · disponible</span>
-                    : <span className={styles.groupSubWarn}> · non disponible</span>
-                )}
-              </p>
-            )}
-            {ai?.error && (
-              <p className={styles.groupError}>
-                {ai.error.length > 100 ? ai.error.slice(0, 100) + '…' : ai.error}
-              </p>
-            )}
-            <div className={styles.groupGrid}>
-              <div className={styles.groupStat}>
-                <span className={styles.groupValue}>{stats.aiRequests?.total || 0}</span>
-                <span className={styles.groupLabel}>requêtes</span>
-              </div>
-              <div className={styles.groupStat}>
-                <span className={styles.groupValue}>{stats.aiRequests?.successRate || 0}%</span>
-                <span className={styles.groupLabel}>taux de succès</span>
-              </div>
-              <div className={styles.groupStat}>
-                <span className={styles.groupValue}>{stats.aiRequests?.successful || 0}</span>
-                <span className={styles.groupLabel}>réussies</span>
-              </div>
-              <div className={styles.groupStat}>
-                <span className={`${styles.groupValue} ${(stats.aiRequests?.failed || 0) > 0 ? styles.groupWarnValue : ''}`}>{stats.aiRequests?.failed || 0}</span>
-                <span className={styles.groupLabel}>échouées</span>
-              </div>
-            </div>
-            {stats.aiRequests?.avgResponseTime > 0 && (
-              <p className={styles.groupSubInfo} style={{ marginTop: '0.75rem' }}>
-                Temps de réponse moyen : <strong>{avgTime}</strong>
-              </p>
-            )}
+      {/* 2. Taux de complétion */}
+      <div className={styles.completionRate}>
+        <h3>Taux de complétion</h3>
+        <div className={styles.progressBar}>
+          <div
+            className={styles.progressFill}
+            style={{ width: `${stats.requests.completionRate}%` }}
+          >
+            {stats.requests.completionRate}%
           </div>
-        );
-      })()}
-
-      {stats.flareSolverr !== undefined && (
-        <div className={styles.groupCard}>
-          <div className={styles.groupHeader}>
-            {/* Shield / proxy icon */}
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            <h3>FlareSolverr</h3>
-            <span className={`${styles.groupStatusBadge} ${stats.flareSolverr.connected ? styles.groupStatusConnected : styles.groupStatusDisconnected}`}>
-              <span className={`${styles.statusDot} ${stats.flareSolverr.connected ? styles.connected : styles.disconnected}`}></span>
-              {stats.flareSolverr.connected ? 'Connecté' : 'Déconnecté'}
-            </span>
-          </div>
-          {stats.flareSolverr.connected && stats.flareSolverr.version && (
-            <p className={styles.groupSubInfo}>
-              Version : <strong>{stats.flareSolverr.version}</strong>
-            </p>
-          )}
-          {!stats.flareSolverr.connected && (
-            <p className={styles.groupError}>
-              Service inaccessible — les téléchargements via Anna's Archive seront indisponibles.
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className={styles.chartCardWide}>
-        <h3>Répartition des requêtes <span className={styles.chartSubtitle}>par statut</span></h3>
-        <div className={styles.chartWrapperWide}>
-          <Bar data={repartitionData} options={repartitionOptions} />
         </div>
       </div>
 
+      {/* 3. Utilisateurs */}
+      <div className={styles.groupCard}>
+        <div className={styles.groupHeader}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <h3>Utilisateurs</h3>
+          <span className={styles.groupTotalBadge}>{stats.users.total} au total</span>
+        </div>
+        <div className={styles.groupGrid}>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.active ?? '—'}</span>
+            <span className={styles.groupLabel}>actifs ce mois</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.new ?? '—'}</span>
+            <span className={styles.groupLabel}>nouveaux ce mois</span>
+          </div>
+          <div className={styles.groupStat}>
+            <span className={styles.groupValue}>{stats.users.withPending ?? '—'}</span>
+            <span className={styles.groupLabel}>avec demandes en attente</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Top utilisateurs */}
+      {stats.topUsers?.length > 0 && (
+        <div className={styles.topUsersCard}>
+          <h3>Top utilisateurs</h3>
+          <div className={styles.topUsersList}>
+            {stats.topUsers.map((u, i) => {
+              const pct = stats.requests.total > 0 ? Math.round((u.total / stats.requests.total) * 100) : 0;
+              return (
+                <div key={u.username} className={styles.topUserRow}>
+                  <span className={styles.topUserRank}>#{i + 1}</span>
+                  <span className={styles.topUserName}>{u.username}</span>
+                  <div className={styles.topUserBar}>
+                    <div className={styles.topUserBarFill} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className={styles.topUserCount}>{u.total} <span className={styles.topUserCompleted}>({u.completed} ✓)</span></span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Graphique — Demandes par semaine */}
       {stats.requestsByWeek?.length > 0 && (
         <div className={styles.chartCardWide}>
           <h3>Demandes par semaine <span className={styles.chartSubtitle}>(12 dernières semaines)</span></h3>
@@ -345,28 +296,16 @@ const StatsDashboard = () => {
           </div>
         </div>
       )}
-      
-      {stats.topUsers?.length > 0 && (
-        <div className={styles.topUsersCard}>
-          <h3>Top utilisateurs</h3>
-          <div className={styles.topUsersList}>
-            {stats.topUsers.map((u, i) => {
-              const pct = stats.requests.total > 0 ? Math.round((u.total / stats.requests.total) * 100) : 0;
-              return (
-                <div key={u.username} className={styles.topUserRow}>
-                  <span className={styles.topUserRank}>#{i + 1}</span>
-                  <span className={styles.topUserName}>{u.username}</span>
-                  <div className={styles.topUserBar}>
-                    <div className={styles.topUserBarFill} style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className={styles.topUserCount}>{u.total} <span className={styles.topUserCompleted}>({u.completed} ✓)</span></span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
+      {/* 6. Graphique — Répartition par statut */}
+      <div className={styles.chartCardWide}>
+        <h3>Répartition des requêtes <span className={styles.chartSubtitle}>par statut</span></h3>
+        <div className={styles.chartWrapperWide}>
+          <Bar data={repartitionData} options={repartitionOptions} />
+        </div>
+      </div>
+
+      {/* 7. Téléchargements automatiques */}
       {stats.valentine && (
         <div className={styles.groupCard}>
           <div className={styles.groupHeader}>
@@ -396,17 +335,69 @@ const StatsDashboard = () => {
         </div>
       )}
 
-      <div className={styles.completionRate}>
-        <h3>Taux de complétion</h3>
-        <div className={styles.progressBar}>
-          <div 
-            className={styles.progressFill} 
-            style={{ width: `${stats.requests.completionRate}%` }}
-          >
-            {stats.requests.completionRate}%
+      {/* 8. IA */}
+      {stats.aiRequests && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/>
+            </svg>
+            <h3>IA</h3>
+            <span className={styles.groupTotalBadge}>{stats.aiRequests.total} requêtes</span>
+          </div>
+          {stats.aiRequests.currentProvider && (
+            <p className={styles.groupSubInfo}>
+              Provider : <strong>{stats.aiRequests.currentProvider}</strong>
+              {stats.aiRequests.currentModel && <> · modèle : <strong>{stats.aiRequests.currentModel}</strong></>}
+            </p>
+          )}
+          <div className={styles.groupGrid}>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.aiRequests.successRate || 0}%</span>
+              <span className={styles.groupLabel}>taux de succès</span>
+            </div>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.aiRequests.successful || 0}</span>
+              <span className={styles.groupLabel}>réussies</span>
+            </div>
+            <div className={styles.groupStat}>
+              <span className={`${styles.groupValue} ${(stats.aiRequests.failed || 0) > 0 ? styles.groupWarnValue : ''}`}>
+                {stats.aiRequests.failed || 0}
+              </span>
+              <span className={styles.groupLabel}>échouées</span>
+            </div>
+            {stats.aiRequests.avgResponseTime > 0 && (
+              <div className={styles.groupStat}>
+                <span className={styles.groupValue}>{(stats.aiRequests.avgResponseTime / 1000).toFixed(1)}s</span>
+                <span className={styles.groupLabel}>temps moyen</span>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* 9. Stockage uploads */}
+      {stats.uploads !== undefined && (
+        <div className={styles.groupCard}>
+          <div className={styles.groupHeader}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/>
+            </svg>
+            <h3>Stockage uploads</h3>
+          </div>
+          <div className={styles.groupGrid}>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{formatSize(stats.uploads.totalSize).value}</span>
+              <span className={styles.groupLabel}>{formatSize(stats.uploads.totalSize).unit} utilisés</span>
+            </div>
+            <div className={styles.groupStat}>
+              <span className={styles.groupValue}>{stats.uploads.fileCount}</span>
+              <span className={styles.groupLabel}>fichier{stats.uploads.fileCount !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

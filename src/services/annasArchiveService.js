@@ -648,3 +648,14 @@ export async function saveAnnasArchiveConfig({ enabled, url, lang }) {
   );
   return doc;
 }
+
+export async function pingAnnasArchive() {
+  const config = await getAnnasArchiveConfig();
+  const baseUrl = config.url || FALLBACK_URLS[0];
+  const response = await axios.get(baseUrl, {
+    timeout: 5000,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    validateStatus: s => s < 500,
+  });
+  return response.status < 500;
+}

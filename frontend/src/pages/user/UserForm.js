@@ -6,11 +6,6 @@ import BookRecommendations from '../../components/BookRecommendations';
 import { compressImage, isImage } from '../../utils/imageCompressor';
 import styles from './UserForm.module.css';
 
-const SwapIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
-  </svg>
-);
 
 const SearchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -58,16 +53,6 @@ const SelectedBookInfo = ({ book, onRemove }) => {
         <h4 className={styles.selectedBookTitle}>{title}</h4>
         <p className={styles.selectedBookMeta}>{authorText}{year ? ` · ${year}` : ''}{pageCount ? ` · ${pageCount} p.` : ''}</p>
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        className={styles.removeButton}
-        aria-label="Changer de livre"
-        title="Changer de livre"
-      >
-        <SwapIcon />
-        <span>Changer</span>
-      </button>
     </div>
   );
 };
@@ -369,6 +354,7 @@ function UserForm() {
   const handleRemoveBook = () => {
     setSelectedBook(null);
     setAvailability(null);
+    setSearchMode('google'); // Retour à la recherche avec les résultats précédents
     setForm(prev => ({
       ...prev,
       title: '',
@@ -590,13 +576,17 @@ function UserForm() {
       )}
 
       {/* ── Contenu ── */}
-      {searchMode === 'google' ? (
-        selectedBook ? (
-          <SelectedBookInfo book={selectedBook} onRemove={handleRemoveBook} />
-        ) : (
-          <GoogleBooksSearch onSelectBook={handleBookSelect} />
-        )
-      ) : (
+
+      {/* GoogleBooksSearch toujours monté pour préserver les résultats */}
+      <div style={{ display: searchMode === 'google' && !selectedBook ? 'block' : 'none' }}>
+        <GoogleBooksSearch onSelectBook={handleBookSelect} />
+      </div>
+
+      {searchMode === 'google' && selectedBook && (
+        <SelectedBookInfo book={selectedBook} onRemove={handleRemoveBook} />
+      )}
+
+      {searchMode === 'manual' && (
         <form onSubmit={handleSubmit} className={styles.form}>
           {selectedBook && <SelectedBookInfo book={selectedBook} onRemove={handleRemoveBook} />}
 
@@ -712,12 +702,19 @@ function UserForm() {
             </div>
           </div>
 
-          <button type="submit" className={styles.submitButton}
-            disabled={isSubmitting || (quota && quota.remaining === 0)} aria-busy={isSubmitting}>
-            {isSubmitting ? 'Soumission en cours…'
-              : quota?.remaining === 0 ? 'Limite de demandes atteinte'
-              : 'Soumettre la demande'}
-          </button>
+          <div className={styles.formActions}>
+            <button type="submit" className={styles.submitButton}
+              disabled={isSubmitting || (quota && quota.remaining === 0)} aria-busy={isSubmitting}>
+              {isSubmitting ? 'Soumission en cours…'
+                : quota?.remaining === 0 ? 'Limite de demandes atteinte'
+                : 'Soumettre la demande'}
+            </button>
+            {selectedBook && (
+              <button type="button" className={styles.cancelButton} onClick={handleRemoveBook} disabled={isSubmitting}>
+                Annuler
+              </button>
+            )}
+          </div>
         </form>
       )}
 

@@ -373,6 +373,16 @@
 .cardCanceled  { border-left-color: #ef4444; }
 .cardReported  { border-left-color: #8b5cf6; }
 
+.cardHighlight {
+  animation: highlightPulse 2s ease-out forwards;
+}
+
+@keyframes highlightPulse {
+  0%   { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.7); }
+  60%  { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2); }
+  100% { box-shadow: none; }
+}
+
 /* ── Cover sidebar ── */
 .bookCover {
   width: 110px;

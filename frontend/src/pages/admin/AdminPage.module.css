@@ -44,6 +44,7 @@ body {
   box-sizing: border-box;
 }
 
+
 .pageHeader {
   display: flex;
   justify-content: space-between;
@@ -190,6 +191,16 @@ body {
 .cardPending   { border-left-color: #f59e0b; }
 .cardCanceled  { border-left-color: #ef4444; }
 .cardReported  { border-left-color: #8b5cf6; }
+
+.cardHighlight {
+  animation: highlightPulse 2s ease-out forwards;
+}
+
+@keyframes highlightPulse {
+  0%   { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.7); }
+  60%  { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2); }
+  100% { box-shadow: none; }
+}
 
 
 /* ── Cover sidebar ── */
@@ -1640,6 +1651,18 @@ body {
   text-align: center;
 }
 
+.noResults {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  text-align: center;
+  gap: 0.75rem;
+}
+
 /* Styles pour l'indicateur de progression de téléchargement */
 .uploadContainer {
   position: relative;
@@ -3036,19 +3059,30 @@ body {
 .systemLogsToolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: var(--color-bg2);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
-  flex-wrap: wrap;
 }
 
-.systemLogsFilters {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
+.systemLogsSelect {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.9rem;
+  background: var(--color-bg2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  height: 38px;
+  transition: border-color 0.15s;
+}
+
+.systemLogsSelect:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
 
 .systemLogsActions {
@@ -3056,29 +3090,6 @@ body {
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
-}
-
-.systemLogsFilterBtn {
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 500;
-  padding: 0.2rem 0.65rem;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.systemLogsFilterBtn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text);
-}
-
-.systemLogsFilterBtnActive {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
 }
 
 .systemLogsFollowBtn {
