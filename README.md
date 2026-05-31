@@ -25,7 +25,11 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 
 **Demandes**
 - Soumission et suivi de demandes de livres
-- Recherche via Google Books API avec auto-complétion des métadonnées
+- Recherche via Google Books API avec auto-complétion des métadonnées :
+  - **Par titre ou ISBN** — recherche directe ou par code ISBN-10/13
+  - **Par auteur** — résultats filtrés en français, triés du plus récent au plus ancien
+  - **Auteur + Titre combinés** — saisir `Prénom Nom Titre du livre` sans séparateur (ex : `Virginie Grimaldi D'autres printemps`)
+  - **Scan de code-barres** — scanner l'ISBN directement depuis la caméra de l'appareil
 - Vérification de disponibilité à la soumission (flux PreDB)
 - Quota de demandes configurable par utilisateur (nombre + fenêtre glissante en jours)
 - Soumission admin au nom d'un autre utilisateur
