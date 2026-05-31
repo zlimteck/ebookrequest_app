@@ -126,6 +126,11 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (v.trim().length >= MIN_LEN) {
       searchTimeoutRef.current = setTimeout(() => searchBooks(v, authorMode, 1), 500);
+    } else if (v.trim().length === 0) {
+      setResults([]);
+      setTotalItems(0);
+      setHasSearched(false);
+      setPage(1);
     }
   };
 
@@ -156,9 +161,12 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
 
   const canSubmit     = !isLoading && value.trim().length >= MIN_LEN;
   const showNoResults = hasSearched && results.length === 0 && !isLoading;
+  const isMobile      = window.innerWidth <= 520;
   const placeholder   = authorMode
     ? 'Rechercher par auteur…'
-    : 'Rechercher par titre, ISBN ou auteur…';
+    : isMobile
+      ? 'Titre, auteur + titre ou ISBN…'
+      : 'Rechercher par titre, auteur + titre ou ISBN…';
 
   return (
     <div className={styles.googleBooksSearch}>
