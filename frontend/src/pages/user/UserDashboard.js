@@ -282,11 +282,43 @@ const UserDashboard = () => {
   };
   
 
-  // Vérifier les mises à jour toutes les 60 secondes
+  // Refresh silencieux toutes les 30s (sans spinner, notifie si statut changé)
+  const silentRefresh = async () => {
+    try {
+      const response = await axiosAdmin.get(`/api/requests/my-requests?status=${filter === 'all' ? '' : filter}`);
+      const STATUS_ORDER = { reported: 1, completed: 2, pending: 3, canceled: 4 };
+      const sorted = [...response.data].sort((a, b) => {
+        const diff = (STATUS_ORDER[a.status] || 3) - (STATUS_ORDER[b.status] || 3);
+        return diff !== 0 ? diff : new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      setRequests(prev => {
+        // Détecte les changements de statut ou nouveaux fichiers
+        const changed = sorted.filter(newR => {
+          const old = prev.find(r => r._id === newR._id);
+          return old && (old.status !== newR.status || old.filePath !== newR.filePath || old.downloadLink !== newR.downloadLink);
+        });
+        const added = sorted.filter(newR => !prev.find(r => r._id === newR._id));
+
+        if (changed.length > 0 || added.length > 0) {
+          changed.forEach(r => {
+            if (r.status === 'completed' && prev.find(p => p._id === r._id)?.status !== 'completed') {
+              toast.success(`📖 "${r.title}" est maintenant disponible !`, { autoClose: 6000 });
+            } else if (r.status === 'canceled' && prev.find(p => p._id === r._id)?.status !== 'canceled') {
+              toast.info(`"${r.title}" a été annulée.`);
+            }
+          });
+          return sorted;
+        }
+        return prev; // pas de changement → pas de re-render
+      });
+    } catch {}
+  };
+
   useEffect(() => {
-    const intervalId = setInterval(fetchRequests, 60000);
+    const intervalId = setInterval(silentRefresh, 30000);
     return () => clearInterval(intervalId);
-  }, [filter]);
+  }, [filter]); // eslint-disable-line
 
   useEffect(() => {
     setCurrentPage(1);

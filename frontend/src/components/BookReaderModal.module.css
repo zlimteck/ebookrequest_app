@@ -64,6 +64,43 @@
   text-overflow: ellipsis;
 }
 
+/* Contrôles taille police */
+.fontControls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--color-bg, #0f172a);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  padding: 0.2rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.fontBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.fontBtn:hover {
+  color: var(--color-accent, #6366f1);
+  background: rgba(99,102,241,0.1);
+}
+
+.fontSize {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+  min-width: 36px;
+  text-align: center;
+}
+
 .closeBtn {
   display: flex;
   align-items: center;
@@ -143,6 +180,38 @@
   .epubWrapper {
     height: calc(100dvh - 57px);
   }
+}
+
+/* Barre de progression EPUB */
+.progressBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-border, #2d3748);
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent, #6366f1);
+  transition: width 0.4s ease;
+  border-radius: 0 2px 2px 0;
+}
+
+.progressLabel {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
+  background: rgba(15,23,42,0.75);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 /* ── CBZ ── */
