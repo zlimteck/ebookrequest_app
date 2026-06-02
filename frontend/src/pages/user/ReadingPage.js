@@ -3,6 +3,15 @@ import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
 import styles from './ReadingPage.module.css';
 import GoogleBooksSearch from '../../components/GoogleBooksSearch';
+import BookReaderModal from '../../components/BookReaderModal';
+
+const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
+
+function isReadable(filePath) {
+  if (!filePath) return false;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  return READABLE_EXTS.includes(ext);
+}
 
 const FILTERS = [
   { key: 'all',    label: 'Tous' },
@@ -53,6 +62,16 @@ export default function ReadingPage() {
   const [filter, setFilter] = useState('all');
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
+  const [downloading, setDownloading] = useState(null);
+  const [addError, setAddError] = useState('');
+
+  // Auto-vider le message d'erreur après 5s
+  useEffect(() => {
+    if (!addError) return;
+    const t = setTimeout(() => setAddError(''), 5000);
+    return () => clearTimeout(t);
+  }, [addError]);
+  const [readerBook, setReaderBook] = useState(null);
   const filterBarRef = useRef(null);
 
   useEffect(() => { fetchBooks(); }, [filter]);
@@ -74,6 +93,7 @@ export default function ReadingPage() {
     const title = info.title || '';
     const author = (info.authors || []).join(', ') || '';
     const thumbnail = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
+    setAddError('');
     try {
       await axiosAdmin.post('/api/reading', {
         title,
@@ -85,7 +105,12 @@ export default function ReadingPage() {
       setShowSearch(false);
       fetchBooks();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Erreur lors de l\'ajout');
+      const msg = err.response?.data?.message || 'Erreur lors de l\'ajout';
+      if (err.response?.status === 409) {
+        setAddError(msg);
+      } else {
+        toast.error(msg);
+      }
     }
   };
 
@@ -107,6 +132,44 @@ export default function ReadingPage() {
       setBooks(prev => prev.map(b => b._id === bookId ? { ...b, rating } : b));
     } catch {
       toast.error('Erreur lors de la notation');
+    }
+  };
+
+  const downloadBook = async (book) => {
+    if (downloading === book._id) return;
+    // requestId est peuplé depuis le backend : { _id, downloadLink, filePath }
+    const req = book.requestId;
+    if (!req) return;
+
+    setDownloading(book._id);
+    try {
+      if (req.downloadLink) {
+        window.open(req.downloadLink, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      if (req.filePath) {
+        const response = await axiosAdmin.get(
+          `/api/requests/download/${req._id}`,
+          { responseType: 'blob' }
+        );
+        const url  = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href  = url;
+        const disposition = response.headers['content-disposition'] || '';
+        const match = disposition.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"']*)['"]?/i);
+        link.setAttribute('download', match?.[1]?.trim() || `ebook_${req._id}`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        toast.error('Aucun fichier disponible pour ce livre');
+      }
+    } catch {
+      toast.error('Erreur lors du téléchargement');
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -202,7 +265,7 @@ export default function ReadingPage() {
             />
           </div>
 
-          <button className={styles.addBtn} onClick={() => setShowSearch(s => !s)} title="Ajouter un livre">
+          <button className={styles.addBtn} onClick={() => { setShowSearch(s => !s); setAddError(''); }} title="Ajouter un livre">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -213,6 +276,14 @@ export default function ReadingPage() {
       {/* Recherche Google Books */}
       {showSearch && (
         <div className={styles.searchPanel}>
+          {addError && (
+            <div className={styles.addErrorMsg}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {addError}
+            </div>
+          )}
           <GoogleBooksSearch onSelectBook={handleSelectBook} />
         </div>
       )}
@@ -248,6 +319,36 @@ export default function ReadingPage() {
 
               {/* Actions */}
               <div className={styles.bookActions}>
+                {book.source === 'request' && book.requestId && isReadable(book.requestId.filePath) && (
+                  <button
+                    className={styles.readBtn}
+                    onClick={() => setReaderBook(book)}
+                    title="Lire"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                  </button>
+                )}
+                {book.source === 'request' && book.requestId && (book.requestId.downloadLink || book.requestId.filePath) && (
+                  <button
+                    className={`${styles.downloadBtn} ${downloading === book._id ? styles.downloadBtnBusy : ''}`}
+                    onClick={() => downloadBook(book)}
+                    disabled={downloading === book._id}
+                    title="Télécharger"
+                  >
+                    {downloading === book._id ? (
+                      <span className={styles.spinner} />
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                    )}
+                  </button>
+                )}
                 <button
                   className={`${styles.statusBtn} ${book.status === 'read' ? styles.statusBtnRead : styles.statusBtnUnread}`}
                   onClick={() => toggleStatus(book)}
@@ -274,6 +375,13 @@ export default function ReadingPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {readerBook && (
+        <BookReaderModal
+          book={readerBook}
+          onClose={() => setReaderBook(null)}
+        />
       )}
     </div>
   );

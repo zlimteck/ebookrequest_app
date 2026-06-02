@@ -16,6 +16,14 @@ import ConnectorsPanel from '../../components/admin/ConnectorsPanel';
 import ServicesHealth from '../../components/admin/ServicesHealth';
 import DownloadLogs from '../../components/admin/DownloadLogs';
 import BookPreviewModal from '../../components/BookPreviewModal';
+import BookReaderModal from '../../components/BookReaderModal';
+
+const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
+const isReadable = (filePath) => {
+  if (!filePath) return false;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  return READABLE_EXTS.includes(ext);
+};
 
 const TrashIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -70,6 +78,7 @@ function AdminPage() {
   const [deletingRequest, setDeletingRequest] = useState(null);
   const [editingDownloadLink, setEditingDownloadLink] = useState(null);
   const [downloadLink, setDownloadLink] = useState('');
+  const [readerRequest, setReaderRequest] = useState(null);
   const [file, setFile] = useState(null);
   const [cancelingRequest, setCancelingRequest] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -1050,6 +1059,17 @@ function AdminPage() {
                                 </div>
                               )}
                               <div className={styles.statusButtons}>
+                                {isReadable(request.filePath) && (
+                                  <button
+                                    className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
+                                    title="Lire"
+                                    onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                                    </svg>
+                                  </button>
+                                )}
                                 {(request.downloadLink || request.filePath) && (
                                   <button
                                     className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`}
@@ -1414,6 +1434,17 @@ function AdminPage() {
 
                       {/* Boutons d'action — une seule ligne */}
                       <div className={styles.statusButtons}>
+                        {isReadable(request.filePath) && (
+                          <button
+                            className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
+                            title="Lire"
+                            onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                            </svg>
+                          </button>
+                        )}
                         {(request.downloadLink || request.filePath) && (
                           <button
                             className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`}
@@ -2159,6 +2190,13 @@ function AdminPage() {
           {renderTabContent()}
         </main>
       </div>
+
+      {readerRequest && (
+        <BookReaderModal
+          book={readerRequest}
+          onClose={() => setReaderRequest(null)}
+        />
+      )}
     </div>
   );
 }

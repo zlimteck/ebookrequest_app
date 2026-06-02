@@ -1,0 +1,247 @@
+/* ── Overlay ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* ── Modal ── */
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1100px;
+  height: 90vh;
+  background: var(--color-bg, #0f172a);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border, #2d3748);
+  flex-shrink: 0;
+  gap: 0.75rem;
+  background: var(--color-bg2, #1e293b);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.formatBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.bookTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.closeBtn:hover {
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* ── Contenu ── */
+.content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ── Centre (loading / error) ── */
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--color-accent, #6366f1);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── PDF ── */
+.pdfFrame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  flex: 1;
+}
+
+/* ── EPUB ── */
+/* epub.js requiert une hauteur concrète — on utilise calc sur la hauteur du modal */
+.epubWrapper {
+  width: 100%;
+  height: calc(90vh - 57px);
+  position: relative;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .epubWrapper {
+    height: calc(100dvh - 57px);
+  }
+}
+
+/* ── CBZ ── */
+.cbzWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  gap: 0;
+}
+
+.cbzImage {
+  max-width: 100%;
+  max-height: calc(90vh - 56px - 52px); /* viewport - header - nav */
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Zones de clic gauche/droite invisibles */
+.cbzLeft,
+.cbzRight {
+  position: absolute;
+  top: 0;
+  bottom: 52px; /* hauteur de la barre de nav */
+  width: 30%;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.cbzLeft  { left: 0; }
+.cbzRight { right: 0; }
+
+/* Barre nav CBZ */
+.cbzNav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: rgba(15, 23, 42, 0.9);
+  border-top: 1px solid var(--color-border, #2d3748);
+  width: 100%;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.cbzBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.cbzBtn:hover:not(:disabled) {
+  border-color: var(--color-accent, #6366f1);
+  color: var(--color-accent, #6366f1);
+}
+
+.cbzBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cbzCounter {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+  min-width: 70px;
+  text-align: center;
+}
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .overlay {
+    padding: 0;
+  }
+
+  .modal {
+    height: 100dvh;
+    max-width: 100%;
+    border-radius: 0;
+    border: none;
+  }
+
+  .cbzImage {
+    max-height: calc(100dvh - 56px - 52px);
+  }
+}

@@ -5,6 +5,14 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import styles from './UserDashboard.module.css';
 import BookPreviewModal from '../../components/BookPreviewModal';
+import BookReaderModal from '../../components/BookReaderModal';
+
+const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
+const isReadable = (filePath) => {
+  if (!filePath) return false;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  return READABLE_EXTS.includes(ext);
+};
 
 
 const UserDashboard = () => {
@@ -19,6 +27,7 @@ const UserDashboard = () => {
   const cardRefs     = useRef({});
   const [downloadingFile, setDownloadingFile] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, requestId: null, requestTitle: '' });
+  const [readerRequest, setReaderRequest] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
@@ -541,6 +550,17 @@ const UserDashboard = () => {
                             )}
                             {request.status === 'completed' && (request.downloadLink || request.filePath) && (
                               <>
+                                {isReadable(request.filePath) && (
+                                  <button
+                                    className={`${styles.iconBtn} ${styles.iconBtnSuccess}`}
+                                    onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                                    title="Lire"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                                    </svg>
+                                  </button>
+                                )}
                                 <button
                                   className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
                                   onClick={async (e) => { e.preventDefault(); try { await downloadFile(request); } catch { toast.error('Une erreur est survenue lors du téléchargement'); } }}
@@ -805,6 +825,17 @@ const UserDashboard = () => {
 
                     {request.status === 'completed' && (request.downloadLink || request.filePath) && (
                       <>
+                        {isReadable(request.filePath) && (
+                          <button
+                            className={`${styles.iconBtn} ${styles.iconBtnSuccess}`}
+                            onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                            title="Lire"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                            </svg>
+                          </button>
+                        )}
                         <button
                           className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
                           onClick={async (e) => {
@@ -1022,6 +1053,13 @@ const UserDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {readerRequest && (
+        <BookReaderModal
+          book={readerRequest}
+          onClose={() => setReaderRequest(null)}
+        />
       )}
     </div>
   );
