@@ -17,7 +17,7 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - **Frontend** — React, React Router, Chart.js, Axios
 - **Backend** — Node.js, Express, MongoDB (Mongoose), JWT
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
-- **IA** — OpenAI / Ollama (recommandations, descriptions)
+- **IA** — OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
@@ -170,12 +170,14 @@ npx web-push generate-vapid-keys
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER` | `openai` ou `ollama` |
+| `AI_PROVIDER` | `openai`, `ollama` ou `claude` |
 | `OPENAI_API_KEY` | Clé API OpenAI (si `AI_PROVIDER=openai`) |
 | `OPENAI_MODEL` | Modèle OpenAI à utiliser (ex : `gpt-4o-mini`) |
 | `OLLAMA_URL` | URL du serveur Ollama (si `AI_PROVIDER=ollama`, ex : `http://172.17.0.x:11434`) |
 | `OLLAMA_MODEL` | Nom du modèle Ollama |
 | `OLLAMA_TIMEOUT` | Timeout en ms pour les requêtes Ollama (défaut : `60000`) |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic (si `AI_PROVIDER=claude`) — [console.anthropic.com](https://console.anthropic.com) |
+| `CLAUDE_MODEL` | Modèle Claude à utiliser (ex : `claude-opus-4-5`, `claude-sonnet-4-5`) |
 
 #### Connecteurs & services externes
 

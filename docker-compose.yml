@@ -34,6 +34,8 @@ services:
       - OLLAMA_URL=${OLLAMA_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-60000}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-5}
       - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
     extra_hosts:
       - "host.docker.internal:host-gateway"

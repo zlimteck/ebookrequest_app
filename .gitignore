@@ -13,6 +13,9 @@ frontend/build/
 # Uploads
 uploads/
 
+# Apprise config (données locales)
+apprise-config/
+
 # Logs
 *.log
 npm-debug.log*
