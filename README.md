@@ -19,6 +19,7 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
 - **IA** — OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
+- **Visionneuse** — PDF (navigateur natif), EPUB (epub.js via react-reader), CBZ/CBR (JSZip)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
 ## Fonctionnalités
@@ -54,8 +55,16 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
   - Côté utilisateur : chaque utilisateur peut configurer ses propres URLs Apprise dans ses paramètres pour recevoir ses notifications personnelles (livre disponible, annulation, commentaire admin)
 - Diffusion admin (email HTML + push vers tous les utilisateurs)
 
+**Bibliothèque & lecture**
+- Bibliothèque personnelle avec statut de lecture, notation par étoiles et notes libres
+- Tri par date, titre, auteur ou note — filtre par source (demandes / ajouts manuels)
+- Visionneuse in-browser sans installation :
+  - **PDF** — viewer natif du navigateur
+  - **EPUB** — lecteur paginé avec réglage de la taille de police, barre de progression, swipe mobile et sauvegarde automatique de la position de lecture
+  - **CBZ / CBR** — galerie image avec navigation clavier et swipe, position mémorisée
+- Bouton « Lire » disponible dans la bibliothèque, les demandes utilisateur et le panel admin
+
 **Découverte & IA**
-- Bibliothèque personnelle avec statut de lecture et notation
 - Page Découverte (tendances, bestsellers, recommandations IA)
 
 **Administration**

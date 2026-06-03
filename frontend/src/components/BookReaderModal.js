@@ -20,7 +20,9 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
   const readingListId = book._id || null;
   const lsKey        = req?._id ? `epub_pos_${req._id}` : null;
   const cbzLsKey     = req?._id ? `cbz_pos_${req._id}` : null;
-  const initialLoc   = book.epubLocation || (lsKey ? localStorage.getItem(lsKey) : null) || null;
+  const rawLoc       = book.epubLocation || (lsKey ? localStorage.getItem(lsKey) : null) || null;
+  // Ignorer une position sauvegardée si elle pointe vers la 1ère section (couverture)
+  const initialLoc   = rawLoc && !rawLoc.includes('/6/2!') ? rawLoc : null;
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [loading, setLoading]       = useState(true);
@@ -30,6 +32,7 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
   const [format, setFormat]         = useState(null);
   const [fontSize, setFontSize]     = useState(100);
   const [progress, setProgress]     = useState(0);
+  const [locationsReady, setLocationsReady] = useState(false);
   const [epubLocation, setEpubLocation] = useState(initialLoc);
   const [cbzImages, setCbzImages]   = useState([]);
   const [cbzPage, setCbzPage]       = useState(() => {
@@ -117,11 +120,13 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
       try { localStorage.setItem(lsKey, loc); } catch {}
     }
 
-    // Calcul progression
+    // Calcul progression (loc doit être un CFI valide)
     const r = renditionRef.current;
-    if (r?.book?.locations?.length?.() > 0) {
-      const pct = r.book.locations.percentageFromCfi(loc);
-      setProgress(Math.round((pct || 0) * 100));
+    if (r?.book?.locations?.length?.() > 0 && typeof loc === 'string' && loc.startsWith('epubcfi(')) {
+      try {
+        const pct = r.book.locations.percentageFromCfi(loc);
+        setProgress(Math.round((pct || 0) * 100));
+      } catch {}
     }
   }, [readingListId, onPositionSaved]);
 
@@ -133,10 +138,23 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
     });
     rendition.themes.select('light');
     rendition.themes.fontSize(`${fontSize}%`);
-    // Génère les localisations pour la progression
-    rendition.book.ready.then(() => {
-      rendition.book.locations.generate(1024).catch(() => {});
-    }).catch(() => {});
+
+    // Génère les locations puis saute automatiquement les pages image-only du début
+    rendition.book.ready
+      .then(() => rendition.book.locations.generate(1024))
+      .then(() => {
+        setLocationsReady(true);
+        if (initialLoc) return;
+        // Naviguer au 2e item du spine pour passer la page de couverture
+        let idx = 0;
+        let secondHref = null;
+        rendition.book.spine.each(item => {
+          if (idx === 1) secondHref = item.href;
+          idx++;
+        });
+        if (secondHref) rendition.display(secondHref).catch(() => {});
+      })
+      .catch(() => setLocationsReady(true));
   }, []); // eslint-disable-line
 
   // ── Navigation clavier ─────────────────────────────────────────────────────
@@ -225,6 +243,12 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
           {/* ── EPUB ── */}
           {!loading && !error && isEpub && epubBuffer && (
             <div className={styles.epubWrapper}>
+              {!locationsReady && (
+                <div className={styles.epubLoadingOverlay}>
+                  <div className={styles.spinner} />
+                  <span>Initialisation de la navigation…</span>
+                </div>
+              )}
               <ReactReader
                 url={epubBuffer}
                 location={epubLocation}
@@ -275,23 +299,3 @@ const epubReaderStyles = {
   tocButtonBar: { ...ReactReaderStyle.tocButtonBar, background: '#555' },
 };
 
-// Styles react-reader (non utilisé — conservé pour référence)
-const defaultReaderStyles = {
-  arrow: {
-    outline: 'none', border: 'none',
-    background: 'rgba(0,0,0,0.06)',
-    borderRadius: '50%',
-    position: 'absolute', top: '50%', marginTop: -28,
-    fontSize: 48, width: 48, height: 48,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 0, color: '#334155', cursor: 'pointer', userSelect: 'none',
-    transition: 'background 0.15s, color 0.15s',
-  },
-  arrowHover: { background: 'rgba(99,102,241,0.12)', color: '#6366f1' },
-  readerArea: { position: 'relative', zIndex: 1, height: '100%', width: '100%', backgroundColor: '#ffffff', transition: 'all .3s ease' },
-  containerExpanded: { transform: 'translateX(256px)' },
-  titleArea: { position: 'absolute', top: 16, left: 60, right: 60, textAlign: 'center', color: '#94a3b8', fontSize: '11px', fontFamily: 'sans-serif', letterSpacing: '0.03em' },
-  tocArea: { position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 0, width: 256, overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '10px 0' },
-  tocButton: { background: 'transparent', border: 'none', cursor: 'pointer' },
-  tocButtonBar: { background: '#334155', borderRadius: '2px' },
-};
