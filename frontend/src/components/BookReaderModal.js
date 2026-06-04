@@ -16,6 +16,11 @@ function getFormat(filePath) {
 
 export default function BookReaderModal({ book, onClose, onPositionSaved }) {
   // ── Constantes dérivées des props (avant tout useState/useRef) ─────────────
+  const supportsFullscreen = !!(
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled
+  );
+
   const req          = book.requestId;
   const readingListId = book._id || null;
   const lsKey        = req?._id ? `epub_pos_${req._id}`  : null;
@@ -266,7 +271,7 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
             <span className={styles.bookTitle}>{book.title}</span>
           </div>
 
-          {!loading && !error && (
+          {!loading && !error && (supportsFullscreen || isEpub) && (
             <div className={styles.headerControls}>
               {isEpub && (
                 <button
@@ -288,13 +293,15 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
                   <button className={styles.fontBtn} onClick={() => setFontSize(s => Math.min(200, s + 10))} title="Agrandir la police">A+</button>
                 </div>
               )}
-              <button
-                className={`${styles.fsBtn} ${isFullscreen ? styles.fsBtnActive : ''}`}
-                onClick={toggleFullscreen}
-                title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
-              >
-                {FullscreenIcon}
-              </button>
+              {supportsFullscreen && (
+                <button
+                  className={`${styles.fsBtn} ${isFullscreen ? styles.fsBtnActive : ''}`}
+                  onClick={toggleFullscreen}
+                  title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                >
+                  {FullscreenIcon}
+                </button>
+              )}
             </div>
           )}
 
