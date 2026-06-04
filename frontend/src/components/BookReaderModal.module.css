@@ -27,19 +27,30 @@
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--color-border, #2d3748);
   flex-shrink: 0;
-  gap: 0.75rem;
+  column-gap: 0.75rem;
+  row-gap: 0.4rem;
   background: var(--color-bg2, #1e293b);
 }
 
+/* Titre : prend tout l'espace dispo — DOM order suffit sur desktop */
 .headerLeft {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
+  flex: 1;
+}
+
+/* Contrôles (police, aide, fullscreen) */
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .formatBadge {
@@ -101,6 +112,35 @@
   text-align: center;
 }
 
+/* Bouton plein écran */
+.fsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.fsBtn:hover {
+  border-color: var(--color-accent, #6366f1);
+  color: var(--color-accent, #6366f1);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.fsBtnActive {
+  border-color: var(--color-accent, #6366f1);
+  color: var(--color-accent, #6366f1);
+  background: rgba(99, 102, 241, 0.1);
+}
+
 .closeBtn {
   display: flex;
   align-items: center;
@@ -122,6 +162,87 @@
   color: var(--color-danger, #ef4444);
   background: rgba(239, 68, 68, 0.08);
 }
+
+/* ── Mobile header : titre+fermer ligne 1, contrôles ligne 2 étalés ── */
+@media (max-width: 640px) {
+  .headerLeft     { order: 1; flex: 1; }
+  .closeBtn       { order: 1; }
+  .headerControls {
+    order: 2;
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 0.2rem;
+    border-top: 1px solid var(--color-border, #2d3748);
+  }
+}
+
+/* Bouton aide EPUB (ⓘ dans le header) */
+.hintBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 50%;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.hintBtn:hover {
+  border-color: #60a5fa;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.hintBtnActive {
+  border-color: #60a5fa;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+
+/* Bandeau d'aide navigation EPUB */
+.epubHint {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 8px;
+  color: #93c5fd;
+  font-size: 0.78rem;
+  max-width: min(420px, 90%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.hintClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #60a5fa;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.hintClose:hover { opacity: 1; }
 
 /* ── Contenu ── */
 .content {
