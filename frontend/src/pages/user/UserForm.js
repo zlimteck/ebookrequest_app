@@ -78,7 +78,7 @@ function UserForm() {
     coverImage: null,
     coverImagePreview: '',
     file: null,
-    format: '',
+    format: 'epub',
     category: 'ebook'
   });
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -652,32 +652,36 @@ function UserForm() {
 
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
-              <label className={styles.label}>Format <span className={styles.optionalLabel}>(optionnel)</span></label>
-              <div className={styles.formatButtons}>
-                {['epub', 'pdf', 'mobi'].map(f => (
-                  <button key={f} type="button"
-                    className={`${styles.formatBtn} ${form.format === f ? styles.formatBtnActive : ''}`}
-                    onClick={() => setForm(prev => ({ ...prev, format: prev.format === f ? '' : f }))}>
-                    {f.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+              <label className={styles.label}>Format</label>
+              <select
+                className={styles.input}
+                value={form.format}
+                onChange={e => setForm(prev => ({ ...prev, format: e.target.value }))}
+              >
+                <optgroup label="Ebook">
+                  <option value="epub">EPUB</option>
+                  <option value="mobi">MOBI</option>
+                  <option value="azw3">AZW3 (Kindle)</option>
+                  <option value="fb2">FB2</option>
+                </optgroup>
+                <optgroup label="Comic / BD / Manga">
+                  <option value="cbz">CBZ</option>
+                  <option value="cbr">CBR</option>
+                  <option value="pdf">PDF</option>
+                </optgroup>
+              </select>
             </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>Type de livre</label>
-              <div className={styles.formatButtons}>
-                {[
-                  { value: 'ebook', label: 'Roman / Essai' },
-                  { value: 'manga', label: 'Manga' },
-                  { value: 'comic', label: 'Comic / BD' },
-                ].map(({ value, label }) => (
-                  <button key={value} type="button"
-                    className={`${styles.formatBtn} ${form.category === value ? styles.formatBtnActive : ''}`}
-                    onClick={() => setForm(prev => ({ ...prev, category: value }))}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <select
+                className={styles.input}
+                value={form.category}
+                onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
+              >
+                <option value="ebook">Roman / Essai</option>
+                <option value="manga">Manga</option>
+                <option value="comic">Comic / BD</option>
+              </select>
             </div>
             <div className={styles.formGroup} style={{ flex: 1 }}>
               <label className={styles.label}>
