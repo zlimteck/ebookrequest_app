@@ -67,7 +67,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const book = await ReadingList.findOne({ _id: req.params.id, userId: req.user.id });
     if (!book) return res.status(404).json({ message: 'Livre non trouvé' });
 
-    const { status, rating, epubLocation, notes } = req.body;
+    const { status, rating, epubLocation, readingProgress, notes } = req.body;
     if (status !== undefined) {
       book.status = status;
       book.readAt = status === 'read' ? new Date() : null;
@@ -76,6 +76,7 @@ router.put('/:id', requireAuth, async (req, res) => {
       book.rating = Math.min(5, Math.max(0, Number(rating)));
     }
     if (epubLocation !== undefined) book.epubLocation = epubLocation;
+    if (readingProgress !== undefined) book.readingProgress = Math.min(100, Math.max(0, Number(readingProgress)));
     if (notes !== undefined) book.notes = notes.trim();
     await book.save();
 

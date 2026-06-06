@@ -11,8 +11,9 @@ const readingListSchema = new mongoose.Schema({
   requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'BookRequest' },
   readAt: { type: Date, default: null },
   rating: { type: Number, min: 0, max: 5, default: 0 },
-  epubLocation: { type: String, default: '' },  // CFI position dans l'EPUB
-  notes: { type: String, default: '' },          // Note libre de l'utilisateur
+  epubLocation:    { type: String, default: '' },   // CFI position dans l'EPUB
+  readingProgress: { type: Number, default: 0, min: 0, max: 100 }, // % lu (0-100)
+  notes: { type: String, default: '' },             // Note libre de l'utilisateur
 }, { timestamps: true });
 
 // Index pour éviter les doublons par demande

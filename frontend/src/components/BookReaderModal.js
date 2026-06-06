@@ -41,6 +41,7 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
   const [locationsReady, setLocationsReady] = useState(false);
   const [showEpubHint, setShowEpubHint]     = useState(false);
   const [isFullscreen, setIsFullscreen]     = useState(false);
+  const [epubTheme, setEpubTheme]           = useState('light'); // 'light' | 'night'
   const [epubLocation, setEpubLocation] = useState(initialLoc);
   const [cbzImages, setCbzImages]   = useState([]);
   const [cbzPage, setCbzPage]       = useState(() => {
@@ -111,6 +112,19 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
     renditionRef.current?.themes.fontSize(`${fontSize}%`);
   }, [fontSize]);
 
+  // ── Thème EPUB (light / night) ────────────────────────────────────────────
+  useEffect(() => {
+    const r = renditionRef.current;
+    if (!r) return;
+    r.themes.select(epubTheme);
+    // Forcer le re-render de la page courante pour appliquer le thème immédiatement
+    try {
+      const loc = r.currentLocation?.();
+      const cfi = loc?.start?.cfi;
+      if (cfi) r.display(cfi).catch(() => {});
+    } catch {}
+  }, [epubTheme]);
+
   // ── Fullscreen ─────────────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     const el = document.documentElement;
@@ -141,34 +155,32 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
 
     if (!loc) return;
 
+    // Calcul progression (loc doit être un CFI valide)
+    let pct = 0;
+    const r = renditionRef.current;
+    if (r?.book?.locations?.length?.() > 0 && typeof loc === 'string' && loc.startsWith('epubcfi(')) {
+      try { pct = Math.round((r.book.locations.percentageFromCfi(loc) || 0) * 100); } catch {}
+    }
+    setProgress(pct);
+
     if (readingListId) {
-      // Bibliothèque : sauvegarde en base
+      // Bibliothèque : sauvegarde position + progression en base
       try {
-        await axiosAdmin.put(`/api/reading/${readingListId}`, { epubLocation: loc });
-        onPositionSaved?.(loc);
+        await axiosAdmin.put(`/api/reading/${readingListId}`, { epubLocation: loc, readingProgress: pct });
+        onPositionSaved?.(loc, pct);
       } catch {}
     } else if (lsKey) {
       // Pas de bibliothèque (admin, etc.) : sauvegarde en localStorage
       try { localStorage.setItem(lsKey, loc); } catch {}
-    }
-
-    // Calcul progression (loc doit être un CFI valide)
-    const r = renditionRef.current;
-    if (r?.book?.locations?.length?.() > 0 && typeof loc === 'string' && loc.startsWith('epubcfi(')) {
-      try {
-        const pct = r.book.locations.percentageFromCfi(loc);
-        setProgress(Math.round((pct || 0) * 100));
-      } catch {}
     }
   }, [readingListId, onPositionSaved]); // eslint-disable-line
 
   // ── Rendition EPUB ─────────────────────────────────────────────────────────
   const handleGetRendition = useCallback((rendition) => {
     renditionRef.current = rendition;
-    rendition.themes.register('light', {
-      body: { background: '#ffffff !important', color: '#1a1a1a !important' },
-    });
-    rendition.themes.select('light');
+    rendition.themes.register('light', { body: { background: '#ffffff !important', color: '#1a1a1a !important' } });
+    rendition.themes.register('night', { body: { background: '#1e1e2e !important', color: '#cdd6f4 !important' } });
+    rendition.themes.select(epubTheme);
     rendition.themes.fontSize(`${fontSize}%`);
 
     // Charge les locations depuis le cache localStorage, ou les génère et les met en cache
@@ -248,6 +260,17 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
 
   const isEpub = format === 'epub';
 
+  // Styles react-reader recalculés selon le thème pour que le cadre suive aussi
+  const isNight = epubTheme === 'night';
+  const epubReaderStyles = {
+    ...ReactReaderStyle,
+    arrow:      { ...ReactReaderStyle.arrow, color: isNight ? '#94a3b8' : '#334155' },
+    arrowHover: { color: '#6366f1' },
+    readerArea: { ...ReactReaderStyle.readerArea, backgroundColor: isNight ? '#1e1e2e' : '#ffffff' },
+    tocArea:    { ...ReactReaderStyle.tocArea, background: isNight ? '#161626' : '#f8fafc', borderRight: `1px solid ${isNight ? '#2d3748' : '#e2e8f0'}` },
+    tocButtonBar: { ...ReactReaderStyle.tocButtonBar, background: isNight ? '#94a3b8' : '#555' },
+  };
+
   // Icône fullscreen / réduire
   const FullscreenIcon = isFullscreen
     ? (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -273,6 +296,25 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
 
           {!loading && !error && (supportsFullscreen || isEpub) && (
             <div className={styles.headerControls}>
+              {isEpub && (
+                <button
+                  className={`${styles.themeBtn} ${epubTheme === 'night' ? styles.themeBtnNight : ''}`}
+                  onClick={() => setEpubTheme(t => t === 'light' ? 'night' : 'light')}
+                  title={epubTheme === 'light' ? 'Mode nuit' : 'Mode jour'}
+                >
+                  {epubTheme === 'light'
+                    ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                      </svg>
+                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                      </svg>
+                  }
+                </button>
+              )}
               {isEpub && (
                 <button
                   className={`${styles.hintBtn} ${showEpubHint ? styles.hintBtnActive : ''}`}
@@ -340,7 +382,7 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
 
           {/* ── EPUB ── */}
           {!loading && !error && isEpub && epubBuffer && (
-            <div className={styles.epubWrapper}>
+            <div className={styles.epubWrapper} style={{ background: epubTheme === 'night' ? '#1e1e2e' : '#ffffff' }}>
               {!locationsReady && (
                 <div className={styles.epubLoadingOverlay}>
                   <div className={styles.spinner} />
@@ -408,10 +450,3 @@ export default function BookReaderModal({ book, onClose, onPositionSaved }) {
   );
 }
 
-// Spread complet des styles par défaut + override uniquement des couleurs
-const epubReaderStyles = {
-  ...ReactReaderStyle,
-  arrow: { ...ReactReaderStyle.arrow, color: '#334155' },
-  arrowHover: { color: '#6366f1' },
-  tocButtonBar: { ...ReactReaderStyle.tocButtonBar, background: '#555' },
-};

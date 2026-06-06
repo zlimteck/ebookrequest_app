@@ -109,11 +109,14 @@
 /* Sort bar */
 .sortBar {
   display: flex;
+  align-items: center;
   gap: 0.15rem;
   background: var(--color-bg2, #1e293b);
   border: 1px solid var(--color-border, #2d3748);
   border-radius: 8px;
   padding: 0.2rem;
+  height: 34px;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
@@ -149,6 +152,30 @@
   flex-shrink: 0;
 }
 
+/* Select filtre format */
+.formatSelect {
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 1.8rem 0 0.65rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-text, #f8fafc);
+  font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  transition: border-color 0.15s;
+}
+.formatSelect:focus {
+  outline: none;
+  border-color: var(--color-accent, #6366f1);
+}
+
 .searchWrap {
   position: relative;
   display: flex;
@@ -164,7 +191,9 @@
 }
 
 .searchInput {
-  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 0.75rem 0 2rem;
   border: 1px solid var(--color-border, #2d3748);
   border-radius: var(--radius, 0.5rem);
   background: var(--color-bg2, #1e293b);
@@ -336,6 +365,32 @@
 }
 
 /* Notes */
+/* Progression lecture sur carte */
+.cardProgress {
+  position: relative;
+  margin-top: 0.4rem;
+  height: 3px;
+  background: var(--color-border, #2d3748);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 180px;
+}
+
+.cardProgressFill {
+  height: 100%;
+  background: var(--color-accent, #6366f1);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.cardProgressLabel {
+  position: absolute;
+  right: 0;
+  top: 5px;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
 .notesPreview {
   margin-top: 0.35rem;
   font-size: 0.78rem;
@@ -572,6 +627,12 @@
   .sortBtn {
     flex: 1;
     justify-content: center;
+  }
+
+  .formatSelect {
+    order: 2;
+    flex: 0 0 auto;
+    font-size: 0.75rem;
   }
 
   .searchWrap {

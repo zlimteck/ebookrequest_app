@@ -11,6 +11,14 @@ function isReadable(filePath) {
   const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
   return READABLE_EXTS.includes(ext);
 }
+function getFileFormat(filePath) {
+  if (!filePath) return null;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  if (ext === 'epub') return 'epub';
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'cbz' || ext === 'cbr') return 'cbz';
+  return null;
+}
 
 const FILTERS = [
   { key: 'all',     label: 'Tous' },
@@ -73,6 +81,7 @@ export default function ReadingPage() {
   const [addError, setAddError]     = useState('');
   const [readerBook, setReaderBook] = useState(null);
   const [editingNote, setEditingNote] = useState(null); // { id, text }
+  const [filterFormat, setFilterFormat] = useState('all');
   const filterBarRef = useRef(null);
 
   // Auto-vider le message d'erreur après 5s
@@ -185,6 +194,10 @@ export default function ReadingPage() {
       return true;
     })
     .filter(b => {
+      if (filterFormat === 'all') return true;
+      return getFileFormat(b.requestId?.filePath) === filterFormat;
+    })
+    .filter(b => {
       if (!search.trim()) return true;
       const s = search.toLowerCase();
       return b.title.toLowerCase().includes(s) || b.author.toLowerCase().includes(s);
@@ -279,6 +292,18 @@ export default function ReadingPage() {
             ))}
           </div>
 
+          <select
+            className={styles.formatSelect}
+            value={filterFormat}
+            onChange={e => setFilterFormat(e.target.value)}
+            title="Filtrer par format"
+          >
+            <option value="all">Tous formats</option>
+            <option value="epub">EPUB</option>
+            <option value="pdf">PDF</option>
+            <option value="cbz">CBZ / CBR</option>
+          </select>
+
           <div className={styles.searchWrap}>
             <span className={styles.searchIcon}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -339,6 +364,13 @@ export default function ReadingPage() {
                   }
                   <StarRating rating={book.rating || 0} bookId={book._id} onRate={handleRate} />
                 </div>
+                {/* Progression EPUB */}
+                {book.readingProgress > 0 && book.readingProgress < 100 && (
+                  <div className={styles.cardProgress}>
+                    <div className={styles.cardProgressFill} style={{ width: `${book.readingProgress}%` }} />
+                    <span className={styles.cardProgressLabel}>{book.readingProgress}%</span>
+                  </div>
+                )}
                 {/* Note preview */}
                 {book.notes && editingNote?.id !== book._id && (
                   <div className={styles.notesPreview} onClick={() => setEditingNote({ id: book._id, text: book.notes })}>
@@ -429,8 +461,10 @@ export default function ReadingPage() {
         <BookReaderModal
           book={readerBook}
           onClose={() => setReaderBook(null)}
-          onPositionSaved={(loc) =>
-            setBooks(prev => prev.map(b => b._id === readerBook._id ? { ...b, epubLocation: loc } : b))
+          onPositionSaved={(loc, pct) =>
+            setBooks(prev => prev.map(b => b._id === readerBook._id
+              ? { ...b, epubLocation: loc, readingProgress: pct }
+              : b))
           }
         />
       )}

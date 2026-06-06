@@ -656,7 +656,13 @@ function UserForm() {
               <select
                 className={styles.input}
                 value={form.format}
-                onChange={e => setForm(prev => ({ ...prev, format: e.target.value }))}
+                onChange={e => {
+                  const fmt = e.target.value;
+                  const autoCategory = ['cbz', 'cbr', 'pdf'].includes(fmt) ? 'comic'
+                    : ['epub', 'mobi', 'azw3', 'fb2'].includes(fmt) ? 'ebook'
+                    : null;
+                  setForm(prev => ({ ...prev, format: fmt, ...(autoCategory ? { category: autoCategory } : {}) }));
+                }}
               >
                 <optgroup label="Ebook">
                   <option value="epub">EPUB</option>
