@@ -21,7 +21,7 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
     console.error('Erreur log admin:', e.message);
   }
 };
-import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail } from '../services/emailService.js';
+import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
@@ -31,7 +31,15 @@ let _adminEmailPrefsCacheAt = 0;
 async function getAdminEmailPrefs() {
   if (_adminEmailPrefsCache && Date.now() - _adminEmailPrefsCacheAt < 60000) return _adminEmailPrefsCache;
   const doc = await ConnectorSettings.findOne({ service: 'email' }).lean();
-  _adminEmailPrefsCache = { enabled: doc?.emailEnabled ?? true, notifyOnNewRequest: doc?.notifyOnNewRequest ?? true };
+  _adminEmailPrefsCache = {
+    enabled:            doc?.emailEnabled         ?? true,
+    notifyOnNewRequest: doc?.notifyOnNewRequest    ?? true,
+    notifyOnComplete:   doc?.notifyOnComplete      ?? true,
+    notifyOnCancel:     doc?.notifyOnCancel        ?? true,
+    notifyOnComment:    doc?.notifyOnComment       ?? true,
+    notifyOnReport:     doc?.notifyOnReport        ?? true,
+    notifyOnNewUser:    doc?.notifyOnNewUser        ?? true,
+  };
   _adminEmailPrefsCacheAt = Date.now();
   return _adminEmailPrefsCache;
 }
@@ -340,6 +348,13 @@ export const updateRequestStatus = async (req, res) => {
       User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
         if (u) appriseService.notifyUserBookCanceled(u, currentRequest, reason).catch(() => {});
       }).catch(() => {});
+      // Email aux admins — annulation
+      getAdminEmailPrefs().then(async prefs => {
+        if (!prefs.enabled || !prefs.notifyOnCancel) return;
+        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendRequestCanceledToAdminsEmail(admin, currentRequest, reason).catch(() => {}));
+      }).catch(() => {});
     } else {
       updateFields.cancelReason = undefined;
     }
@@ -376,6 +391,13 @@ export const updateRequestStatus = async (req, res) => {
         // Notif Apprise personnelle de l'user
         User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
           if (u) appriseService.notifyUserBookCompleted(u, currentRequest).catch(() => {});
+        }).catch(() => {});
+        // Email aux admins — complétion
+        getAdminEmailPrefs().then(async prefs => {
+          if (!prefs.enabled || !prefs.notifyOnComplete) return;
+          const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+          admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+            sendBookCompletedToAdminsEmail(admin, currentRequest).catch(() => {}));
         }).catch(() => {});
       }
     }
@@ -743,6 +765,13 @@ export const updateUserComment = async (req, res) => {
 
     if (comment?.trim()) {
       appriseService.notifyUserComment(request, comment).catch(() => {});
+      // Email aux admins — commentaire utilisateur
+      getAdminEmailPrefs().then(async prefs => {
+        if (!prefs.enabled || !prefs.notifyOnComment) return;
+        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendUserCommentToAdminsEmail(admin, request, comment).catch(() => {}));
+      }).catch(() => {});
     }
 
     res.json({ success: true, userComment: request.userComment });
@@ -857,6 +886,13 @@ export const reportRequest = async (req, res) => {
     await request.save();
 
     appriseService.notifyReport(request, reason).catch(() => {});
+    // Email aux admins — signalement
+    getAdminEmailPrefs().then(async prefs => {
+      if (!prefs.enabled || !prefs.notifyOnReport) return;
+      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+        sendReportToAdminsEmail(admin, request, reason).catch(() => {}));
+    }).catch(() => {});
 
     res.json({
       success: true,

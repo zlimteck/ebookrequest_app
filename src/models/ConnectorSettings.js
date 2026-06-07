@@ -11,8 +11,13 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   cronInterval: { type: Number, default: 6 },
   valentineFallbackToAdmin: { type: Boolean, default: false },
   // Préférences emails admin (service: 'email')
-  emailEnabled:        { type: Boolean, default: true },
-  notifyOnNewRequest:  { type: Boolean, default: true },
+  emailEnabled:          { type: Boolean, default: true },
+  notifyOnNewRequest:    { type: Boolean, default: true },
+  notifyOnComplete:      { type: Boolean, default: true },
+  notifyOnCancel:        { type: Boolean, default: true },
+  notifyOnComment:       { type: Boolean, default: true },
+  notifyOnReport:        { type: Boolean, default: true },
+  notifyOnNewUser:       { type: Boolean, default: true },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

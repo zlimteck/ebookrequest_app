@@ -5,7 +5,9 @@ import jwt from 'jsonwebtoken';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import Invitation from '../models/Invitation.js';
 import User from '../models/User.js';
-import { sendInvitationEmail } from '../services/emailService.js';
+import { sendInvitationEmail, sendNewUserToAdminsEmail } from '../services/emailService.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
+import appriseService from '../services/appriseService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
@@ -151,6 +153,15 @@ router.post('/register', async (req, res) => {
     invitation.status = 'accepted';
     invitation.acceptedAt = new Date();
     await invitation.save();
+
+    // Notifications admins — nouvel utilisateur
+    appriseService.notifyNewUser(user.username, invitation.email).catch(() => {});
+    ConnectorSettings.findOne({ service: 'email' }).lean().then(async doc => {
+      if (!(doc?.emailEnabled ?? true) || !(doc?.notifyOnNewUser ?? true)) return;
+      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+        sendNewUserToAdminsEmail(admin, user.username, invitation.email).catch(() => {}));
+    }).catch(() => {});
 
     const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 

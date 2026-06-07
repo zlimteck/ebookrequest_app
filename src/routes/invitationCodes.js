@@ -4,7 +4,8 @@ import jwt from 'jsonwebtoken';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import InvitationCode from '../models/InvitationCode.js';
 import User from '../models/User.js';
-import { sendVerificationEmail } from '../services/emailService.js';
+import { sendVerificationEmail, sendNewUserToAdminsEmail } from '../services/emailService.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
 const router = express.Router();
@@ -168,6 +169,15 @@ router.post('/register', async (req, res) => {
 
     console.log(`[InvitationCode] ${user.username} inscrit via le code ${invCode.code}`);
     appriseService.notifyNewUser(user.username, normalizedEmail).catch(() => {});
+    // Email aux admins — nouvel utilisateur
+    ConnectorSettings.findOne({ service: 'email' }).lean().then(async doc => {
+      const enabled = doc?.emailEnabled ?? true;
+      const notify  = doc?.notifyOnNewUser ?? true;
+      if (!enabled || !notify) return;
+      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+        sendNewUserToAdminsEmail(admin, user.username, normalizedEmail).catch(() => {}));
+    }).catch(() => {});
 
     const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 

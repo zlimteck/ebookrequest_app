@@ -323,6 +323,106 @@ export const sendNewRequestToAdminsEmail = async (admin, bookRequest, requesterU
   }
 };
 
+// ── Notifications admin ────────────────────────────────────────────────────
+
+const adminLink = () => `<div style="text-align:center;margin:2rem 0;">
+  <a href="${FRONTEND()}/admin" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#4f46e5,#059669);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+    Gérer les demandes
+  </a>
+</div>`;
+
+const bookCard = (bookRequest) => `
+  <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:0 0 1.25rem;display:flex;gap:1rem;align-items:flex-start;">
+    ${bookRequest.thumbnail ? `<img src="${escapeHtml(bookRequest.thumbnail)}" alt="" style="width:56px;height:80px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : ''}
+    <div>
+      <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.2rem;">${escapeHtml(bookRequest.title)}</p>
+      <p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(bookRequest.author)}</p>
+    </div>
+  </div>`;
+
+export const sendBookCompletedToAdminsEmail = async (admin, bookRequest) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#059669 0%,#0891b2 100%)',
+    title: '✅ Livre complété',
+    subtitle: `Disponible pour ${escapeHtml(bookRequest.username || 'un utilisateur')}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      <p style="color:#cbd5e1;font-size:0.95rem;margin:0 0 1rem;">Une demande de livre vient d'être complétée et est maintenant disponible au téléchargement.</p>
+      ${bookCard(bookRequest)}
+      ${adminLink()}`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `✅ Livre disponible : ${escapeHtml(bookRequest.title)}`, html, type: 'book_completed_admin' }); } catch {}
+};
+
+export const sendRequestCanceledToAdminsEmail = async (admin, bookRequest, reason) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#dc2626 0%,#9333ea 100%)',
+    title: '❌ Demande annulée',
+    subtitle: `Demandé par ${escapeHtml(bookRequest.username || 'un utilisateur')}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      ${bookCard(bookRequest)}
+      ${reason ? `<div style="background:#1e293b;border-left:3px solid #dc2626;padding:0.75rem 1rem;border-radius:0 6px 6px 0;margin:0 0 1.25rem;"><p style="color:#94a3b8;font-size:0.85rem;margin:0;">Motif : ${escapeHtml(reason)}</p></div>` : ''}
+      ${adminLink()}`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `❌ Demande annulée : ${escapeHtml(bookRequest.title)}`, html, type: 'request_canceled_admin' }); } catch {}
+};
+
+export const sendUserCommentToAdminsEmail = async (admin, bookRequest, comment) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#f59e0b 0%,#ef4444 100%)',
+    title: '💬 Commentaire utilisateur',
+    subtitle: `De ${escapeHtml(bookRequest.username || 'un utilisateur')}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      ${bookCard(bookRequest)}
+      <div style="background:#1e293b;border-left:3px solid #f59e0b;padding:0.75rem 1rem;border-radius:0 6px 6px 0;margin:0 0 1.25rem;">
+        <p style="color:#94a3b8;font-size:0.85rem;margin:0;">${escapeHtml(comment)}</p>
+      </div>
+      ${adminLink()}`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `💬 Commentaire : ${escapeHtml(bookRequest.title)}`, html, type: 'user_comment_admin' }); } catch {}
+};
+
+export const sendReportToAdminsEmail = async (admin, bookRequest, reason) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#dc2626 0%,#f59e0b 100%)',
+    title: '🚨 Signalement d\'un problème',
+    subtitle: `Signalé par ${escapeHtml(bookRequest.username || 'un utilisateur')}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      ${bookCard(bookRequest)}
+      ${reason ? `<div style="background:#1e293b;border-left:3px solid #dc2626;padding:0.75rem 1rem;border-radius:0 6px 6px 0;margin:0 0 1.25rem;"><p style="color:#94a3b8;font-size:0.85rem;margin:0;">Problème signalé : ${escapeHtml(reason)}</p></div>` : ''}
+      ${adminLink()}`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `🚨 Signalement : ${escapeHtml(bookRequest.title)}`, html, type: 'report_admin' }); } catch {}
+};
+
+export const sendNewUserToAdminsEmail = async (admin, username, email) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)',
+    title: '👤 Nouvel utilisateur inscrit',
+    subtitle: 'Un nouveau compte a été créé',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:0 0 1.25rem;">
+        <p style="color:#e2e8f0;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(username)}</p>
+        ${email ? `<p style="color:#94a3b8;font-size:0.87rem;margin:0;">${escapeHtml(email)}</p>` : ''}
+      </div>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${FRONTEND()}/admin" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+          Gérer les utilisateurs
+        </a>
+      </div>`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `👤 Nouvel utilisateur : ${escapeHtml(username)}`, html, type: 'new_user_admin' }); } catch {}
+};
+
 export const sendInvitationEmail = async (email, invitedByUsername, token) => {
   const link = `${FRONTEND()}/register?token=${token}`;
   const html = darkEmail({
