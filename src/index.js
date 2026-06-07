@@ -178,6 +178,28 @@ mongoose.connect(process.env.MONGODB_URI, {
 
     // Cron Valentine : re-tentative de téléchargement pour les demandes en attente
     startValentineCron();
+
+    // Nettoyage horaire des fichiers convertis (uploads/convert/) > 24h
+    import('./services/calibreConvertService.js').then(({ CONVERT_DIR }) => {
+      import('fs').then(fsMod => {
+        const fsSync = fsMod.default;
+        const cleanConvertDir = () => {
+          if (!fsSync.existsSync(CONVERT_DIR)) return;
+          const now = Date.now();
+          try {
+            fsSync.readdirSync(CONVERT_DIR).forEach(file => {
+              const fp = path.join(CONVERT_DIR, file);
+              try {
+                const stat = fsSync.statSync(fp);
+                if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) fsSync.unlinkSync(fp);
+              } catch {}
+            });
+          } catch {}
+        };
+        cleanConvertDir(); // nettoyage au démarrage
+        setInterval(cleanConvertDir, 60 * 60 * 1000); // puis toutes les heures
+      });
+    }).catch(() => {});
   });
 })
 .catch((error) => console.error('Erreur de connexion MongoDB:', error));

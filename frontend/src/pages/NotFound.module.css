@@ -1,0 +1,146 @@
+/* ── Page ── */
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg, #0f172a);
+  padding: 2rem;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Livres flottants ── */
+.floatingBooks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.floatingBook {
+  position: absolute;
+  font-size: 1.8rem;
+  opacity: 0;
+  animation: floatUp 8s ease-in infinite;
+  animation-delay: calc(var(--i) * 0.9s);
+}
+
+/* Positions horizontales variées */
+.floatingBook:nth-child(1)  { left:  5%; }
+.floatingBook:nth-child(2)  { left: 14%; }
+.floatingBook:nth-child(3)  { left: 24%; }
+.floatingBook:nth-child(4)  { left: 35%; }
+.floatingBook:nth-child(5)  { left: 47%; }
+.floatingBook:nth-child(6)  { left: 58%; }
+.floatingBook:nth-child(7)  { left: 68%; }
+.floatingBook:nth-child(8)  { left: 78%; }
+.floatingBook:nth-child(9)  { left: 87%; }
+.floatingBook:nth-child(10) { left: 94%; }
+
+@keyframes floatUp {
+  0%   { transform: translateY(100vh) rotate(-15deg); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.4; }
+  100% { transform: translateY(-120px) rotate(15deg); opacity: 0; }
+}
+
+/* ── Card ── */
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  z-index: 1;
+  animation: fadeIn 0.6s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Logo ── */
+.logo {
+  height: 64px;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.06); }
+}
+
+/* ── 404 ── */
+.codeWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  line-height: 1;
+}
+
+.codeDigit {
+  font-size: 6rem;
+  font-weight: 900;
+  color: var(--color-accent, #6366f1);
+  letter-spacing: -4px;
+  text-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
+}
+
+.codeBook {
+  font-size: 4.5rem;
+  animation: wobble 2.5s ease-in-out infinite;
+  display: inline-block;
+  margin: 0 0.25rem;
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(-8deg) scale(1); }
+  50%       { transform: rotate(8deg) scale(1.1); }
+}
+
+/* ── Texte ── */
+.title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin: 0;
+  line-height: 1.7;
+  max-width: 360px;
+}
+
+/* ── Bouton ── */
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem 1.5rem;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius, 0.5rem);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+}
+
+.btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(99, 102, 241, 0.5);
+}
+
+.btn:active {
+  transform: translateY(0);
+}

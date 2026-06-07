@@ -592,6 +592,50 @@
   background: rgba(239, 68, 68, 0.08);
 }
 
+/* Confirmation suppression inline */
+.deleteConfirm {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.deleteConfirmYes,
+.deleteConfirmNo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius, 0.5rem);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  border: 1px solid;
+  line-height: 1;
+}
+
+.deleteConfirmYes {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--color-danger, #ef4444);
+}
+.deleteConfirmYes:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.deleteConfirmNo {
+  background: transparent;
+  border-color: var(--color-border, #2d3748);
+  color: var(--color-text-muted, #94a3b8);
+}
+.deleteConfirmNo:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--color-text, #f8fafc);
+}
+
 /* ── Mobile ── */
 @media (max-width: 640px) {
   .page {

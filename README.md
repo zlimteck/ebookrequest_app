@@ -20,6 +20,7 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - **IA** — OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
 - **Visionneuse** — PDF (navigateur natif), EPUB (epub.js via react-reader), CBZ/CBR (JSZip)
+- **Conversion** — Calibre (`ebook-convert`) intégré dans l'image Docker — EPUB ↔ MOBI, AZW3, FB2 ; CBZ → PDF (JSZip + pdfkit, sans dépendance externe)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
 ## Fonctionnalités
@@ -60,9 +61,14 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - Tri par date, titre, auteur ou note — filtre par source (demandes / ajouts manuels)
 - Visionneuse in-browser sans installation :
   - **PDF** — viewer natif du navigateur
-  - **EPUB** — lecteur paginé avec réglage de la taille de police, barre de progression, swipe mobile et sauvegarde automatique de la position de lecture
+  - **EPUB** — lecteur paginé avec réglage de la taille de police, mode nuit, barre de progression, swipe mobile et sauvegarde automatique de la position de lecture
   - **CBZ / CBR** — galerie image avec navigation clavier et swipe, position mémorisée
 - Bouton « Lire » disponible dans la bibliothèque, les demandes utilisateur et le panel admin
+- **Conversion de format au téléchargement** — modal dédié avec conversion à la volée :
+  - Ebooks (EPUB, MOBI, AZW3, FB2) : conversion via Calibre (`ebook-convert`), inclus dans l'image Docker — aucune configuration requise
+  - Comics/BD (CBZ) : conversion en PDF via JSZip + pdfkit, sans dépendance externe
+  - Affichage du poids du fichier original et du fichier converti
+  - Les fichiers convertis sont automatiquement supprimés après 24h
 
 **Découverte & IA**
 - Page Découverte (tendances, bestsellers, recommandations IA)

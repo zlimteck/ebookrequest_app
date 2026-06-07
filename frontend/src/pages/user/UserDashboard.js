@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import styles from './UserDashboard.module.css';
 import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
+import DownloadModal from '../../components/DownloadModal';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -28,6 +29,7 @@ const UserDashboard = () => {
   const [downloadingFile, setDownloadingFile] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, requestId: null, requestTitle: '' });
   const [readerRequest, setReaderRequest] = useState(null);
+  const [downloadModalRequest, setDownloadModalRequest] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
@@ -594,17 +596,14 @@ const UserDashboard = () => {
                                   </button>
                                 )}
                                 <button
-                                  className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
-                                  onClick={async (e) => { e.preventDefault(); try { await downloadFile(request); } catch { toast.error('Une erreur est survenue lors du téléchargement'); } }}
-                                  disabled={downloadingFile === request._id}
-                                  title={downloadingFile === request._id ? 'Téléchargement...' : 'Télécharger'}
+                                  className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
+                                  onClick={() => setDownloadModalRequest(request)}
+                                  title="Télécharger"
                                 >
-                                  {downloadingFile === request._id ? <span className={styles.spinner} /> : (
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                  )}
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                  </svg>
                                 </button>
                                 <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => setReportModal({ isOpen: true, requestId: request._id, requestTitle: request.title })} title="Signaler un problème">
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -869,22 +868,15 @@ const UserDashboard = () => {
                           </button>
                         )}
                         <button
-                          className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            try { await downloadFile(request); }
-                            catch (error) { toast.error('Une erreur est survenue lors du téléchargement'); }
-                          }}
-                          disabled={downloadingFile === request._id}
-                          title={downloadingFile === request._id ? 'Téléchargement...' : request.downloadedAt ? `Téléchargé le ${new Date(request.downloadedAt).toLocaleDateString('fr-FR')}` : `Télécharger ${request.filePath ? `(${getFileType(request.filePath)})` : ''}`}
+                          className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
+                          onClick={() => setDownloadModalRequest(request)}
+                          title="Télécharger"
                         >
-                          {downloadingFile === request._id ? <span className={styles.spinner} /> : (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                              <polyline points="7 10 12 15 17 10"/>
-                              <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                          )}
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                          </svg>
                         </button>
                         <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => setReportModal({ isOpen: true, requestId: request._id, requestTitle: request.title })} title="Signaler un problème">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1091,6 +1083,13 @@ const UserDashboard = () => {
         <BookReaderModal
           book={readerRequest}
           onClose={() => setReaderRequest(null)}
+        />
+      )}
+
+      {downloadModalRequest && (
+        <DownloadModal
+          request={downloadModalRequest}
+          onClose={() => setDownloadModalRequest(null)}
         />
       )}
     </div>

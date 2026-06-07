@@ -17,6 +17,7 @@ import ServicesHealth from '../../components/admin/ServicesHealth';
 import DownloadLogs from '../../components/admin/DownloadLogs';
 import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
+import DownloadModal from '../../components/DownloadModal';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -79,6 +80,7 @@ function AdminPage() {
   const [editingDownloadLink, setEditingDownloadLink] = useState(null);
   const [downloadLink, setDownloadLink] = useState('');
   const [readerRequest, setReaderRequest] = useState(null);
+  const [downloadModalRequest, setDownloadModalRequest] = useState(null);
   const [file, setFile] = useState(null);
   const [cancelingRequest, setCancelingRequest] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -1073,22 +1075,8 @@ function AdminPage() {
                                 {(request.downloadLink || request.filePath) && (
                                   <button
                                     className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`}
-                                    title={request.filePath ? `Télécharger (${getFileType(request.filePath)})` : 'Ouvrir le lien'}
-                                    onClick={async () => {
-                                      if (request.filePath) {
-                                        try {
-                                          const response = await axiosAdmin.get(`/api/requests/download/${request._id}`, { responseType: 'blob' });
-                                          const url = window.URL.createObjectURL(new Blob([response.data]));
-                                          const a = document.createElement('a');
-                                          a.href = url;
-                                          const cd = response.headers['content-disposition'] || '';
-                                          const m = cd.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"]*)['"]?;?/i) || cd.match(/filename=['"]([^'"]+)['"]/i);
-                                          a.setAttribute('download', m?.[1] ? decodeURIComponent(m[1].trim()) : request.filePath.split('/').pop());
-                                          document.body.appendChild(a); a.click(); a.remove();
-                                          window.URL.revokeObjectURL(url);
-                                        } catch { toast.error('Erreur lors du téléchargement'); }
-                                      } else { window.open(request.downloadLink, '_blank'); }
-                                    }}
+                                    title="Télécharger"
+                                    onClick={() => setDownloadModalRequest(request)}
                                   >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                                   </button>
@@ -1448,22 +1436,8 @@ function AdminPage() {
                         {(request.downloadLink || request.filePath) && (
                           <button
                             className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`}
-                            title={request.filePath ? `Télécharger (${getFileType(request.filePath)})` : 'Ouvrir le lien'}
-                            onClick={async () => {
-                              if (request.filePath) {
-                                try {
-                                  const response = await axiosAdmin.get(`/api/requests/download/${request._id}`, { responseType: 'blob' });
-                                  const url = window.URL.createObjectURL(new Blob([response.data]));
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  const cd = response.headers['content-disposition'] || '';
-                                  const m = cd.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"]*)['"]?;?/i) || cd.match(/filename=['"]([^'"]+)['"]/i);
-                                  a.setAttribute('download', m?.[1] ? decodeURIComponent(m[1].trim()) : request.filePath.split('/').pop());
-                                  document.body.appendChild(a); a.click(); a.remove();
-                                  window.URL.revokeObjectURL(url);
-                                } catch { toast.error('Erreur lors du téléchargement'); }
-                              } else { window.open(request.downloadLink, '_blank'); }
-                            }}
+                            title="Télécharger"
+                            onClick={() => setDownloadModalRequest(request)}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           </button>
@@ -2195,6 +2169,12 @@ function AdminPage() {
         <BookReaderModal
           book={readerRequest}
           onClose={() => setReaderRequest(null)}
+        />
+      )}
+      {downloadModalRequest && (
+        <DownloadModal
+          request={downloadModalRequest}
+          onClose={() => setDownloadModalRequest(null)}
         />
       )}
     </div>

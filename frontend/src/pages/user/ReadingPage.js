@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import styles from './ReadingPage.module.css';
 import GoogleBooksSearch from '../../components/GoogleBooksSearch';
 import BookReaderModal from '../../components/BookReaderModal';
+import DownloadModal from '../../components/DownloadModal';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 function isReadable(filePath) {
@@ -78,6 +79,8 @@ export default function ReadingPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch]         = useState('');
   const [downloading, setDownloading] = useState(null);
+  const [downloadModalBook, setDownloadModalBook] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId]     = useState(null);
   const [addError, setAddError]     = useState('');
   const [readerBook, setReaderBook] = useState(null);
   const [editingNote, setEditingNote] = useState(null); // { id, text }
@@ -418,16 +421,16 @@ export default function ReadingPage() {
                 {/* Télécharger */}
                 {book.source === 'request' && book.requestId && (book.requestId.downloadLink || book.requestId.filePath) && (
                   <button
-                    className={`${styles.downloadBtn} ${downloading === book._id ? styles.downloadBtnBusy : ''}`}
-                    onClick={() => downloadBook(book)} disabled={downloading === book._id} title="Télécharger"
+                    className={styles.downloadBtn}
+                    onClick={() => setDownloadModalBook({ ...book.requestId, title: book.title, _id: book.requestId._id })}
+                    title="Télécharger"
                   >
-                    {downloading === book._id ? <span className={styles.spinner} /> : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                    )}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    {/* dummy child to match closing tag below */}
                   </button>
                 )}
 
@@ -444,13 +447,24 @@ export default function ReadingPage() {
                   {book.status === 'read' ? 'Lu' : 'Non lu'}
                 </button>
 
-                {/* Supprimer */}
-                <button className={styles.deleteBtn} onClick={() => handleDelete(book._id)} title="Retirer de la liste">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                </button>
+                {/* Supprimer — confirmation inline */}
+                {confirmDeleteId === book._id ? (
+                  <div className={styles.deleteConfirm}>
+                    <button className={styles.deleteConfirmYes} onClick={() => { handleDelete(book._id); setConfirmDeleteId(null); }} title="Confirmer la suppression">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+                    <button className={styles.deleteConfirmNo} onClick={() => setConfirmDeleteId(null)} title="Annuler">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button className={styles.deleteBtn} onClick={() => setConfirmDeleteId(book._id)} title="Retirer de la liste">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -466,6 +480,12 @@ export default function ReadingPage() {
               ? { ...b, epubLocation: loc, readingProgress: pct }
               : b))
           }
+        />
+      )}
+      {downloadModalBook && (
+        <DownloadModal
+          request={downloadModalBook}
+          onClose={() => setDownloadModalBook(null)}
         />
       )}
     </div>
