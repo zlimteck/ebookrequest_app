@@ -11,7 +11,9 @@ router.get('/', requireAuth, async (req, res) => {
     const filter = { userId: req.user.id };
     if (status && status !== 'all') filter.status = status;
 
-    const books = await ReadingList.find(filter).sort({ createdAt: -1 });
+    const books = await ReadingList.find(filter)
+      .populate('requestId', 'downloadLink filePath status author')
+      .sort({ createdAt: -1 });
     res.json(books);
   } catch (error) {
     console.error('Erreur lecture liste:', error);
@@ -27,14 +29,18 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Titre et auteur requis' });
     }
 
-    // Vérifier doublon manuel (même titre + auteur pour cet utilisateur)
-    const existing = await ReadingList.findOne({
-      userId: req.user.id,
-      title: { $regex: new RegExp(`^${title.trim()}$`, 'i') },
-      author: { $regex: new RegExp(`^${author.trim()}$`, 'i') },
-    });
+    // Vérifier doublon : d'abord par googleBooksId (plus fiable), puis par titre+auteur
+    const orConditions = [
+      {
+        title:  { $regex: new RegExp(`^${title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        author: { $regex: new RegExp(`^${author.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      },
+    ];
+    if (googleBooksId) orConditions.unshift({ googleBooksId });
+
+    const existing = await ReadingList.findOne({ userId: req.user.id, $or: orConditions });
     if (existing) {
-      return res.status(409).json({ message: 'Ce livre est déjà dans votre liste' });
+      return res.status(409).json({ message: 'Ce livre est déjà dans votre bibliothèque' });
     }
 
     const book = await ReadingList.create({
@@ -61,7 +67,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const book = await ReadingList.findOne({ _id: req.params.id, userId: req.user.id });
     if (!book) return res.status(404).json({ message: 'Livre non trouvé' });
 
-    const { status, rating } = req.body;
+    const { status, rating, epubLocation, readingProgress, notes } = req.body;
     if (status !== undefined) {
       book.status = status;
       book.readAt = status === 'read' ? new Date() : null;
@@ -69,6 +75,9 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (rating !== undefined) {
       book.rating = Math.min(5, Math.max(0, Number(rating)));
     }
+    if (epubLocation !== undefined) book.epubLocation = epubLocation;
+    if (readingProgress !== undefined) book.readingProgress = Math.min(100, Math.max(0, Number(readingProgress)));
+    if (notes !== undefined) book.notes = notes.trim();
     await book.save();
 
     res.json(book);

@@ -742,6 +742,14 @@ body {
   background: rgba(239,68,68,0.08);
   border-color: #ef4444;
 }
+.aIconBtnSuccess {
+  border-color: rgba(16,185,129,0.35);
+  color: #10b981;
+}
+.aIconBtnSuccess:hover {
+  background: rgba(16,185,129,0.08);
+  border-color: #10b981;
+}
 .aIconBtnValentine {
   border-color: rgba(99, 102, 241, 0.35);
   color: #6366f1;

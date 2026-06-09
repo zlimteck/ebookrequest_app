@@ -5,6 +5,15 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import styles from './UserDashboard.module.css';
 import BookPreviewModal from '../../components/BookPreviewModal';
+import BookReaderModal from '../../components/BookReaderModal';
+import DownloadModal from '../../components/DownloadModal';
+
+const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
+const isReadable = (filePath) => {
+  if (!filePath) return false;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  return READABLE_EXTS.includes(ext);
+};
 
 
 const UserDashboard = () => {
@@ -19,6 +28,8 @@ const UserDashboard = () => {
   const cardRefs     = useRef({});
   const [downloadingFile, setDownloadingFile] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, requestId: null, requestTitle: '' });
+  const [readerRequest, setReaderRequest] = useState(null);
+  const [downloadModalRequest, setDownloadModalRequest] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
@@ -273,11 +284,43 @@ const UserDashboard = () => {
   };
   
 
-  // Vérifier les mises à jour toutes les 60 secondes
+  // Refresh silencieux toutes les 30s (sans spinner, notifie si statut changé)
+  const silentRefresh = async () => {
+    try {
+      const response = await axiosAdmin.get(`/api/requests/my-requests?status=${filter === 'all' ? '' : filter}`);
+      const STATUS_ORDER = { reported: 1, completed: 2, pending: 3, canceled: 4 };
+      const sorted = [...response.data].sort((a, b) => {
+        const diff = (STATUS_ORDER[a.status] || 3) - (STATUS_ORDER[b.status] || 3);
+        return diff !== 0 ? diff : new Date(b.createdAt) - new Date(a.createdAt);
+      });
+
+      setRequests(prev => {
+        // Détecte les changements de statut ou nouveaux fichiers
+        const changed = sorted.filter(newR => {
+          const old = prev.find(r => r._id === newR._id);
+          return old && (old.status !== newR.status || old.filePath !== newR.filePath || old.downloadLink !== newR.downloadLink);
+        });
+        const added = sorted.filter(newR => !prev.find(r => r._id === newR._id));
+
+        if (changed.length > 0 || added.length > 0) {
+          changed.forEach(r => {
+            if (r.status === 'completed' && prev.find(p => p._id === r._id)?.status !== 'completed') {
+              toast.success(`📖 "${r.title}" est maintenant disponible !`, { autoClose: 6000 });
+            } else if (r.status === 'canceled' && prev.find(p => p._id === r._id)?.status !== 'canceled') {
+              toast.info(`"${r.title}" a été annulée.`);
+            }
+          });
+          return sorted;
+        }
+        return prev; // pas de changement → pas de re-render
+      });
+    } catch {}
+  };
+
   useEffect(() => {
-    const intervalId = setInterval(fetchRequests, 60000);
+    const intervalId = setInterval(silentRefresh, 30000);
     return () => clearInterval(intervalId);
-  }, [filter]);
+  }, [filter]); // eslint-disable-line
 
   useEffect(() => {
     setCurrentPage(1);
@@ -541,18 +584,26 @@ const UserDashboard = () => {
                             )}
                             {request.status === 'completed' && (request.downloadLink || request.filePath) && (
                               <>
-                                <button
-                                  className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
-                                  onClick={async (e) => { e.preventDefault(); try { await downloadFile(request); } catch { toast.error('Une erreur est survenue lors du téléchargement'); } }}
-                                  disabled={downloadingFile === request._id}
-                                  title={downloadingFile === request._id ? 'Téléchargement...' : 'Télécharger'}
-                                >
-                                  {downloadingFile === request._id ? <span className={styles.spinner} /> : (
+                                {isReadable(request.filePath) && (
+                                  <button
+                                    className={`${styles.iconBtn} ${styles.iconBtnSuccess}`}
+                                    onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                                    title="Lire"
+                                  >
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
                                     </svg>
-                                  )}
+                                  </button>
+                                )}
+                                <button
+                                  className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
+                                  onClick={() => setDownloadModalRequest(request)}
+                                  title="Télécharger"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                  </svg>
                                 </button>
                                 <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => setReportModal({ isOpen: true, requestId: request._id, requestTitle: request.title })} title="Signaler un problème">
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -805,23 +856,27 @@ const UserDashboard = () => {
 
                     {request.status === 'completed' && (request.downloadLink || request.filePath) && (
                       <>
-                        <button
-                          className={`${styles.iconBtn} ${styles.iconBtnPrimary} ${downloadingFile === request._id ? styles.downloading : ''}`}
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            try { await downloadFile(request); }
-                            catch (error) { toast.error('Une erreur est survenue lors du téléchargement'); }
-                          }}
-                          disabled={downloadingFile === request._id}
-                          title={downloadingFile === request._id ? 'Téléchargement...' : request.downloadedAt ? `Téléchargé le ${new Date(request.downloadedAt).toLocaleDateString('fr-FR')}` : `Télécharger ${request.filePath ? `(${getFileType(request.filePath)})` : ''}`}
-                        >
-                          {downloadingFile === request._id ? <span className={styles.spinner} /> : (
+                        {isReadable(request.filePath) && (
+                          <button
+                            className={`${styles.iconBtn} ${styles.iconBtnSuccess}`}
+                            onClick={() => setReaderRequest({ title: request.title, requestId: { _id: request._id, filePath: request.filePath, downloadLink: request.downloadLink } })}
+                            title="Lire"
+                          >
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                              <polyline points="7 10 12 15 17 10"/>
-                              <line x1="12" y1="15" x2="12" y2="3"/>
+                              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
                             </svg>
-                          )}
+                          </button>
+                        )}
+                        <button
+                          className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
+                          onClick={() => setDownloadModalRequest(request)}
+                          title="Télécharger"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                          </svg>
                         </button>
                         <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => setReportModal({ isOpen: true, requestId: request._id, requestTitle: request.title })} title="Signaler un problème">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1022,6 +1077,20 @@ const UserDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {readerRequest && (
+        <BookReaderModal
+          book={readerRequest}
+          onClose={() => setReaderRequest(null)}
+        />
+      )}
+
+      {downloadModalRequest && (
+        <DownloadModal
+          request={downloadModalRequest}
+          onClose={() => setDownloadModalRequest(null)}
+        />
       )}
     </div>
   );

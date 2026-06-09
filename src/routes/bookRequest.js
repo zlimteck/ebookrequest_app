@@ -113,4 +113,93 @@ router.patch('/:id/category', requireAuth, requireAdmin, async (req, res) => {
 // Commentaire utilisateur sur sa propre demande
 router.patch('/:id/user-comment', requireAuth, updateUserComment);
 
+// ── Conversion de format ──────────────────────────────────────────────────────
+
+// GET /api/requests/:id/convert-formats — formats disponibles + taille du fichier source
+router.get('/:id/convert-formats', requireAuth, async (req, res) => {
+  try {
+    const request = await BookRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+
+    const fp = request.filePath;
+    if (!fp) return res.json({ formats: [], sourceFormat: null, fileSize: null });
+
+    const ext = fp.split('.').pop().toLowerCase();
+    const { EBOOK_CONVERT_FORMATS, COMIC_CONVERT_FORMATS } = await import('../services/calibreConvertService.js');
+    const { default: pathMod } = await import('path');
+    const { default: fsMod }   = await import('fs');
+    const { fileURLToPath: ftu } = await import('url');
+    const __d = pathMod.dirname(ftu(import.meta.url));
+    const srcPath = pathMod.join(__d, '../../uploads', fp);
+
+    let fileSize = null;
+    try { fileSize = fsMod.statSync(srcPath).size; } catch {}
+
+    let formats = [];
+    let type = null;
+    if (['epub', 'mobi', 'azw3', 'fb2'].includes(ext)) {
+      type = 'ebook';
+      formats = EBOOK_CONVERT_FORMATS.filter(f => f !== ext);
+    } else if (['cbz', 'cbr'].includes(ext)) {
+      type = 'comic';
+      formats = COMIC_CONVERT_FORMATS;
+    } else if (ext === 'pdf') {
+      type = 'pdf';
+      formats = [];
+    }
+
+    res.json({ formats, sourceFormat: ext, type, fileSize });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/requests/:id/convert?format=mobi — déclenche la conversion (timeout 3min)
+router.post('/:id/convert', requireAuth, async (req, res) => {
+  req.setTimeout(180000); // 3 minutes max pour la conversion
+  try {
+    const { format } = req.query;
+    if (!format) return res.status(400).json({ error: 'Format cible requis (?format=...)' });
+
+    const request = await BookRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+    if (!request.filePath) return res.status(400).json({ error: 'Fichier source indisponible' });
+
+    const srcExt = request.filePath.split('.').pop().toLowerCase();
+    const { default: path } = await import('path');
+    const { default: fs } = await import('fs');
+    const { fileURLToPath } = await import('url');
+    const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
+    const srcPath = path.join(__dirname2, '../../uploads', request.filePath);
+
+    if (!fs.existsSync(srcPath)) return res.status(404).json({ error: 'Fichier source introuvable sur le serveur' });
+
+    const targetFmt = format.toLowerCase();
+    let convertedPath;
+
+    if (['cbz', 'cbr'].includes(srcExt) && targetFmt === 'pdf') {
+      // CBZ → PDF en Node.js pur
+      const { cbzToPdf } = await import('../services/cbzToPdfService.js');
+      convertedPath = await cbzToPdf(srcPath, request.title);
+    } else {
+      // Ebook → autre format via Calibre-Web
+      const { convertViaCalibреWeb } = await import('../services/calibreConvertService.js');
+      convertedPath = await convertViaCalibреWeb(srcPath, srcExt, targetFmt, request.title);
+    }
+
+    // Envoyer le fichier
+    const filename = `${request.title.replace(/[^a-z0-9 .-]/gi, '_')}.${targetFmt}`;
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    const fileStream = fs.createReadStream(convertedPath);
+    fileStream.pipe(res);
+    fileStream.on('error', () => res.status(500).end());
+
+  } catch (err) {
+    console.error('[convert]', err.message);
+    const status = err.message.includes('Calibre-Web') ? 503 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;

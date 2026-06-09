@@ -8,11 +8,18 @@ const BarcodeScanner = ({ onDetected, onClose }) => {
   const [error, setError]           = useState('');
   const [facingMode, setFacingMode] = useState('environment'); // caméra arrière par défaut
 
+  const stopCamera = () => {
+    readerRef.current?.reset();
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
-    return () => { reader.reset(); };
-  }, []);
+    readerRef.current = new BrowserMultiFormatReader();
+    return () => stopCamera();
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -24,8 +31,7 @@ const BarcodeScanner = ({ onDetected, onClose }) => {
     }
 
     const reader = readerRef.current;
-
-    reader.reset();
+    stopCamera();
     setError('');
 
     reader.decodeFromConstraints(
@@ -35,7 +41,7 @@ const BarcodeScanner = ({ onDetected, onClose }) => {
         if (result) {
           const text = result.getText().replace(/[-\s]/g, '');
           if (/^\d{10}$/.test(text) || /^\d{13}$/.test(text)) {
-            reader.reset();
+            stopCamera();
             onDetected(text);
           }
         }
@@ -46,7 +52,9 @@ const BarcodeScanner = ({ onDetected, onClose }) => {
     ).catch(() => {
       setError('Impossible d\'accéder à la caméra. Vérifiez les permissions.');
     });
-  }, [facingMode, onDetected]);
+
+    return () => stopCamera();
+  }, [facingMode, onDetected]); // eslint-disable-line
 
   const switchCamera = () => {
     setFacingMode(f => f === 'environment' ? 'user' : 'environment');

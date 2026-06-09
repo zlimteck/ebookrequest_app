@@ -3,11 +3,37 @@ import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
 import styles from './ReadingPage.module.css';
 import GoogleBooksSearch from '../../components/GoogleBooksSearch';
+import BookReaderModal from '../../components/BookReaderModal';
+import DownloadModal from '../../components/DownloadModal';
+
+const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
+function isReadable(filePath) {
+  if (!filePath) return false;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  return READABLE_EXTS.includes(ext);
+}
+function getFileFormat(filePath) {
+  if (!filePath) return null;
+  const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
+  if (ext === 'epub') return 'epub';
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'cbz' || ext === 'cbr') return 'cbz';
+  return null;
+}
 
 const FILTERS = [
-  { key: 'all',    label: 'Tous' },
-  { key: 'unread', label: 'Non lus' },
-  { key: 'read',   label: 'Lus' },
+  { key: 'all',     label: 'Tous' },
+  { key: 'unread',  label: 'Non lus' },
+  { key: 'read',    label: 'Lus' },
+  { key: 'request', label: 'Demandes' },
+  { key: 'manual',  label: 'Ajouts' },
+];
+
+const SORTS = [
+  { key: 'date',   label: 'Date' },
+  { key: 'title',  label: 'Titre' },
+  { key: 'author', label: 'Auteur' },
+  { key: 'rating', label: 'Note' },
 ];
 
 const BookPlaceholder = () => (
@@ -19,25 +45,22 @@ const BookPlaceholder = () => (
   </div>
 );
 
-// Composant étoiles SVG
 const StarRating = ({ rating = 0, bookId, onRate }) => {
   const [hovered, setHovered] = useState(0);
-
   return (
     <div className={styles.starRow} onMouseLeave={() => setHovered(0)}>
       {[1, 2, 3, 4, 5].map(star => {
         const active = star <= (hovered || rating);
         return (
-          <button
-            key={star}
-            className={styles.starBtn}
+          <button key={star} className={styles.starBtn}
             onMouseEnter={() => setHovered(star)}
             onClick={() => onRate(bookId, star === rating ? 0 : star)}
             title={`${star} étoile${star > 1 ? 's' : ''}`}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill={active ? '#f59e0b' : 'none'}
-              stroke={active ? '#f59e0b' : 'rgba(255,255,255,0.4)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{}}>
+            <svg width="15" height="15" viewBox="0 0 24 24"
+              fill={active ? '#f59e0b' : 'none'}
+              stroke={active ? '#f59e0b' : 'rgba(255,255,255,0.4)'}
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </button>
@@ -48,19 +71,36 @@ const StarRating = ({ rating = 0, bookId, onRate }) => {
 };
 
 export default function ReadingPage() {
-  const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [books, setBooks]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filter, setFilter]         = useState('all');
+  const [sortBy, setSortBy]         = useState('date');
+  const [sortDir, setSortDir]       = useState('desc');
   const [showSearch, setShowSearch] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]         = useState('');
+  const [downloading, setDownloading] = useState(null);
+  const [downloadModalBook, setDownloadModalBook] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId]     = useState(null);
+  const [addError, setAddError]     = useState('');
+  const [readerBook, setReaderBook] = useState(null);
+  const [editingNote, setEditingNote] = useState(null); // { id, text }
+  const [filterFormat, setFilterFormat] = useState('all');
   const filterBarRef = useRef(null);
 
-  useEffect(() => { fetchBooks(); }, [filter]);
+  // Auto-vider le message d'erreur après 5s
+  useEffect(() => {
+    if (!addError) return;
+    const t = setTimeout(() => setAddError(''), 5000);
+    return () => clearTimeout(t);
+  }, [addError]);
+
+  // Fetch toujours tout, filtrage client-side
+  useEffect(() => { fetchBooks(); }, []); // eslint-disable-line
 
   const fetchBooks = async () => {
     try {
       setLoading(true);
-      const res = await axiosAdmin.get(`/api/reading?status=${filter}`);
+      const res = await axiosAdmin.get('/api/reading?status=all');
       setBooks(res.data);
     } catch {
       toast.error('Erreur lors du chargement de la liste');
@@ -74,18 +114,16 @@ export default function ReadingPage() {
     const title = info.title || '';
     const author = (info.authors || []).join(', ') || '';
     const thumbnail = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '';
+    setAddError('');
     try {
-      await axiosAdmin.post('/api/reading', {
-        title,
-        author,
-        thumbnail,
-        googleBooksId: book.id || '',
-      });
+      await axiosAdmin.post('/api/reading', { title, author, thumbnail, googleBooksId: book.id || '' });
       toast.success(`"${title}" ajouté à votre liste`);
       setShowSearch(false);
       fetchBooks();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Erreur lors de l\'ajout');
+      const msg = err.response?.data?.message || 'Erreur lors de l\'ajout';
+      if (err.response?.status === 409) setAddError(msg);
+      else toast.error(msg);
     }
   };
 
@@ -93,21 +131,47 @@ export default function ReadingPage() {
     const newStatus = book.status === 'read' ? 'unread' : 'read';
     try {
       await axiosAdmin.put(`/api/reading/${book._id}`, { status: newStatus });
-      setBooks(prev => prev.map(b =>
-        b._id === book._id ? { ...b, status: newStatus } : b
-      ));
-    } catch {
-      toast.error('Erreur lors de la mise à jour');
-    }
+      setBooks(prev => prev.map(b => b._id === book._id ? { ...b, status: newStatus } : b));
+    } catch { toast.error('Erreur lors de la mise à jour'); }
   };
 
   const handleRate = async (bookId, rating) => {
     try {
       await axiosAdmin.put(`/api/reading/${bookId}`, { rating });
       setBooks(prev => prev.map(b => b._id === bookId ? { ...b, rating } : b));
-    } catch {
-      toast.error('Erreur lors de la notation');
-    }
+    } catch { toast.error('Erreur lors de la notation'); }
+  };
+
+  const handleSaveNote = async () => {
+    if (!editingNote) return;
+    const { id, text } = editingNote;
+    try {
+      await axiosAdmin.put(`/api/reading/${id}`, { notes: text });
+      setBooks(prev => prev.map(b => b._id === id ? { ...b, notes: text } : b));
+    } catch { toast.error('Erreur lors de la sauvegarde de la note'); }
+    setEditingNote(null);
+  };
+
+  const downloadBook = async (book) => {
+    if (downloading === book._id) return;
+    const req = book.requestId;
+    if (!req) return;
+    setDownloading(book._id);
+    try {
+      if (req.downloadLink) { window.open(req.downloadLink, '_blank', 'noopener,noreferrer'); return; }
+      if (req.filePath) {
+        const response = await axiosAdmin.get(`/api/requests/download/${req._id}`, { responseType: 'blob' });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        const disposition = response.headers['content-disposition'] || '';
+        const match = disposition.match(/filename\*?=['"]?(?:UTF-8'')?([^;\n"']*)['"]?/i);
+        link.setAttribute('download', match?.[1]?.trim() || `ebook_${req._id}`);
+        document.body.appendChild(link); link.click(); link.remove();
+        window.URL.revokeObjectURL(url);
+      } else { toast.error('Aucun fichier disponible pour ce livre'); }
+    } catch { toast.error('Erreur lors du téléchargement'); }
+    finally { setDownloading(null); }
   };
 
   const handleDelete = async (id) => {
@@ -115,21 +179,47 @@ export default function ReadingPage() {
       await axiosAdmin.delete(`/api/reading/${id}`);
       setBooks(prev => prev.filter(b => b._id !== id));
       toast.success('Livre retiré de la liste');
-    } catch {
-      toast.error('Erreur lors de la suppression');
-    }
+    } catch { toast.error('Erreur lors de la suppression'); }
   };
 
-  const filtered = books.filter(b => {
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return b.title.toLowerCase().includes(s) || b.author.toLowerCase().includes(s);
-  });
+  const toggleSort = (key) => {
+    if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(key); setSortDir(key === 'date' ? 'desc' : 'asc'); }
+  };
 
-  const readCount = books.filter(b => b.status === 'read').length;
+  // Filtrage + tri client-side
+  const filtered = books
+    .filter(b => {
+      if (filter === 'read')    return b.status === 'read';
+      if (filter === 'unread')  return b.status === 'unread';
+      if (filter === 'request') return b.source === 'request';
+      if (filter === 'manual')  return b.source === 'manual';
+      return true;
+    })
+    .filter(b => {
+      if (filterFormat === 'all') return true;
+      return getFileFormat(b.requestId?.filePath) === filterFormat;
+    })
+    .filter(b => {
+      if (!search.trim()) return true;
+      const s = search.toLowerCase();
+      return b.title.toLowerCase().includes(s) || b.author.toLowerCase().includes(s);
+    })
+    .sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'title')  { va = a.title.toLowerCase();  vb = b.title.toLowerCase(); }
+      else if (sortBy === 'author') { va = a.author.toLowerCase(); vb = b.author.toLowerCase(); }
+      else if (sortBy === 'rating') { va = a.rating || 0; vb = b.rating || 0; }
+      else { va = new Date(a.createdAt); vb = new Date(b.createdAt); }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+
+  const readCount  = books.filter(b => b.status === 'read').length;
   const totalCount = books.length;
   const ratedBooks = books.filter(b => b.rating > 0);
-  const avgRating = ratedBooks.length > 0
+  const avgRating  = ratedBooks.length > 0
     ? (ratedBooks.reduce((sum, b) => sum + b.rating, 0) / ratedBooks.length).toFixed(1)
     : null;
 
@@ -171,38 +261,62 @@ export default function ReadingPage() {
         </div>
       )}
 
-      {/* Barre filtres + recherche + ajouter */}
+      {/* Toolbar */}
       <div className={styles.toolbar}>
         <div className={styles.filterBarWrapper}>
           <div className={styles.filterBar} ref={filterBarRef}>
             {FILTERS.map(f => (
-              <button
-                key={f.key}
+              <button key={f.key}
                 className={`${styles.filterPill} ${filter === f.key ? styles.filterPillActive : ''}`}
                 onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </button>
+              >{f.label}</button>
             ))}
           </div>
         </div>
 
         <div className={styles.toolbarRight}>
+          {/* Tri */}
+          <div className={styles.sortBar}>
+            {SORTS.map(s => (
+              <button key={s.key}
+                className={`${styles.sortBtn} ${sortBy === s.key ? styles.sortBtnActive : ''}`}
+                onClick={() => toggleSort(s.key)}
+                title={sortBy === s.key ? (sortDir === 'asc' ? 'Croissant' : 'Décroissant') : s.label}
+              >
+                {s.label}
+                {sortBy === s.key && (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    {sortDir === 'asc'
+                      ? <polyline points="18 15 12 9 6 15"/>
+                      : <polyline points="6 9 12 15 18 9"/>}
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <select
+            className={styles.formatSelect}
+            value={filterFormat}
+            onChange={e => setFilterFormat(e.target.value)}
+            title="Filtrer par format"
+          >
+            <option value="all">Tous formats</option>
+            <option value="epub">EPUB</option>
+            <option value="pdf">PDF</option>
+            <option value="cbz">CBZ / CBR</option>
+          </select>
+
           <div className={styles.searchWrap}>
             <span className={styles.searchIcon}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </span>
-            <input
-              className={styles.searchInput}
-              placeholder="Filtrer..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <input className={styles.searchInput} placeholder="Filtrer..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
 
-          <button className={styles.addBtn} onClick={() => setShowSearch(s => !s)} title="Ajouter un livre">
+          <button className={styles.addBtn} onClick={() => { setShowSearch(s => !s); setAddError(''); }} title="Ajouter un livre">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -213,6 +327,14 @@ export default function ReadingPage() {
       {/* Recherche Google Books */}
       {showSearch && (
         <div className={styles.searchPanel}>
+          {addError && (
+            <div className={styles.addErrorMsg}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {addError}
+            </div>
+          )}
           <GoogleBooksSearch onSelectBook={handleSelectBook} />
         </div>
       )}
@@ -239,15 +361,80 @@ export default function ReadingPage() {
                 <div className={styles.bookTitle}>{book.title}</div>
                 <div className={styles.bookAuthor}>{book.author}</div>
                 <div className={styles.bookMeta}>
-                  {book.source === 'request' && (
-                    <span className={styles.sourceBadge}>Demande</span>
-                  )}
+                  {book.source === 'request'
+                    ? <span className={styles.sourceBadge}>Demande</span>
+                    : <span className={`${styles.sourceBadge} ${styles.sourceBadgeManual}`}>Manuel</span>
+                  }
                   <StarRating rating={book.rating || 0} bookId={book._id} onRate={handleRate} />
                 </div>
+                {/* Progression EPUB */}
+                {book.readingProgress > 0 && book.readingProgress < 100 && (
+                  <div className={styles.cardProgress}>
+                    <div className={styles.cardProgressFill} style={{ width: `${book.readingProgress}%` }} />
+                    <span className={styles.cardProgressLabel}>{book.readingProgress}%</span>
+                  </div>
+                )}
+                {/* Note preview */}
+                {book.notes && editingNote?.id !== book._id && (
+                  <div className={styles.notesPreview} onClick={() => setEditingNote({ id: book._id, text: book.notes })}>
+                    {book.notes}
+                  </div>
+                )}
+                {/* Note edit */}
+                {editingNote?.id === book._id && (
+                  <textarea
+                    className={styles.notesInput}
+                    value={editingNote.text}
+                    placeholder="Ajouter une note..."
+                    onChange={e => setEditingNote(prev => ({ ...prev, text: e.target.value }))}
+                    onBlur={handleSaveNote}
+                    autoFocus
+                    rows={2}
+                  />
+                )}
               </div>
 
               {/* Actions */}
               <div className={styles.bookActions}>
+                {/* Note */}
+                <button
+                  className={`${styles.noteBtn} ${book.notes ? styles.noteBtnActive : ''}`}
+                  onClick={() => setEditingNote(editingNote?.id === book._id ? null : { id: book._id, text: book.notes || '' })}
+                  title={book.notes ? 'Modifier la note' : 'Ajouter une note'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+
+                {/* Lire */}
+                {book.source === 'request' && book.requestId && isReadable(book.requestId.filePath) && (
+                  <button className={styles.readBtn} onClick={() => setReaderBook(book)} title="Lire">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                  </button>
+                )}
+
+                {/* Télécharger */}
+                {book.source === 'request' && book.requestId && (book.requestId.downloadLink || book.requestId.filePath) && (
+                  <button
+                    className={styles.downloadBtn}
+                    onClick={() => setDownloadModalBook({ ...book.requestId, title: book.title, _id: book.requestId._id })}
+                    title="Télécharger"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    {/* dummy child to match closing tag below */}
+                  </button>
+                )}
+
+                {/* Statut */}
                 <button
                   className={`${styles.statusBtn} ${book.status === 'read' ? styles.statusBtnRead : styles.statusBtnUnread}`}
                   onClick={() => toggleStatus(book)}
@@ -260,20 +447,46 @@ export default function ReadingPage() {
                   {book.status === 'read' ? 'Lu' : 'Non lu'}
                 </button>
 
-                <button
-                  className={styles.deleteBtn}
-                  onClick={() => handleDelete(book._id)}
-                  title="Retirer de la liste"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                </button>
+                {/* Supprimer — confirmation inline */}
+                {confirmDeleteId === book._id ? (
+                  <div className={styles.deleteConfirm}>
+                    <button className={styles.deleteConfirmYes} onClick={() => { handleDelete(book._id); setConfirmDeleteId(null); }} title="Confirmer la suppression">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+                    <button className={styles.deleteConfirmNo} onClick={() => setConfirmDeleteId(null)} title="Annuler">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button className={styles.deleteBtn} onClick={() => setConfirmDeleteId(book._id)} title="Retirer de la liste">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {readerBook && (
+        <BookReaderModal
+          book={readerBook}
+          onClose={() => setReaderBook(null)}
+          onPositionSaved={(loc, pct) =>
+            setBooks(prev => prev.map(b => b._id === readerBook._id
+              ? { ...b, epubLocation: loc, readingProgress: pct }
+              : b))
+          }
+        />
+      )}
+      {downloadModalBook && (
+        <DownloadModal
+          request={downloadModalBook}
+          onClose={() => setDownloadModalBook(null)}
+        />
       )}
     </div>
   );

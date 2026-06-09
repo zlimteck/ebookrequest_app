@@ -14,12 +14,14 @@ ENV REACT_APP_API_URL=""
 RUN npm run build
 
 # ── Stage 2 : image finale Node.js ────────────────────────────────────────────
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
-# Mise à jour des paquets système Alpine (libcrypto3, libssl3, musl…)
-RUN apk upgrade --no-cache
+# Calibre pour ebook-convert (conversion de formats ebook)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends calibre wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # Dépendances backend uniquement (production)
 COPY package*.json ./

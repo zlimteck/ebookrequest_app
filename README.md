@@ -17,8 +17,10 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - **Frontend** — React, React Router, Chart.js, Axios
 - **Backend** — Node.js, Express, MongoDB (Mongoose), JWT
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
-- **IA** — OpenAI / Ollama (recommandations, descriptions)
+- **IA** — OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
+- **Visionneuse** — PDF (navigateur natif), EPUB (epub.js via react-reader), CBZ/CBR (JSZip)
+- **Conversion** — Calibre (`ebook-convert`) intégré dans l'image Docker — EPUB ↔ MOBI, AZW3, FB2 ; CBZ → PDF (JSZip + pdfkit, sans dépendance externe)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
 
 ## Fonctionnalités
@@ -54,8 +56,21 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
   - Côté utilisateur : chaque utilisateur peut configurer ses propres URLs Apprise dans ses paramètres pour recevoir ses notifications personnelles (livre disponible, annulation, commentaire admin)
 - Diffusion admin (email HTML + push vers tous les utilisateurs)
 
+**Bibliothèque & lecture**
+- Bibliothèque personnelle avec statut de lecture, notation par étoiles et notes libres
+- Tri par date, titre, auteur ou note — filtre par source (demandes / ajouts manuels)
+- Visionneuse in-browser sans installation :
+  - **PDF** — viewer natif du navigateur
+  - **EPUB** — lecteur paginé avec réglage de la taille de police, mode nuit, barre de progression, swipe mobile et sauvegarde automatique de la position de lecture
+  - **CBZ / CBR** — galerie image avec navigation clavier et swipe, position mémorisée
+- Bouton « Lire » disponible dans la bibliothèque, les demandes utilisateur et le panel admin
+- **Conversion de format au téléchargement** — modal dédié avec conversion à la volée :
+  - Ebooks (EPUB, MOBI, AZW3, FB2) : conversion via Calibre (`ebook-convert`), inclus dans l'image Docker — aucune configuration requise
+  - Comics/BD (CBZ) : conversion en PDF via JSZip + pdfkit, sans dépendance externe
+  - Affichage du poids du fichier original et du fichier converti
+  - Les fichiers convertis sont automatiquement supprimés après 24h
+
 **Découverte & IA**
-- Bibliothèque personnelle avec statut de lecture et notation
 - Page Découverte (tendances, bestsellers, recommandations IA)
 
 **Administration**
@@ -170,12 +185,14 @@ npx web-push generate-vapid-keys
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER` | `openai` ou `ollama` |
+| `AI_PROVIDER` | `openai`, `ollama` ou `claude` |
 | `OPENAI_API_KEY` | Clé API OpenAI (si `AI_PROVIDER=openai`) |
 | `OPENAI_MODEL` | Modèle OpenAI à utiliser (ex : `gpt-4o-mini`) |
 | `OLLAMA_URL` | URL du serveur Ollama (si `AI_PROVIDER=ollama`, ex : `http://172.17.0.x:11434`) |
 | `OLLAMA_MODEL` | Nom du modèle Ollama |
 | `OLLAMA_TIMEOUT` | Timeout en ms pour les requêtes Ollama (défaut : `60000`) |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic (si `AI_PROVIDER=claude`) — [console.anthropic.com](https://console.anthropic.com) |
+| `CLAUDE_MODEL` | Modèle Claude à utiliser (ex : `claude-opus-4-5`, `claude-sonnet-4-5`) |
 
 #### Connecteurs & services externes
 

@@ -20,7 +20,7 @@ const NotificationsConfig = () => {
     notifyOnCancel:     true,
     notifyOnComment:    true,
     notifyOnReport:     true,
-    notifyOnNewUser:    false,
+    notifyOnNewUser:    true,
   });
 
   const NOTIFY_EVENTS = [
@@ -32,7 +32,15 @@ const NotificationsConfig = () => {
     { key: 'notifyOnNewUser',    label: 'Nouvel utilisateur inscrit' },
   ];
 
-  const [emailPrefs, setEmailPrefs] = useState({ enabled: true, notifyOnNewRequest: true });
+  const [emailPrefs, setEmailPrefs] = useState({
+    enabled: true,
+    notifyOnNewRequest: true,
+    notifyOnComplete:   true,
+    notifyOnCancel:     true,
+    notifyOnComment:    true,
+    notifyOnReport:     true,
+    notifyOnNewUser:    true,
+  });
 
   const [loading, setLoading] = useState(true);
   const [testResult, setTestResult] = useState(null);
@@ -47,7 +55,16 @@ const NotificationsConfig = () => {
           axiosAdmin.get('/api/connectors/email'),
         ]);
         setConfig(prev => ({ ...prev, ...appriseRes.data }));
-        setEmailPrefs({ enabled: emailRes.data.enabled ?? true, notifyOnNewRequest: emailRes.data.notifyOnNewRequest ?? true });
+        const e = emailRes.data;
+        setEmailPrefs({
+          enabled:            e.enabled            ?? true,
+          notifyOnNewRequest: e.notifyOnNewRequest  ?? true,
+          notifyOnComplete:   e.notifyOnComplete    ?? true,
+          notifyOnCancel:     e.notifyOnCancel      ?? true,
+          notifyOnComment:    e.notifyOnComment     ?? true,
+          notifyOnReport:     e.notifyOnReport      ?? true,
+          notifyOnNewUser:    e.notifyOnNewUser      ?? false,
+        });
       } catch (error) {
         console.error('Erreur chargement config:', error);
       } finally {
@@ -152,16 +169,25 @@ const NotificationsConfig = () => {
 
         {emailPrefs.enabled && (
           <div className={styles.eventsGrid}>
-            <label className={styles.eventRow}>
-              <input
-                type="checkbox"
-                name="notifyOnNewRequest"
-                checked={!!emailPrefs.notifyOnNewRequest}
-                onChange={handleEmailChange}
-                className={styles.eventCheckbox}
-              />
-              <span className={styles.eventLabel}>Nouvelle demande soumise</span>
-            </label>
+            {[
+              { key: 'notifyOnNewRequest', label: 'Nouvelle demande de livre' },
+              { key: 'notifyOnComplete',   label: 'Livre complété (disponible)' },
+              { key: 'notifyOnCancel',     label: 'Demande annulée' },
+              { key: 'notifyOnComment',    label: 'Commentaire utilisateur' },
+              { key: 'notifyOnReport',     label: 'Signalement d\'un problème' },
+              { key: 'notifyOnNewUser',    label: 'Nouvel utilisateur inscrit' },
+            ].map(({ key, label }) => (
+              <label key={key} className={styles.eventRow}>
+                <input
+                  type="checkbox"
+                  name={key}
+                  checked={!!emailPrefs[key]}
+                  onChange={handleEmailChange}
+                  className={styles.eventCheckbox}
+                />
+                <span className={styles.eventLabel}>{label}</span>
+              </label>
+            ))}
           </div>
         )}
       </div>

@@ -17,6 +17,7 @@ import SetupPage from './pages/auth/SetupPage';
 import UserSettings from './components/UserSettings';
 import ProfilePage from './pages/user/ProfilePage';
 import ReadingPage from './pages/user/ReadingPage';
+import NotFound from './pages/NotFound';
 import NotificationBell from './components/NotificationBell';
 import NavDrawer from './components/NavDrawer';
 import InstallPWABanner from './components/InstallPWABanner';
@@ -328,7 +329,7 @@ function App() {
           element={<VerifyEmail />}
         />
         <Route path="/" element={token ? <UserForm /> : <Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   );

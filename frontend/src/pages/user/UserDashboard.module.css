@@ -627,6 +627,16 @@
   border-color: #ef4444;
 }
 
+.iconBtnSuccess {
+  border-color: rgba(16,185,129,0.35);
+  color: #10b981;
+}
+
+.iconBtnSuccess:hover {
+  background: rgba(16,185,129,0.08);
+  border-color: #10b981;
+}
+
 .iconBtnNote {
   border-color: rgba(16,185,129,0.35);
   color: #10b981;

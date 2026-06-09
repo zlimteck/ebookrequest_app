@@ -201,10 +201,15 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
 router.get('/email', requireAuth, requireAdmin, async (req, res) => {
   try {
     let doc = await ConnectorSettings.findOne({ service: 'email' }).lean();
-    if (!doc) doc = { emailEnabled: true, notifyOnNewRequest: true };
+    if (!doc) doc = {};
     res.json({
-      enabled:           doc.emailEnabled ?? true,
-      notifyOnNewRequest: doc.notifyOnNewRequest ?? true,
+      enabled:            doc.emailEnabled         ?? true,
+      notifyOnNewRequest: doc.notifyOnNewRequest    ?? true,
+      notifyOnComplete:   doc.notifyOnComplete      ?? true,
+      notifyOnCancel:     doc.notifyOnCancel        ?? true,
+      notifyOnComment:    doc.notifyOnComment       ?? true,
+      notifyOnReport:     doc.notifyOnReport        ?? true,
+      notifyOnNewUser:    doc.notifyOnNewUser        ?? true,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -214,10 +219,18 @@ router.get('/email', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/email ─────────────────────────────────────────────────
 router.put('/email', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, notifyOnNewRequest } = req.body;
+    const { enabled, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser } = req.body;
     await ConnectorSettings.findOneAndUpdate(
       { service: 'email' },
-      { emailEnabled: !!enabled, notifyOnNewRequest: !!notifyOnNewRequest },
+      {
+        emailEnabled:         !!enabled,
+        notifyOnNewRequest:   !!notifyOnNewRequest,
+        notifyOnComplete:     !!notifyOnComplete,
+        notifyOnCancel:       !!notifyOnCancel,
+        notifyOnComment:      !!notifyOnComment,
+        notifyOnReport:       !!notifyOnReport,
+        notifyOnNewUser:      !!notifyOnNewUser,
+      },
       { upsert: true, new: true }
     );
     invalidateAdminEmailPrefsCache();

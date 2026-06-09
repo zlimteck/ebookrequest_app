@@ -4,13 +4,13 @@ import path from 'path';
 import FormData from 'form-data';
 import { decrypt } from './cryptoService.js';
 
-const TIMEOUT = 30000;
+const TIMEOUT = 120000;
 
 /**
  * Obtain a session cookie for password-based auth.
  * Calibre-Web uses Flask-WTF → requires a CSRF token extracted from the login page.
  */
-async function getSessionCookie(url, username, password) {
+export async function getSessionCookie(url, username, password) {
   const loginPage = await axios.get(`${url}/login`, {
     timeout: TIMEOUT,
     validateStatus: s => s < 500,
