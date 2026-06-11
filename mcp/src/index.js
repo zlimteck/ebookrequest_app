@@ -66,7 +66,9 @@ function buildServer() {
           pageCount   = first.volumeInfo?.pageCount || 0;
           link        = first.volumeInfo?.previewLink || link;
         }
-      } catch {}
+      } catch (err) {
+        console.error('[MCP] Google Books search error:', err.response?.status, err.message);
+      }
 
       await api.post('/requests', { title, author, format, category: type, link, thumbnail, description, pageCount });
       return { content: [{ type: 'text', text: `✅ Demande créée pour **${title}** de ${author} (${format}).` }] };
@@ -151,15 +153,113 @@ function buildServer() {
     {},
     async () => {
       const res = await api.get('/admin/stats');
-      const s = res.data;
+      const d = res.data?.data || res.data;
       const text = [
-        `**Utilisateurs** : ${s.totalUsers}`,
-        `**Demandes totales** : ${s.totalRequests}`,
-        `**En attente** : ${s.pendingRequests}`,
-        `**Complétées** : ${s.completedRequests}`,
-        `**Annulées** : ${s.canceledRequests}`,
+        `**Utilisateurs** : ${d.users?.total ?? d.totalUsers ?? '—'}`,
+        `**Demandes totales** : ${d.requests?.total ?? d.totalRequests ?? '—'}`,
+        `**En attente** : ${d.requests?.pending ?? d.pendingRequests ?? '—'}`,
+        `**Complétées** : ${d.requests?.completed ?? d.completedRequests ?? '—'}`,
+        `**Annulées** : ${d.requests?.cancelled ?? d.requests?.canceled ?? d.canceledRequests ?? '—'}`,
       ].join('\n');
       return { content: [{ type: 'text', text }] };
+    }
+  );
+
+  // ── Nouveaux outils utilisateur ──────────────────────────────────────────────
+
+  server.tool(
+    'search_books',
+    'Rechercher un livre via Google Books avant de soumettre une demande',
+    {
+      query:  z.string().describe('Titre, auteur ou ISBN'),
+      author: z.string().optional().describe('Auteur (optionnel, affine la recherche)'),
+    },
+    async ({ query, author }) => {
+      const params = { q: query };
+      if (author) params.author = author;
+      const res = await api.get('/books/search', { params });
+      const results = res.data?.results || [];
+      if (!results.length) return { content: [{ type: 'text', text: 'Aucun livre trouvé.' }] };
+      const lines = results.slice(0, 5).map((b, i) => {
+        const v = b.volumeInfo;
+        const authors = (v.authors || []).join(', ') || '—';
+        const year = v.publishedDate?.slice(0, 4) || '—';
+        return `**${i + 1}. ${v.title}** — ${authors} (${year})\n  ${v.description?.slice(0, 100) || ''}…`;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_request_details',
+    'Voir les détails d\'une demande : description, couverture, commentaire admin',
+    { title: z.string().describe('Titre du livre (recherche partielle)') },
+    async ({ title }) => {
+      const res = await api.get('/requests/my-requests');
+      const search = title.toLowerCase();
+      const r = res.data.find(x => x.title?.toLowerCase().includes(search));
+      if (!r) return { content: [{ type: 'text', text: `Aucune demande trouvée pour "${title}".` }] };
+      const lines = [
+        `**${r.title}** — ${r.author || '—'}`,
+        `Statut : ${r.status} | Format : ${r.format || '—'}`,
+        r.description ? `Description : ${r.description.slice(0, 200)}…` : null,
+        r.adminComment ? `💬 Commentaire admin : ${r.adminComment}` : null,
+        r.downloadLink ? `📥 Lien de téléchargement disponible` : null,
+        `Demandé le : ${new Date(r.createdAt).toLocaleDateString('fr-FR')}`,
+      ].filter(Boolean);
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+  );
+
+  server.tool(
+    'cancel_request',
+    'Annuler une de ses demandes en attente',
+    { title: z.string().describe('Titre du livre dont annuler la demande (recherche partielle)') },
+    async ({ title }) => {
+      const res = await api.get('/requests/my-requests');
+      const search = title.toLowerCase();
+      const r = res.data.find(x => x.status === 'pending' && x.title?.toLowerCase().includes(search));
+      if (!r) return { content: [{ type: 'text', text: `Aucune demande en attente trouvée pour "${title}".` }] };
+      await api.delete(`/requests/${r._id}`);
+      return { content: [{ type: 'text', text: `✅ Demande **${r.title}** annulée.` }] };
+    }
+  );
+
+  server.tool(
+    'check_availability',
+    'Vérifier si un livre est disponible au téléchargement (PreDB, Valentine, Anna\'s Archive)',
+    {
+      title:  z.string().describe('Titre du livre'),
+      author: z.string().describe('Auteur du livre'),
+    },
+    async ({ title, author }) => {
+      const res = await api.post('/availability/check', { title, author });
+      const d = res.data;
+      const icon = d.available ? '✅' : '❌';
+      const conf = d.confidence === 'high' ? 'Haute' : d.confidence === 'medium' ? 'Moyenne' : 'Faible';
+      const text = `${icon} **${d.available ? 'Disponible' : 'Non disponible'}** (confiance : ${conf})\n${d.message || ''}`;
+      return { content: [{ type: 'text', text }] };
+    }
+  );
+
+  // ── Nouveaux outils admin ─────────────────────────────────────────────────────
+
+  server.tool(
+    'get_user_list',
+    '[Admin] Lister les utilisateurs avec leur quota, rôle et dernière activité',
+    {},
+    async () => {
+      const res = await api.get('/admin/users');
+      const users = res.data;
+      if (!users.length) return { content: [{ type: 'text', text: 'Aucun utilisateur.' }] };
+      const lines = users.map(u => {
+        const lastSeen = u.lastActivity
+          ? new Date(u.lastActivity).toLocaleDateString('fr-FR')
+          : 'jamais';
+        const status = u.isActive === false ? ' ⛔' : '';
+        return `• **${u.username}**${status} — ${u.role} | Quota : ${u.requestLimit ?? '∞'}/${u.requestLimitDays ?? 30}j | Vu : ${lastSeen}`;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
     }
   );
 

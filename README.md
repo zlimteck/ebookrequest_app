@@ -77,10 +77,10 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - Panel admin avec statistiques et logs
 - Visionneuse de logs système en temps réel
 
-**Intégration Claude (MCP)**
+**Intégration (MCP)**
 - Serveur MCP pour gérer ses demandes directement depuis un assistant IA
-- Outils utilisateur : lister ses demandes, créer une demande (avec récupération automatique de la couverture via Google Books), consulter ses stats et sa bibliothèque
-- Outils admin : voir les demandes en attente, les statistiques globales, changer le statut d'une demande
+- Outils utilisateur : rechercher un livre, créer une demande (couverture auto via Google Books), consulter ses demandes, vérifier la disponibilité, annuler une demande, consulter stats et bibliothèque
+- Outils admin : demandes en attente, statistiques globales, changer le statut d'une demande, lister les utilisateurs
 - Compatible avec tous les clients MCP : [ChatMCP](https://apps.apple.com/fr/app/chatmcp/id6745196560) (iOS/iPadOS), Claude Desktop (Mac/Windows), Claude Web
 - Deux modes de déploiement : **HTTP** (hébergé sur VPS, accessible depuis n'importe où) ou **stdio** (local, pour Claude Desktop)
 - Voir [`mcp/README.md`](mcp/README.md) pour la configuration
