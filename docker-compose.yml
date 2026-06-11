@@ -39,6 +39,21 @@ services:
       - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  ebookrequest-mcp:
+    image: zlimteck/ebookrequest-mcp:1.0.0-beta
+    container_name: ebookrequest-mcp
+    restart: always
+    ports:
+      - "${MCP_PORT:-3035}:3035"
+    environment:
+      - EBOOKREQUEST_URL=http://ebookrequest:5001
+      - EBOOKREQUEST_TOKEN=${MCP_EBOOKREQUEST_TOKEN}
+      - MCP_MODE=http
+      - MCP_PORT=3035
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
+    depends_on:
+      - ebookrequest
+
   apprise:
     image: caronc/apprise:latest
     container_name: apprise
