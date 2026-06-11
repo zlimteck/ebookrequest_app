@@ -311,3 +311,9 @@ ebookrequest/
 ├── docker-compose.yml
 └── Dockerfile
 ```
+
+---
+
+## Remerciements
+
+Un grand merci à [@Gusdezap](https://github.com/Gusdezap) pour ses idées et suggestions qui ont contribué à enrichir le projet, notamment la synchronisation Calibre, l'étagère Calibre et la synchronisation Kobo.
