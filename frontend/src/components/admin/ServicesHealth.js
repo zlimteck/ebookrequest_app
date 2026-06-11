@@ -22,8 +22,6 @@ const SERVICE_DEFS = [
       return lines;
     },
     error: (s) => s.error,
-    connectedLabel: 'Connecté',
-    disconnectedLabel: 'Déconnecté',
   },
   {
     key: 'flareSolverr',
@@ -37,8 +35,6 @@ const SERVICE_DEFS = [
     isConnected: (s) => s.connected,
     details: (s) => s.version ? [`Version : ${s.version}`] : [],
     error: (s) => s.error,
-    connectedLabel: 'Connecté',
-    disconnectedLabel: 'Inaccessible',
   },
   {
     key: 'apprise',
@@ -53,8 +49,6 @@ const SERVICE_DEFS = [
     isConnected: (s) => s.reachable,
     details: () => [],
     error: (s) => s.error,
-    connectedLabel: 'Serveur actif',
-    disconnectedLabel: 'Inaccessible',
   },
   {
     key: 'calibreWeb',
@@ -69,8 +63,6 @@ const SERVICE_DEFS = [
     isConnected: (s) => s.connected,
     details: (s) => s.url ? [`URL : ${s.url}`] : [],
     error: (s) => s.error,
-    connectedLabel: 'Connecté',
-    disconnectedLabel: 'Déconnecté',
   },
   {
     key: 'valentine',
@@ -91,8 +83,6 @@ const SERVICE_DEFS = [
       return [`Quota : ${remaining}${total} téléch. restants`];
     },
     error: (s) => s.error,
-    connectedLabel: 'Connecté',
-    disconnectedLabel: 'Erreur de connexion',
   },
   {
     key: 'annasArchive',
@@ -104,8 +94,6 @@ const SERVICE_DEFS = [
     isConnected: (s) => s.connected,
     details: () => [],
     error: (s) => s.error,
-    connectedLabel: 'Joignable',
-    disconnectedLabel: 'Inaccessible',
   },
   {
     key: 'mcp',
@@ -119,8 +107,6 @@ const SERVICE_DEFS = [
     isConnected: (s) => s.connected,
     details: (s) => s.url ? [`URL : ${s.url}`] : [],
     error: (s) => s.error,
-    connectedLabel: 'En ligne',
-    disconnectedLabel: 'Hors ligne',
   },
 ];
 
@@ -212,9 +198,9 @@ const ServicesHealth = () => {
               <div className={styles.cardBody}>
                 <div className={styles.cardTop}>
                   <span className={styles.cardName}>{label}</span>
-                  <span className={`${styles.badge} ${!enabled ? styles.badgeDisabled : connected ? styles.badgeOk : styles.badgeError}`}>
-                    <span className={`${styles.dot} ${!enabled ? styles.dotDisabled : connected ? styles.dotOk : styles.dotError}`}></span>
-                    {!enabled ? 'Non configuré' : connected ? def.connectedLabel : def.disconnectedLabel}
+                  <span className={styles.dotWrap}>
+                    {connected && <span className={styles.dotPing} />}
+                    <span className={`${styles.dot} ${!enabled ? styles.dotDisabled : connected ? styles.dotOk : styles.dotError}`} />
                   </span>
                 </div>
                 {details.length > 0 && (

@@ -964,19 +964,25 @@ const UserSettings = () => {
               </h2>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                  padding: '0.25rem 0.65rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 500,
-                  background: mcpInfo.online ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-                  color: mcpInfo.online ? 'var(--color-success, #22c55e)' : 'var(--color-error, #ef4444)',
-                }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
-                  {mcpInfo.online ? 'En ligne' : 'Hors ligne'}
+                <span style={{ position: 'relative', display: 'inline-flex', width: 10, height: 10, flexShrink: 0 }}>
+                  {mcpInfo.online && (
+                    <span style={{
+                      position: 'absolute', inset: 0, borderRadius: '50%',
+                      background: '#22c55e', opacity: 0.6,
+                      animation: 'mcp-ping 1.4s cubic-bezier(0,0,0.2,1) infinite',
+                    }} />
+                  )}
+                  <span style={{
+                    position: 'relative', display: 'inline-flex', width: 10, height: 10,
+                    borderRadius: '50%',
+                    background: mcpInfo.online ? '#22c55e' : 'var(--color-error, #ef4444)',
+                  }} />
                 </span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                  Gérez vos demandes depuis n'importe quel client compatible MCP
+                  {mcpInfo.online ? 'En ligne' : 'Hors ligne'} — Gérez vos demandes depuis n'importe quel client compatible MCP
                 </span>
               </div>
+              <style>{`@keyframes mcp-ping { 75%,100% { transform: scale(2); opacity: 0; } }`}</style>
 
               <FieldRow label="URL du serveur" value={mcpInfo.url} />
               <FieldRow label="Token (EBOOKREQUEST_TOKEN)" value={opdsToken} />

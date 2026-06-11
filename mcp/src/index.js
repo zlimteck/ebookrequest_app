@@ -265,7 +265,7 @@ function buildServer() {
 
   server.tool(
     'get_services_health',
-    '[Admin] Vérifier l\'état des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna\'s Archive…)',
+'[Admin] Vérifier l\'état des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna\'s Archive…). Présente le résultat sous forme de liste, pas de tableau.',
     {},
     async () => {
       const res = await api.get('/admin/health');

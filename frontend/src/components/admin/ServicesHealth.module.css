@@ -113,46 +113,35 @@
   color: var(--color-text);
 }
 
-.badge {
-  display: flex;
+.dotWrap {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  white-space: nowrap;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
-.badgeOk {
-  color: #10B981;
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.25);
-}
-
-.badgeError {
-  color: var(--color-danger, #ef4444);
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.25);
-}
-
-.badgeDisabled {
-  color: var(--color-text-muted);
-  background: var(--color-bg2);
-  border-color: var(--color-border);
+.dotPing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #10B981;
+  opacity: 0.6;
+  animation: ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  position: relative;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .dotOk {
   background: #10B981;
-  animation: pulse 2s ease-in-out infinite;
 }
 
 .dotError {
@@ -163,9 +152,8 @@
   background: var(--color-text-muted);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
 }
 
 .details {
