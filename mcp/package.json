@@ -1,6 +1,6 @@
 {
   "name": "ebookrequest-mcp",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "description": "MCP server for EbookRequest — manage book requests from Claude",
   "type": "module",
   "bin": {
