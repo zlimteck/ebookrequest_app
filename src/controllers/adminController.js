@@ -17,6 +17,19 @@ const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
+async function checkMcpServer() {
+  const mcpUrl = (process.env.MCP_URL || '').replace(/\/$/, '');
+  const mcpInternalUrl = (process.env.MCP_INTERNAL_URL || mcpUrl).replace(/\/$/, '');
+  if (!mcpUrl) return { enabled: false, connected: false, url: null, error: null };
+  try {
+    const res = await axios.get(`${mcpInternalUrl}/health`, { timeout: 4000 });
+    const online = res.data?.status === 'ok';
+    return { enabled: true, connected: online, url: `${mcpUrl}/mcp`, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, url: `${mcpUrl}/mcp`, error: err.message };
+  }
+}
+
 async function checkFlareSolverr() {
   try {
     const res = await axios.get(FLARESOLVERR_URL, { timeout: 4000 });
@@ -285,13 +298,14 @@ export const getAdminStats = async (req, res) => {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp] = await Promise.all([
       testAIProviderConnection(),
       checkFlareSolverr(),
       checkAppriseServer(),
       checkCalibreWeb(),
       checkValentineConnector(),
       checkAnnasArchiveConnector(),
+      checkMcpServer(),
     ]);
 
     res.json({
@@ -330,6 +344,12 @@ export const getServicesHealth = async (req, res) => {
           enabled: annasArchive.enabled,
           connected: annasArchive.connected,
           error: annasArchive.error || null,
+        },
+        mcp: {
+          enabled: mcp.enabled,
+          connected: mcp.connected,
+          url: mcp.url || null,
+          error: mcp.error || null,
         },
       },
     });

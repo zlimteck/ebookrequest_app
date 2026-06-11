@@ -37,6 +37,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-5}
       - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
+      - MCP_URL=${MCP_URL}
+      - MCP_INTERNAL_URL=${MCP_INTERNAL_URL:-http://ebookrequest-mcp:3035}
     extra_hosts:
       - "host.docker.internal:host-gateway"
   ebookrequest-mcp:

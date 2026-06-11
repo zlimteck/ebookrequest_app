@@ -264,6 +264,42 @@ function buildServer() {
   );
 
   server.tool(
+    'get_services_health',
+    '[Admin] Vérifier l\'état des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna\'s Archive…)',
+    {},
+    async () => {
+      const res = await api.get('/admin/health');
+      const services = res.data?.services || {};
+      const lines = Object.entries(services).map(([key, s]) => {
+        const name = {
+          aiProvider: `IA (${s.provider || 'inconnu'})`,
+          flareSolverr: 'FlareSolverr',
+          apprise: 'Apprise',
+          calibreWeb: 'Calibre-Web',
+          valentine: 'Valentine.wtf',
+          annasArchive: "Anna's Archive",
+          mcp: 'Serveur MCP',
+        }[key] || key;
+
+        if (s.enabled === false) return `⚪ **${name}** — Non configuré`;
+        const ok = s.connected ?? s.reachable ?? false;
+        const icon = ok ? '🟢' : '🔴';
+        const details = [];
+        if (s.model) details.push(`modèle : ${s.model}`);
+        if (s.version) details.push(`v${s.version}`);
+        if (s.url) details.push(s.url);
+        if (s.quota) details.push(`quota : ${s.quota.remaining ?? '—'}/${s.quota.total ?? '—'}`);
+        if (!ok && s.error) details.push(`erreur : ${s.error}`);
+        return `${icon} **${name}**${details.length ? ' — ' + details.join(', ') : ''}`;
+      });
+      const checkedAt = res.data?.checkedAt
+        ? new Date(res.data.checkedAt).toLocaleTimeString('fr-FR')
+        : '—';
+      return { content: [{ type: 'text', text: `Santé des services (${checkedAt}) :\n\n${lines.join('\n')}` }] };
+    }
+  );
+
+  server.tool(
     'update_request_status',
     '[Admin] Changer le statut d\'une demande (compléter ou annuler)',
     {

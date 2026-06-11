@@ -90,6 +90,7 @@ Dans Claude.ai → Paramètres → Connecteurs → Ajouter :
 | `get_admin_stats` | Statistiques globales de l'application |
 | `update_request_status` | Compléter ou annuler une demande |
 | `get_user_list` | Lister les utilisateurs avec quota, rôle et dernière activité |
+| `get_services_health` | État en temps réel des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna's Archive) |
 
 ## Exemples d'utilisation
 

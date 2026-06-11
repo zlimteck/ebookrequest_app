@@ -37,6 +37,7 @@ import emailLogsRoutes from './routes/emailLogs.js';
 import webhooksRoutes from './routes/webhooks.js';
 import opdsRoutes from './routes/opds.js';
 import opdsAdminRoutes from './routes/opdsAdmin.js';
+import mcpRoutes from './routes/mcp.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
 import { startValentineCron } from './services/valentineCron.js';
@@ -152,6 +153,7 @@ app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/invitations', invitationsRoutes);
 app.use('/api/invitation-codes', invitationCodesRoutes);
 app.use('/api/connectors', connectorsRoutes);
+app.use('/api/mcp', mcpRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));

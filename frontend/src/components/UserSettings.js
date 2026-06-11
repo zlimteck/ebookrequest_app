@@ -71,6 +71,8 @@ const UserSettings = () => {
   const [valentineQuota, setValentineQuota] = useState(null);
   const [valentineQuotaFetchedAt, setValentineQuotaFetchedAt] = useState(null);
 
+  const [mcpInfo, setMcpInfo] = useState(null);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -141,11 +143,18 @@ const UserSettings = () => {
         }
       } catch { /* silencieux */ }
     };
+    const fetchMcpInfo = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/mcp/info');
+        setMcpInfo(res.data);
+      } catch { /* silencieux */ }
+    };
     fetchUserData();
     fetchOpdsToken();
     fetchCalibreConfig();
     fetchAppriseStatus();
     fetchValentineConfig();
+    fetchMcpInfo();
   }, []);
 
   useEffect(() => {
@@ -922,6 +931,94 @@ const UserSettings = () => {
             </button>
           </div>
         </div>
+
+        {/* ── MCP ── */}
+        {mcpInfo && mcpInfo.configured && (() => {
+          const opdsToken = opdsUrl ? opdsUrl.substring(opdsUrl.lastIndexOf('/') + 1) : '';
+          const copyField = (val, label) => { navigator.clipboard.writeText(val); toast.success(`${label} copié !`); };
+          const CopyBtn = ({ val, label }) => (
+            <button type="button" className={styles.btnOutline} disabled={!val} onClick={() => copyField(val, label)}
+              style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          );
+          const FieldRow = ({ label, value }) => (
+            <div className={styles.fieldRow} style={{ marginBottom: '0.5rem' }}>
+              <label className={styles.fieldLabel}>{label}</label>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <input readOnly value={value || '—'} className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }} onFocus={e => e.target.select()} />
+                <CopyBtn val={value} label={label} />
+              </div>
+            </div>
+          );
+          return (
+            <div className={styles.settingsCard}>
+              <h2 className={styles.sectionTitle}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+                Intégration MCP
+              </h2>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                  padding: '0.25rem 0.65rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 500,
+                  background: mcpInfo.online ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                  color: mcpInfo.online ? 'var(--color-success, #22c55e)' : 'var(--color-error, #ef4444)',
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
+                  {mcpInfo.online ? 'En ligne' : 'Hors ligne'}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                  Gérez vos demandes depuis n'importe quel client compatible MCP
+                </span>
+              </div>
+
+              <FieldRow label="URL du serveur" value={mcpInfo.url} />
+              <FieldRow label="Token (EBOOKREQUEST_TOKEN)" value={opdsToken} />
+
+              <details style={{ marginTop: '0.75rem' }}>
+                <summary style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none', marginBottom: '0.5rem' }}>
+                  Instructions de connexion
+                </summary>
+                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', lineHeight: 1.6, marginTop: '0.5rem' }}>
+                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>ChatMCP (iOS / iPadOS)</p>
+                  <p style={{ margin: '0 0 0.75rem' }}>Ajouter un serveur → type <strong>Streamable HTTP</strong> → URL ci-dessus → Header : <code>Authorization: Bearer &lt;token&gt;</code></p>
+                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>Claude Desktop (Mac / Windows)</p>
+                  <p style={{ margin: '0 0 0.75rem' }}>Paramètres → Développeur → Modifier la configuration → ajouter le bloc <code>mcpServers</code> avec <code>command: node</code></p>
+                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>Claude Web</p>
+                  <p style={{ margin: 0 }}>Paramètres → Connecteurs → Ajouter → URL ci-dessus + clé API = token</p>
+                </div>
+              </details>
+
+              {mcpInfo.tools?.user?.length > 0 && (
+                <details style={{ marginTop: '0.75rem' }}>
+                  <summary style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none' }}>
+                    Outils disponibles ({(mcpInfo.tools.user.length + (mcpInfo.tools.admin?.length || 0))})
+                  </summary>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    {mcpInfo.tools.user.map(t => (
+                      <div key={t.name} style={{ fontSize: '0.8rem', display: 'flex', gap: '0.5rem' }}>
+                        <code style={{ color: 'var(--color-accent)', minWidth: 160 }}>{t.name}</code>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{t.description}</span>
+                      </div>
+                    ))}
+                    {mcpInfo.tools.admin?.map(t => (
+                      <div key={t.name} style={{ fontSize: '0.8rem', display: 'flex', gap: '0.5rem' }}>
+                        <code style={{ color: 'var(--color-accent)', minWidth: 160 }}>{t.name}</code>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{t.description} <em>(admin)</em></span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Calibre-Web ── */}
         <div className={styles.settingsCard}>
