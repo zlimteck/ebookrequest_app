@@ -2,7 +2,8 @@
 
 ![EbookRequest Logo](https://zupimages.net/up/25/20/wdmb.png)
 
-[![Docker Hub](https://img.shields.io/docker/v/zlimteck/ebookrequest?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/zlimteck/ebookrequest)
+[![Docker Hub](https://img.shields.io/docker/v/zlimteck/ebookrequest?label=ebookrequest&logo=docker)](https://hub.docker.com/r/zlimteck/ebookrequest)
+[![Docker Hub](https://img.shields.io/docker/v/zlimteck/ebookrequest-mcp?label=ebookrequest_mcp&logo=docker)](https://hub.docker.com/r/zlimteck/ebookrequest-mcp)
 [![Build](https://github.com/zlimteck/ebookrequest_app/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/zlimteck/ebookrequest_app/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -320,4 +321,4 @@ ebookrequest/
 
 ## Remerciements
 
-Un grand merci à [@Gusdezap](https://github.com/Gusdezap) pour ses idées et suggestions qui ont contribué à enrichir le projet, notamment la synchronisation Calibre, l'étagère Calibre et la synchronisation Kobo.
+Un grand merci à [@Gusdezup](https://github.com/Gusdezup) pour ses idées et suggestions qui ont contribué à enrichir le projet, notamment la synchronisation Calibre, l'étagère Calibre et la synchronisation Kobo.
