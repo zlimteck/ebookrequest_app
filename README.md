@@ -85,6 +85,10 @@ Application web de gestion de demandes de livres numériques. Les utilisateurs s
 - Deux modes de déploiement : **HTTP** (hébergé sur VPS, accessible depuis n'importe où) ou **stdio** (local, pour Claude Desktop)
 - Voir [`mcp/README.md`](mcp/README.md) pour la configuration
 
+## API
+
+La référence complète des endpoints REST avec exemples `curl` est disponible dans [`API.md`](API.md).
+
 ## Déploiement Docker
 
 ### Prérequis
