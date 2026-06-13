@@ -1045,9 +1045,10 @@ const UserSettings = () => {
                 </summary>
                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', lineHeight: 1.6, marginTop: '0.5rem' }}>
                   <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>OpenWebUI / ChatMCP / Claude Web</p>
-                  <p style={{ margin: '0 0 0.75rem' }}>Ajouter un serveur MCP → type <strong>Streamable HTTP</strong> → URL ci-dessus → Clé API = votre token</p>
+                  <p style={{ margin: '0 0 0.25rem' }}>Ajouter un serveur MCP → type <strong>Streamable HTTP</strong> → URL ci-dessus</p>
+                  <p style={{ margin: '0 0 0.75rem' }}>Header : <code>Authorization: Bearer &lt;votre token&gt;</code></p>
                   <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>Claude Desktop (Mac / Windows)</p>
-                  <p style={{ margin: 0 }}>Paramètres → Développeur → Modifier la configuration → ajouter dans <code>mcpServers</code> avec <code>EBOOKREQUEST_TOKEN</code> = votre token</p>
+                  <p style={{ margin: 0 }}>Paramètres → Développeur → Modifier la configuration → ajouter dans <code>mcpServers</code> : <code>"EBOOKREQUEST_TOKEN": "&lt;votre token&gt;"</code></p>
                 </div>
               </details>
 

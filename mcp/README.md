@@ -38,14 +38,14 @@ L'app Claude iOS ne supporte pas les connecteurs MCP personnalisés. Utilise **[
 
 1. Ajouter un serveur → type **SSE / Streamable HTTP**
 2. **URL** : `https://mcp.ndd.fr/mcp`
-3. **Clé API** : votre token (visible dans **Paramètres → Token d'accès**)
+3. **Header** : `Authorization: Bearer <votre token>`
 
 ### Web (Claude.ai, OpenWebUI…)
 
 Paramètres → Connecteurs → Ajouter :
 
 - **URL** : `https://mcp.ndd.fr/mcp`
-- **Clé API** : votre token (visible dans **Paramètres → Token d'accès**)
+- **Header** : `Authorization: Bearer <votre token>`
 
 ### Claude Desktop (stdio, local)
 
