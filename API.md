@@ -195,6 +195,22 @@ curl -X PATCH https://app.ndd.fr/api/requests/ID/user-comment \
   -d '{"userComment": "Édition française de préférence"}'
 ```
 
+### `POST /api/requests/:id/comments`
+Envoie un message dans le fil de conversation de la demande (user ou admin).
+```bash
+curl -X POST https://app.ndd.fr/api/requests/ID/comments \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Avez-vous une préférence pour le format ?"}'
+```
+
+### `POST /api/requests/:id/comments/seen`
+Marque tous les messages du fil comme lus pour l'utilisateur connecté.
+```bash
+curl -X POST https://app.ndd.fr/api/requests/ID/comments/seen \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `POST /api/requests/:id/report`
 ```bash
 curl -X POST https://app.ndd.fr/api/requests/ID/report \

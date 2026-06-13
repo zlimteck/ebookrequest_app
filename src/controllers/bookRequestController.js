@@ -904,3 +904,115 @@ export const reportRequest = async (req, res) => {
     res.status(500).json({ error: 'Erreur lors du signalement de la demande.' });
   }
 };
+
+// Fil de commentaires — poster un message (user ou admin)
+export const addComment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: 'Le message ne peut pas être vide.' });
+
+    const isAdmin = req.user.role === 'admin';
+
+    const request = isAdmin
+      ? await BookRequest.findById(id)
+      : await BookRequest.findOne({ _id: id, user: req.user.id });
+
+    if (!request) return res.status(404).json({ error: 'Demande non trouvée.' });
+
+    const authorUsername = req.user.username
+      || (await User.findById(req.user.id).select('username').lean())?.username
+      || 'inconnu';
+
+    const comment = {
+      author:      authorUsername,
+      role:        isAdmin ? 'admin' : 'user',
+      text:        text.trim(),
+      createdAt:   new Date(),
+      seenByUser:  isAdmin ? false : true,
+      seenByAdmin: isAdmin ? true  : false,
+    };
+
+    request.comments.push(comment);
+
+    if (isAdmin) {
+      request.notifications.adminComment.seen = false;
+      request.notifications.adminComment.seenAt = null;
+    } else {
+      request.notifications.userComment.seen = false;
+      request.notifications.userComment.seenAt = null;
+    }
+
+    await request.save();
+
+    const newComment = request.comments[request.comments.length - 1];
+
+    if (isAdmin) {
+      // Notifier l'utilisateur
+      sendPushToUser(request.user, {
+        title: '💬 Nouveau message',
+        body: `Un admin a répondu sur votre demande "${request.title}".`,
+        url: '/dashboard'
+      }).catch(() => {});
+
+      try {
+        const user = await User.findById(request.user);
+        if (user) {
+          const prefs = user.notificationPreferences?.email;
+          if (prefs?.enabled !== false && prefs?.adminComment !== false) {
+            await sendAdminCommentEmail(user, request, text.trim());
+          }
+          appriseService.notifyUserAdminComment(user, request, text.trim()).catch(() => {});
+        }
+      } catch (e) { /* non bloquant */ }
+    } else {
+      // Notifier les admins
+      appriseService.notifyUserComment(request, text.trim()).catch(() => {});
+      getAdminEmailPrefs().then(async prefs => {
+        if (!prefs.enabled || !prefs.notifyOnComment) return;
+        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendUserCommentToAdminsEmail(admin, request, text.trim()).catch(() => {}));
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, comment: newComment });
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout du commentaire:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'ajout du commentaire.' });
+  }
+};
+
+// Marquer les commentaires comme lus
+export const markCommentsSeen = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isAdmin = req.user.role === 'admin';
+
+    const request = isAdmin
+      ? await BookRequest.findById(id)
+      : await BookRequest.findOne({ _id: id, user: req.user.id });
+
+    if (!request) return res.status(404).json({ error: 'Demande non trouvée.' });
+
+    request.comments.forEach(c => {
+      if (isAdmin) c.seenByAdmin = true;
+      else c.seenByUser = true;
+    });
+
+    if (!isAdmin && request.notifications?.adminComment) {
+      request.notifications.adminComment.seen = true;
+      request.notifications.adminComment.seenAt = new Date();
+    }
+    if (isAdmin && request.notifications?.userComment) {
+      request.notifications.userComment.seen = true;
+      request.notifications.userComment.seenAt = new Date();
+    }
+
+    await request.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+};

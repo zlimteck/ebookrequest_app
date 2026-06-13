@@ -76,6 +76,10 @@ const bookRequestSchema = new mongoose.Schema({
     adminComment: {
       seen: { type: Boolean, default: false },
       seenAt: { type: Date }
+    },
+    userComment: {
+      seen: { type: Boolean, default: false },
+      seenAt: { type: Date }
     }
   },
   completedAt: { type: Date },
@@ -85,6 +89,14 @@ const bookRequestSchema = new mongoose.Schema({
   reportReason: { type: String },
   adminComment: { type: String, default: '' },
   userComment: { type: String, default: '' },
+  comments: [{
+    author:    { type: String, required: true },
+    role:      { type: String, enum: ['admin', 'user'], required: true },
+    text:      { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    seenByUser:  { type: Boolean, default: false },
+    seenByAdmin: { type: Boolean, default: false },
+  }],
   format: { type: String, enum: ['epub', 'pdf', 'mobi', ''], default: '' },
   category: { type: String, enum: ['ebook', 'comic', 'manga', ''], default: 'ebook' },
   statusHistory: [{

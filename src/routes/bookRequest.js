@@ -12,7 +12,9 @@ import {
   getRequestQuota,
   updateAdminComment,
   updateUserComment,
-  editUserRequest
+  editUserRequest,
+  addComment,
+  markCommentsSeen,
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -112,6 +114,10 @@ router.patch('/:id/category', requireAuth, requireAdmin, async (req, res) => {
 
 // Commentaire utilisateur sur sa propre demande
 router.patch('/:id/user-comment', requireAuth, updateUserComment);
+
+// Fil de commentaires
+router.post('/:id/comments', requireAuth, addComment);
+router.post('/:id/comments/seen', requireAuth, markCommentsSeen);
 
 // ── Conversion de format ──────────────────────────────────────────────────────
 

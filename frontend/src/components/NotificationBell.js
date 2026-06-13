@@ -20,22 +20,32 @@ const CATEGORIES = [
   { key: 'all',          label: 'Toutes',      adminOnly: false },
   { key: 'completed',    label: 'Disponible',  adminOnly: false },
   { key: 'canceled',     label: 'Annulé',      adminOnly: false },
-  { key: 'adminComment', label: 'Commentaire', adminOnly: false },
+  { key: 'adminComment', label: 'Message',      adminOnly: false },
   { key: 'reported',     label: 'Signalement', adminOnly: true  },
   { key: 'new_request',  label: 'Demandes',    adminOnly: true  },
+  { key: 'userComment',  label: 'Messages',    adminOnly: true  },
   { key: 'update',       label: 'Mise à jour', adminOnly: true  },
 ];
 
 const DASHBOARD_TYPES = new Set(['completed', 'canceled', 'adminComment', 'deleted', 'resolved']);
-const ADMIN_TYPES     = new Set(['reported', 'new_request']);
+const ADMIN_TYPES     = new Set(['reported', 'new_request', 'userComment']);
 
 const getNotificationText = (n) => {
   if (n.type === 'update')       return null; // handled separately
   if (n.standalone)              return n.notification.message;
   if (n.type === 'completed')    return `"${n.request.title}" est disponible au téléchargement`;
   if (n.type === 'canceled')     return `"${n.request.title}" a été annulée${n.request.cancelReason ? ` : ${n.request.cancelReason}` : ''}`;
-  if (n.type === 'adminComment') return `Note admin sur "${n.request.title}" : ${n.request.adminComment}`;
+  if (n.type === 'adminComment') {
+    const lastAdminComment = n.request.comments?.filter(c => c.role === 'admin').slice(-1)[0];
+    if (lastAdminComment) return `Nouveau message sur "${n.request.title}" : ${lastAdminComment.text}`;
+    return `Note admin sur "${n.request.title}"${n.request.adminComment ? ` : ${n.request.adminComment}` : ''}`;
+  }
   if (n.type === 'reported')     return `Signalement sur "${n.request.title}" (${n.request.username})${n.request.reportReason ? ` : ${n.request.reportReason}` : ''}`;
+  if (n.type === 'userComment') {
+    const lastUserComment = n.request.comments?.filter(c => c.role === 'user').slice(-1)[0];
+    if (lastUserComment) return `Message de ${n.request.username || lastUserComment.author} sur "${n.request.title}" : ${lastUserComment.text}`;
+    return `Nouveau message sur "${n.request.title}"`;
+  }
   return n.request?.title ?? '';
 };
 
@@ -46,6 +56,7 @@ const getNotificationIcon = (n) => {
   if (n.type === 'deleted')      return '🗑️';
   if (n.type === 'resolved')     return '✔️';
   if (n.type === 'new_request')  return '📚';
+  if (n.type === 'userComment')  return '💬';
   if (n.type === 'update')       return '🔄';
   return '💬';
 };

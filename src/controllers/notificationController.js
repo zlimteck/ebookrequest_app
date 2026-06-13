@@ -39,9 +39,12 @@ const getUnseenNotifications = async (userId) => {
       }),
       BookRequest.find({
         user: userId,
-        adminComment: { $exists: true, $ne: '' },
-        'notifications.adminComment.seen': { $ne: true }
-      })
+        'notifications.adminComment.seen': { $ne: true },
+        $or: [
+          { adminComment: { $exists: true, $ne: '' } },
+          { comments: { $elemMatch: { role: 'admin' } } },
+        ],
+      }).select('title author adminComment comments notifications updatedAt')
     ]);
 
     const standaloneNotifs = await Notification.find({

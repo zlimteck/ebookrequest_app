@@ -7,6 +7,7 @@ import styles from './UserDashboard.module.css';
 import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
 import DownloadModal from '../../components/DownloadModal';
+import CommentThread from '../../components/CommentThread';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -37,6 +38,7 @@ const UserDashboard = () => {
   const [search, setSearch] = useState('');
   const [commentModal, setCommentModal] = useState(null); // request._id pour le modal note
   const [commentValue, setCommentValue] = useState('');
+  const [threadModal, setThreadModal] = useState(null); // request object pour le fil
   const [expandedHistory, setExpandedHistory] = useState(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_user') || 'cards');
   const [expandedTableRows, setExpandedTableRows] = useState(new Set());
@@ -393,6 +395,18 @@ const UserDashboard = () => {
     <div className={styles.dashboardContainer}>
       {previewBook && <BookPreviewModal book={previewBook} onClose={() => setPreviewBook(null)} />}
 
+      {threadModal && (
+        <CommentThread
+          request={threadModal}
+          currentRole="user"
+          onClose={() => setThreadModal(null)}
+          onUpdate={(id, comments) => {
+            setRequests(prev => prev.map(r => r._id === id ? { ...r, comments } : r));
+            setThreadModal(prev => prev?._id === id ? { ...prev, comments } : prev);
+          }}
+        />
+      )}
+
       {/* Modal note utilisateur */}
       {commentModal && (() => {
         const req = requests.find(r => r._id === commentModal);
@@ -613,6 +627,14 @@ const UserDashboard = () => {
                                 </button>
                               </>
                             )}
+                            <button className={`${styles.iconBtn} ${styles.iconBtnNote}`} onClick={() => setThreadModal(request)} title="Messages" style={{ position: 'relative' }}>
+                              {request.comments?.some(c => c.role === 'admin' && !c.seenByUser) && (
+                                <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
+                              )}
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                              </svg>
+                            </button>
                             <button className={`${styles.iconBtn} ${styles.iconBtnNote}`} onClick={() => { setCommentModal(request._id); setCommentValue(request.userComment || ''); }} title={request.userComment ? 'Modifier la note' : 'Ajouter une note'}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 {request.userComment ? (
@@ -887,17 +909,14 @@ const UserDashboard = () => {
                       </>
                     )}
 
-                    {true && (
-                      <button className={`${styles.iconBtn} ${styles.iconBtnNote}`} onClick={() => { setCommentModal(request._id); setCommentValue(request.userComment || ''); }} title={request.userComment ? 'Modifier la note' : 'Ajouter une note'}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          {request.userComment ? (
-                            <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>
-                          ) : (
-                            <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>
-                          )}
-                        </svg>
-                      </button>
-                    )}
+                    <button className={`${styles.iconBtn} ${styles.iconBtnNote}`} onClick={() => setThreadModal(request)} title="Messages" style={{ position: 'relative' }}>
+                      {request.comments?.some(c => c.role === 'admin' && !c.seenByUser) && (
+                        <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
+                      )}
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    </button>
                     {request.status === 'pending' && (
                       <button className={`${styles.iconBtn} ${styles.iconBtnEdit}`} onClick={() => openEditModal(request)} title="Modifier la demande">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -159,7 +159,7 @@ class AppriseService {
   }
 
   async notifyUserBookCompleted(user, bookRequest) {
-    if (!user.notificationPreferences?.apprise?.notifyOnComplete) return;
+    if (user.notificationPreferences?.apprise?.notifyOnComplete === false) return;
     await this.sendUserNotification(user,
       '✅ Livre disponible',
       `📖 "${bookRequest.title}" est prêt au téléchargement.`
@@ -167,7 +167,7 @@ class AppriseService {
   }
 
   async notifyUserBookCanceled(user, bookRequest, reason) {
-    if (!user.notificationPreferences?.apprise?.notifyOnCancel) return;
+    if (user.notificationPreferences?.apprise?.notifyOnCancel === false) return;
     await this.sendUserNotification(user,
       '❌ Demande annulée',
       `📖 "${bookRequest.title}"${reason ? '\n💬 Raison : ' + reason : ''}`
@@ -175,7 +175,7 @@ class AppriseService {
   }
 
   async notifyUserAdminComment(user, bookRequest, comment) {
-    if (!user.notificationPreferences?.apprise?.notifyOnAdminComment) return;
+    if (user.notificationPreferences?.apprise?.notifyOnAdminComment === false) return;
     await this.sendUserNotification(user,
       '💬 Nouveau commentaire',
       `📖 "${bookRequest.title}"\n${comment.substring(0, 200)}`
