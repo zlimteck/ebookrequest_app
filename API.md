@@ -8,7 +8,7 @@ Deux types de tokens sont acceptés :
 - **Token d'accès** — token personnel stable (sans expiration), visible dans **Paramètres → Token d'accès**. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, MCP, applications tierces).
 
 ```bash
-curl https://app.ebookrequest.fr/api/requests/quota \
+curl https://app.ndd.fr/api/requests/quota \
   -H "Authorization: Bearer <token>"
 ```
 
