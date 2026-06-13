@@ -1,6 +1,6 @@
 {
   "name": "ebook-frontend",
-  "version": "1.4.2-beta",
+  "version": "1.4.2",
   "private": true,
   "dependencies": {
     "@zxing/browser": "^0.2.0",
