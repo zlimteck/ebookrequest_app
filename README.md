@@ -217,8 +217,6 @@ npx web-push generate-vapid-keys
 | `TZ` | Fuseau horaire des conteneurs (ex : `Europe/Paris`). Utile pour que les logs s'affichent à la bonne heure. |
 | `FLARESOLVERR_URL` | URL du service FlareSolverr pour contourner les protections Cloudflare (défaut : `http://flaresolverr:8191`) |
 | `RSS_FEED_URL` | URL du flux RSS (PreDB) utilisé pour vérifier si un livre est récemment sorti et estimer sa disponibilité au moment de la demande (défaut : `https://predb.me/?cats=books-ebooks&rss=1`) |
-| `MCP_EBOOKREQUEST_TOKEN` | Token d'authentification du serveur MCP (votre token OPDS, visible dans Paramètres → OPDS) |
-| `MCP_AUTH_TOKEN` | Secret protégeant l'endpoint HTTP du serveur MCP (clé à définir librement) |
 | `MCP_PORT` | Port du serveur MCP (défaut : `3035`) |
 | `MCP_URL` | URL publique du serveur MCP (ex : `https://mcp.ndd.fr`). Affichée aux utilisateurs dans les paramètres. Optionnel — si absent, la section MCP est masquée. |
 | `MCP_INTERNAL_URL` | URL interne du serveur MCP pour le health check depuis le backend (défaut : `http://ebookrequest-mcp:3035`). Utile quand le backend et le MCP sont sur le même réseau Docker — évite de passer par l'URL publique. |

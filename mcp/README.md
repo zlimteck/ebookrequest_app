@@ -7,9 +7,7 @@ Serveur MCP pour [EbookRequest](https://github.com/zlimteck/ebookrequest_app) �
 ### Variables d'environnement (`.env`)
 
 ```env
-MCP_EBOOKREQUEST_TOKEN=votre-opds-token   # Paramètres → OPDS dans l'app
-MCP_AUTH_TOKEN=un-secret-fort              # Protège l'endpoint MCP
-MCP_PORT=3035                              # Optionnel, défaut: 3035
+MCP_PORT=3035   # Optionnel, défaut: 3035
 ```
 
 ### Lancement
@@ -40,16 +38,14 @@ L'app Claude iOS ne supporte pas les connecteurs MCP personnalisés. Utilise **[
 
 1. Ajouter un serveur → type **SSE / Streamable HTTP**
 2. **URL** : `https://mcp.ndd.fr/mcp`
-3. **Header** : `Authorization` → `Bearer <MCP_AUTH_TOKEN>`
+3. **Clé API** : votre token (visible dans **Paramètres → Token d'accès**)
 
-### Web (via URL)
+### Web (Claude.ai, OpenWebUI…)
 
-Dans Claude.ai → Paramètres → Connecteurs → Ajouter :
+Paramètres → Connecteurs → Ajouter :
 
 - **URL** : `https://mcp.ndd.fr/mcp`
-- **Clé API** : valeur de `MCP_AUTH_TOKEN`
-
-> Si `MCP_AUTH_TOKEN` n'est pas défini, l'endpoint est public (déconseillé).
+- **Clé API** : votre token (visible dans **Paramètres → Token d'accès**)
 
 ### Claude Desktop (stdio, local)
 
@@ -61,7 +57,7 @@ Dans Claude.ai → Paramètres → Connecteurs → Ajouter :
       "args": ["/chemin/vers/ebookrequest/mcp/src/index.js"],
       "env": {
         "EBOOKREQUEST_URL": "https://ndd.fr",
-        "EBOOKREQUEST_TOKEN": "votre-opds-token"
+        "EBOOKREQUEST_TOKEN": "votre-token"
       }
     }
   }

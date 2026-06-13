@@ -5,24 +5,30 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import axios from 'axios';
 import { z } from 'zod';
 
-const BASE_URL   = (process.env.EBOOKREQUEST_URL || '').replace(/\/$/, '');
-const TOKEN      = process.env.EBOOKREQUEST_TOKEN || '';
-const MODE       = process.env.MCP_MODE || 'stdio';           // 'stdio' | 'http'
-const PORT       = parseInt(process.env.MCP_PORT || '3035', 10);
-const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN || '';
+const BASE_URL = (process.env.EBOOKREQUEST_URL || '').replace(/\/$/, '');
+const TOKEN    = process.env.EBOOKREQUEST_TOKEN || '';
+const MODE     = process.env.MCP_MODE || 'stdio';
+const PORT     = parseInt(process.env.MCP_PORT || '3035', 10);
 
-if (!BASE_URL || !TOKEN) {
-  console.error('EBOOKREQUEST_URL et EBOOKREQUEST_TOKEN sont requis.');
+if (!BASE_URL) {
+  console.error('EBOOKREQUEST_URL est requis.');
   process.exit(1);
 }
 
-const api = axios.create({
-  baseURL: `${BASE_URL}/api`,
-  headers: { Authorization: `Bearer ${TOKEN}` },
-  timeout: 15000,
-});
+if (MODE !== 'http' && !TOKEN) {
+  console.error('EBOOKREQUEST_TOKEN est requis en mode stdio.');
+  process.exit(1);
+}
 
-function buildServer() {
+function createApi(token) {
+  return axios.create({
+    baseURL: `${BASE_URL}/api`,
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 15000,
+  });
+}
+
+function buildServer(api) {
   const server = new McpServer({ name: 'ebookrequest', version: '1.0.0' });
 
   server.tool(
@@ -51,7 +57,6 @@ function buildServer() {
       type:   z.enum(['ebook', 'comic', 'manga']).optional().default('ebook'),
     },
     async ({ title, author, format, type }) => {
-      // Récupère les métadonnées Google Books (thumbnail, description, pageCount, link)
       let thumbnail = '';
       let description = '';
       let pageCount = 0;
@@ -165,8 +170,6 @@ function buildServer() {
     }
   );
 
-  // ── Nouveaux outils utilisateur ──────────────────────────────────────────────
-
   server.tool(
     'search_books',
     'Rechercher un livre via Google Books avant de soumettre une demande',
@@ -242,8 +245,6 @@ function buildServer() {
     }
   );
 
-  // ── Nouveaux outils admin ─────────────────────────────────────────────────────
-
   server.tool(
     'get_user_list',
     '[Admin] Lister les utilisateurs avec leur quota, rôle et dernière activité',
@@ -265,7 +266,7 @@ function buildServer() {
 
   server.tool(
     'get_services_health',
-'[Admin] Vérifier l\'état des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna\'s Archive…). Présente le résultat sous forme de liste, pas de tableau.',
+    '[Admin] Vérifier l\'état des services (IA, MCP, Apprise, Calibre-Web, Valentine, Anna\'s Archive…). Présente le résultat sous forme de liste, pas de tableau.',
     {},
     async () => {
       const res = await api.get('/admin/health');
@@ -323,20 +324,19 @@ if (MODE === 'http') {
   const app = express();
   app.use(express.json());
 
-  if (AUTH_TOKEN) {
-    app.use('/mcp', (req, res, next) => {
-      const auth = req.headers.authorization || '';
-      if (auth !== `Bearer ${AUTH_TOKEN}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      next();
-    });
-  }
-
   app.all('/mcp', async (req, res) => {
     try {
+      const authHeader = req.headers.authorization || '';
+      const match = authHeader.match(/^Bearer\s+(.+)$/i);
+      const userToken = (match && match[1]) || TOKEN;
+
+      if (!userToken) {
+        return res.status(401).json({ error: 'Token requis. Ajoutez votre token OPDS comme clé API.' });
+      }
+
+      const api = createApi(userToken);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      const server = buildServer();
+      const server = buildServer(api);
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (err) {
@@ -350,6 +350,7 @@ if (MODE === 'http') {
     console.log(`EbookRequest MCP server (HTTP) running on :${PORT}`);
   });
 } else {
+  const api = createApi(TOKEN);
   const transport = new StdioServerTransport();
-  await buildServer().connect(transport);
+  await buildServer(api).connect(transport);
 }

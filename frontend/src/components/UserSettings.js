@@ -72,6 +72,7 @@ const UserSettings = () => {
   const [valentineQuotaFetchedAt, setValentineQuotaFetchedAt] = useState(null);
 
   const [mcpInfo, setMcpInfo] = useState(null);
+  const [tokenVisible, setTokenVisible] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -316,7 +317,7 @@ const UserSettings = () => {
       const res = await axiosAdmin.post('/api/users/opds-token/regenerate');
       if (res.data.success) {
         setOpdsUrl(res.data.feedUrl);
-        toast.success('Lien OPDS régénéré');
+        toast.success('Token régénéré');
       }
     } catch {
       toast.error('Erreur lors de la régénération du lien');
@@ -855,6 +856,52 @@ const UserSettings = () => {
           </div>
         )}
 
+        {/* ── Token d'accès ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+            Token d'accès
+          </h2>
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            Token personnel utilisé pour OPDS, MCP et l'API REST.
+          </p>
+          {(() => {
+            const token = opdsUrl ? opdsUrl.substring(opdsUrl.lastIndexOf('/') + 1) : '';
+            const copyToken = () => { navigator.clipboard.writeText(token); toast.success('Token copié !'); };
+            return (
+              <div className={styles.fieldRow} style={{ marginBottom: '0.5rem' }}>
+                <label className={styles.fieldLabel}>Token</label>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input readOnly value={token || 'Chargement…'} type={tokenVisible ? 'text' : 'password'}
+                    className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                    style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                    onFocus={e => e.target.select()} />
+                  <button type="button" className={styles.btnOutline} onClick={() => setTokenVisible(v => !v)}
+                    style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }} title={tokenVisible ? 'Masquer' : 'Afficher'}>
+                    {tokenVisible
+                      ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    }
+                  </button>
+                  <button type="button" className={styles.btnOutline} disabled={!token} onClick={copyToken}
+                    style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          <div className={styles.btnRowEnd}>
+            <button type="button" className={styles.btnOutline} onClick={handleRegenerateOpds} disabled={opdsLoading}>
+              {opdsLoading ? 'Régénération…' : 'Régénérer le token'}
+            </button>
+          </div>
+        </div>
+
         {/* ── Catalogue OPDS ── */}
         <div className={styles.settingsCard}>
           <h2 className={styles.sectionTitle}>
@@ -890,13 +937,24 @@ const UserSettings = () => {
                 </svg>
               </button>
             );
-            const FieldRow = ({ label, value, mono }) => (
+            const EyeBtn = () => (
+              <button type="button" className={styles.btnOutline} onClick={() => setTokenVisible(v => !v)}
+                style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }} title={tokenVisible ? 'Masquer' : 'Afficher'}>
+                {tokenVisible
+                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            );
+            const FieldRow = ({ label, value, mono, password }) => (
               <div className={styles.fieldRow} style={{ marginBottom: '0.5rem' }}>
                 <label className={styles.fieldLabel}>{label}</label>
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                  <input readOnly value={value || 'Chargement…'} className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                  <input readOnly value={value || 'Chargement…'} type={password && !tokenVisible ? 'password' : 'text'}
+                    className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
                     style={{ flex: 1, fontFamily: mono ? 'monospace' : undefined, fontSize: mono ? '0.78rem' : undefined }}
                     onFocus={e => e.target.select()} />
+                  {password && <EyeBtn />}
                   <CopyBtn val={value} label={label} />
                 </div>
               </div>
@@ -905,9 +963,9 @@ const UserSettings = () => {
               <>
                 <FieldRow label="Hôte" value={baseOpdsUrl} mono />
                 <FieldRow label="Port" value={opdsPort} />
-                <FieldRow label="Mot de passe" value={opdsToken} mono />
+                <FieldRow label="Mot de passe" value={opdsToken} mono password />
                 <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem' }}>
-                  Le nom d'utilisateur peut être n'importe quoi. Le mot de passe est votre clé d'accès OPDS.
+                  Le nom d'utilisateur peut être n'importe quoi. Le mot de passe est votre token d'accès.
                 </p>
                 {/* URL directe pour Calibre / apps sans Basic Auth */}
                 <details style={{ marginTop: '0.5rem' }}>
@@ -925,11 +983,6 @@ const UserSettings = () => {
             );
           })()}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button type="button" className={styles.btnOutline} onClick={handleRegenerateOpds} disabled={opdsLoading}>
-              {opdsLoading ? 'Régénération…' : 'Régénérer le token'}
-            </button>
-          </div>
         </div>
 
         {/* ── MCP ── */}
@@ -985,19 +1038,16 @@ const UserSettings = () => {
               <style>{`@keyframes mcp-ping { 75%,100% { transform: scale(2); opacity: 0; } }`}</style>
 
               <FieldRow label="URL du serveur" value={mcpInfo.url} />
-              <FieldRow label="Token (EBOOKREQUEST_TOKEN)" value={opdsToken} />
 
               <details style={{ marginTop: '0.75rem' }}>
                 <summary style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none', marginBottom: '0.5rem' }}>
                   Instructions de connexion
                 </summary>
                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', lineHeight: 1.6, marginTop: '0.5rem' }}>
-                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>ChatMCP (iOS / iPadOS)</p>
-                  <p style={{ margin: '0 0 0.75rem' }}>Ajouter un serveur → type <strong>Streamable HTTP</strong> → URL ci-dessus → Header : <code>Authorization: Bearer &lt;token&gt;</code></p>
+                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>OpenWebUI / ChatMCP / Claude Web</p>
+                  <p style={{ margin: '0 0 0.75rem' }}>Ajouter un serveur MCP → type <strong>Streamable HTTP</strong> → URL ci-dessus → Clé API = votre token</p>
                   <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>Claude Desktop (Mac / Windows)</p>
-                  <p style={{ margin: '0 0 0.75rem' }}>Paramètres → Développeur → Modifier la configuration → ajouter le bloc <code>mcpServers</code> avec <code>command: node</code></p>
-                  <p style={{ margin: '0 0 0.4rem', fontWeight: 500, color: 'var(--color-text)' }}>Claude Web</p>
-                  <p style={{ margin: 0 }}>Paramètres → Connecteurs → Ajouter → URL ci-dessus + clé API = token</p>
+                  <p style={{ margin: 0 }}>Paramètres → Développeur → Modifier la configuration → ajouter dans <code>mcpServers</code> avec <code>EBOOKREQUEST_TOKEN</code> = votre token</p>
                 </div>
               </details>
 

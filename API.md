@@ -5,11 +5,11 @@ Toutes les routes sont préfixées par `/api`. L'authentification se fait via le
 Deux types de tokens sont acceptés :
 
 - **JWT** — obtenu via `/api/auth/login`. Expire après un certain délai.
-- **Token OPDS** — token personnel stable (sans expiration), visible dans **Paramètres → OPDS** de l'application. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, applications tierces).
+- **Token d'accès** — token personnel stable (sans expiration), visible dans **Paramètres → Token d'accès**. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, MCP, applications tierces).
 
 ```bash
 curl https://app.ebookrequest.fr/api/requests/quota \
-  -H "Authorization: Bearer <opds-token>"
+  -H "Authorization: Bearer <token>"
 ```
 
 ---
@@ -549,11 +549,11 @@ curl "https://app.ndd.fr/api/connectors/annasarchive/search?q=Dune" \
 
 ## OPDS
 
-Le catalogue OPDS est accessible sans authentification JWT via le token OPDS :
+Le catalogue OPDS est accessible via le token d'accès intégré dans l'URL :
 
 ```
-GET /api/opds/:opdsToken
-GET /api/opds/:opdsToken/search?q=Dune
+GET /api/opds/:token
+GET /api/opds/:token/search?q=Dune
 ```
 
 Compatible avec KOReader, Calibre, Kybook et toute application supportant OPDS 1.2.

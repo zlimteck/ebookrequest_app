@@ -474,6 +474,12 @@ input:focus + .slider {
   to { transform: rotate(360deg); }
 }
 
+.btnRowEnd {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .pageWrapper {
@@ -502,6 +508,10 @@ input:focus + .slider {
     justify-content: center;
     padding: 0.55rem 1.25rem;
     font-size: 0.875rem;
+  }
+
+  .btnRowEnd {
+    justify-content: flex-start;
   }
 }
 
