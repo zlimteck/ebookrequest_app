@@ -310,7 +310,7 @@ const UserSettings = () => {
   };
 
   const handleRegenerateOpds = async () => {
-    if (!window.confirm('Régénérer le lien OPDS ? L\'ancien lien ne fonctionnera plus dans vos liseuses.')) return;
+    if (!window.confirm('Régénérer le token ? L\'ancien token ne fonctionnera plus dans vos liseuses, raccourcis, et intégrations MCP.')) return;
     setOpdsLoading(true);
     try {
       const res = await axiosAdmin.post('/api/users/opds-token/regenerate');
@@ -927,7 +927,7 @@ const UserSettings = () => {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
             <button type="button" className={styles.btnOutline} onClick={handleRegenerateOpds} disabled={opdsLoading}>
-              {opdsLoading ? 'Régénération…' : 'Régénérer le lien'}
+              {opdsLoading ? 'Régénération…' : 'Régénérer le token'}
             </button>
           </div>
         </div>

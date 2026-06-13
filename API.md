@@ -1,6 +1,16 @@
 # EbookRequest — Référence API
 
-Toutes les routes sont préfixées par `/api`. L'authentification se fait via un token JWT dans le header `Authorization: Bearer <token>` (obtenu via `/api/auth/login`), ou via un token OPDS pour les routes compatibles.
+Toutes les routes sont préfixées par `/api`. L'authentification se fait via le header `Authorization: Bearer <token>`.
+
+Deux types de tokens sont acceptés :
+
+- **JWT** — obtenu via `/api/auth/login`. Expire après un certain délai.
+- **Token OPDS** — token personnel stable (sans expiration), visible dans **Paramètres → OPDS** de l'application. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, applications tierces).
+
+```bash
+curl https://app.ebookrequest.fr/api/requests/quota \
+  -H "Authorization: Bearer <opds-token>"
+```
 
 ---
 
