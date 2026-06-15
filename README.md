@@ -1,17 +1,55 @@
 # EbookRequest
 
-![EbookRequest Logo](https://zupimages.net/up/25/20/wdmb.png)
+<div align="center">
+  <img src="screenshots/logo.png" alt="EbookRequest Logo" width="80" />
+</div>
+
+<div align="center">
 
 [![Docker Hub](https://img.shields.io/docker/v/zlimteck/ebookrequest?label=ebookrequest&logo=docker)](https://hub.docker.com/r/zlimteck/ebookrequest)
 [![Docker Hub](https://img.shields.io/docker/v/zlimteck/ebookrequest-mcp?label=ebookrequest_mcp&logo=docker)](https://hub.docker.com/r/zlimteck/ebookrequest-mcp)
 [![Build](https://github.com/zlimteck/ebookrequest_app/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/zlimteck/ebookrequest_app/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/zlimteck/ebookrequest_app?style=flat)](https://github.com/zlimteck/ebookrequest_app/stargazers)
 
-Application web de gestion de demandes de livres numériques. Les utilisateurs soumettent des demandes, suivent leur statut et téléchargent leurs livres. Les administrateurs gèrent les demandes, les utilisateurs et les notifications.
+</div>
+
+Gérez les demandes de livres numériques de vos proches, de la soumission jusqu'au téléchargement automatique — self-hosted, en français.
 
 > 🇫🇷 Projet développé par et pour la communauté francophone. Interface, documentation et support entièrement en français.
 >
 > Si le projet vous est utile, une ⭐ sur GitHub fait toujours plaisir et aide à le faire connaître !
+
+## Aperçu
+
+<div align="center">
+  <img src="screenshots/01-form.png" width="49%" alt="Formulaire de demande avec recommandations IA" />
+  <img src="screenshots/02-dashboard.png" width="49%" alt="Dashboard des demandes utilisateur" />
+  <img src="screenshots/03-library.png" width="49%" alt="Bibliothèque personnelle" />
+  <img src="screenshots/04-admin.png" width="49%" alt="Panel d'administration" />
+</div>
+
+<div align="center">
+  <img src="screenshots/05-stats.png" width="80%" alt="Statistiques administrateur" />
+</div>
+
+## Table des matières
+
+- [Stack](#stack)
+- [Fonctionnalités](#fonctionnalités)
+- [API](#api)
+- [Déploiement Docker](#déploiement-docker)
+  - [Prérequis](#prérequis)
+  - [Image Docker](#image-docker)
+  - [docker-compose.yml](#docker-composeyml)
+  - [Variables d'environnement](#variables-denvironnement)
+  - [Lancer l'application](#lancer-lapplication)
+  - [Reverse proxy (HTTPS)](#reverse-proxy-https)
+  - [Créer le compte administrateur](#créer-le-compte-administrateur)
+  - [Mise à jour](#mise-à-jour)
+  - [Accès OPDS](#accès-opds)
+- [Structure du projet](#structure-du-projet)
+- [Remerciements](#remerciements)
 
 ## Stack
 
