@@ -119,6 +119,16 @@ class AppriseService {
     );
   }
 
+  async notifyDownloadFailed(bookRequest, annaUrl) {
+    const config = await this.getConfig();
+    if (!config?.enabled || !config.notifyOnDownloadFailed) return;
+    const link = annaUrl ? `\n🔗 ${annaUrl}` : '';
+    await this.sendNotification(
+      '⚠️ Téléchargement automatique échoué',
+      `📚 Livre: ${bookRequest.title}\n👤 Demandé par: ${bookRequest.username}\n\nTous les connecteurs ont échoué. Un téléchargement manuel est nécessaire.${link}`
+    );
+  }
+
   async notifyNewUser(username, email) {
     const config = await this.getConfig();
     if (!config?.enabled || !config.notifyOnNewUser) return;

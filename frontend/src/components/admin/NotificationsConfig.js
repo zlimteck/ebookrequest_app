@@ -15,31 +15,34 @@ const NotificationsConfig = () => {
   const [config, setConfig] = useState({
     enabled: false,
     appriseUrls: '',
-    notifyOnNewRequest: true,
-    notifyOnComplete:   true,
-    notifyOnCancel:     true,
-    notifyOnComment:    true,
-    notifyOnReport:     true,
-    notifyOnNewUser:    true,
+    notifyOnNewRequest:     true,
+    notifyOnComplete:       true,
+    notifyOnCancel:         true,
+    notifyOnComment:        true,
+    notifyOnReport:         true,
+    notifyOnNewUser:        false,
+    notifyOnDownloadFailed: true,
   });
 
   const NOTIFY_EVENTS = [
-    { key: 'notifyOnNewRequest', label: 'Nouvelle demande de livre' },
-    { key: 'notifyOnComplete',   label: 'Livre complété (disponible)' },
-    { key: 'notifyOnCancel',     label: 'Demande annulée' },
-    { key: 'notifyOnComment',    label: 'Commentaire utilisateur' },
-    { key: 'notifyOnReport',     label: 'Signalement d\'un problème' },
-    { key: 'notifyOnNewUser',    label: 'Nouvel utilisateur inscrit' },
+    { key: 'notifyOnNewRequest',     label: 'Nouvelle demande de livre' },
+    { key: 'notifyOnComplete',       label: 'Livre complété (disponible)' },
+    { key: 'notifyOnCancel',         label: 'Demande annulée' },
+    { key: 'notifyOnComment',        label: 'Commentaire utilisateur' },
+    { key: 'notifyOnReport',         label: 'Signalement d\'un problème' },
+    { key: 'notifyOnNewUser',        label: 'Nouvel utilisateur inscrit' },
+    { key: 'notifyOnDownloadFailed', label: 'Téléchargement automatique échoué' },
   ];
 
   const [emailPrefs, setEmailPrefs] = useState({
-    enabled: true,
-    notifyOnNewRequest: true,
-    notifyOnComplete:   true,
-    notifyOnCancel:     true,
-    notifyOnComment:    true,
-    notifyOnReport:     true,
-    notifyOnNewUser:    true,
+    enabled:                true,
+    notifyOnNewRequest:     true,
+    notifyOnComplete:       true,
+    notifyOnCancel:         true,
+    notifyOnComment:        true,
+    notifyOnReport:         true,
+    notifyOnNewUser:        true,
+    notifyOnDownloadFailed: true,
   });
 
   const [loading, setLoading] = useState(true);
@@ -63,7 +66,8 @@ const NotificationsConfig = () => {
           notifyOnCancel:     e.notifyOnCancel      ?? true,
           notifyOnComment:    e.notifyOnComment     ?? true,
           notifyOnReport:     e.notifyOnReport      ?? true,
-          notifyOnNewUser:    e.notifyOnNewUser      ?? false,
+          notifyOnNewUser:        e.notifyOnNewUser        ?? false,
+          notifyOnDownloadFailed: e.notifyOnDownloadFailed ?? true,
         });
       } catch (error) {
         console.error('Erreur chargement config:', error);
@@ -170,12 +174,13 @@ const NotificationsConfig = () => {
         {emailPrefs.enabled && (
           <div className={styles.eventsGrid}>
             {[
-              { key: 'notifyOnNewRequest', label: 'Nouvelle demande de livre' },
-              { key: 'notifyOnComplete',   label: 'Livre complété (disponible)' },
-              { key: 'notifyOnCancel',     label: 'Demande annulée' },
-              { key: 'notifyOnComment',    label: 'Commentaire utilisateur' },
-              { key: 'notifyOnReport',     label: 'Signalement d\'un problème' },
-              { key: 'notifyOnNewUser',    label: 'Nouvel utilisateur inscrit' },
+              { key: 'notifyOnNewRequest',     label: 'Nouvelle demande de livre' },
+              { key: 'notifyOnComplete',       label: 'Livre complété (disponible)' },
+              { key: 'notifyOnCancel',         label: 'Demande annulée' },
+              { key: 'notifyOnComment',        label: 'Commentaire utilisateur' },
+              { key: 'notifyOnReport',         label: 'Signalement d\'un problème' },
+              { key: 'notifyOnNewUser',        label: 'Nouvel utilisateur inscrit' },
+              { key: 'notifyOnDownloadFailed', label: 'Téléchargement automatique échoué' },
             ].map(({ key, label }) => (
               <label key={key} className={styles.eventRow}>
                 <input

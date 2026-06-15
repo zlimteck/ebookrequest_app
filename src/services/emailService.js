@@ -423,6 +423,26 @@ export const sendNewUserToAdminsEmail = async (admin, username, email) => {
   try { await sendEmail({ to: admin.email, subject: `👤 Nouvel utilisateur : ${escapeHtml(username)}`, html, type: 'new_user_admin' }); } catch {}
 };
 
+export const sendDownloadFailedToAdminsEmail = async (admin, bookRequest, annaUrl) => {
+  if (!admin?.email || !admin?.emailVerified) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#f59e0b 0%,#ef4444 100%)',
+    title: '⚠️ Téléchargement automatique échoué',
+    subtitle: `Demandé par ${escapeHtml(bookRequest.username || 'un utilisateur')}`,
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1.25rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(admin.username)}</strong>,</p>
+      <p style="color:#cbd5e1;font-size:0.95rem;margin:0 0 1rem;">Le téléchargement automatique a échoué sur tous les connecteurs. Un téléchargement manuel est nécessaire.</p>
+      ${bookCard(bookRequest)}
+      ${annaUrl ? `<div style="text-align:center;margin:1.5rem 0;">
+        <a href="${annaUrl}" style="display:inline-block;padding:0.75rem 1.75rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:0.95rem;" target="_blank">
+          Rechercher sur Anna's Archive
+        </a>
+      </div>` : ''}
+      ${adminLink()}`,
+  });
+  try { await sendEmail({ to: admin.email, subject: `⚠️ DL échoué : ${escapeHtml(bookRequest.title)}`, html, type: 'download_failed_admin' }); } catch (e) { console.error('[Email] download_failed_admin:', e.message); }
+};
+
 export const sendInvitationEmail = async (email, invitedByUsername, token) => {
   const link = `${FRONTEND()}/register?token=${token}`;
   const html = darkEmail({

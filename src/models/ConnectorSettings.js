@@ -18,6 +18,7 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   notifyOnComment:       { type: Boolean, default: true },
   notifyOnReport:        { type: Boolean, default: true },
   notifyOnNewUser:       { type: Boolean, default: true },
+  notifyOnDownloadFailed:{ type: Boolean, default: true },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

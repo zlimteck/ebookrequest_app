@@ -347,7 +347,13 @@ export async function downloadFromValentine(title, author, requestId, category =
       .replace(/\s+/g, ' ')
       .trim();
 
-    const queries = [`${cleanTitle} ${cleanAuthor}`.trim(), cleanTitle];
+    // Variante sans virgules ni points de suspension — pour les titres comme "Il pleut, un peu, beaucoup…"
+    const cleanTitleNoPunct = cleanTitle.replace(/,/g, '').replace(/\.{2,}/g, '').replace(/\s+/g, ' ').trim();
+    // Valentine cherche par titre uniquement (pas titre + auteur)
+    const queries = [
+      cleanTitle,
+      ...(cleanTitleNoPunct !== cleanTitle ? [cleanTitleNoPunct] : []),
+    ];
     const MIN_AUTHOR_SCORE = 0.5; // au moins 50 % des tokens auteur doivent correspondre
 
     let book = null;

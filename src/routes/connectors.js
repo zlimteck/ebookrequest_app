@@ -209,7 +209,8 @@ router.get('/email', requireAuth, requireAdmin, async (req, res) => {
       notifyOnCancel:     doc.notifyOnCancel        ?? true,
       notifyOnComment:    doc.notifyOnComment       ?? true,
       notifyOnReport:     doc.notifyOnReport        ?? true,
-      notifyOnNewUser:    doc.notifyOnNewUser        ?? true,
+      notifyOnNewUser:       doc.notifyOnNewUser        ?? true,
+      notifyOnDownloadFailed: doc.notifyOnDownloadFailed ?? true,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -219,17 +220,18 @@ router.get('/email', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/email ─────────────────────────────────────────────────
 router.put('/email', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser } = req.body;
+    const { enabled, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser, notifyOnDownloadFailed } = req.body;
     await ConnectorSettings.findOneAndUpdate(
       { service: 'email' },
       {
-        emailEnabled:         !!enabled,
-        notifyOnNewRequest:   !!notifyOnNewRequest,
-        notifyOnComplete:     !!notifyOnComplete,
-        notifyOnCancel:       !!notifyOnCancel,
-        notifyOnComment:      !!notifyOnComment,
-        notifyOnReport:       !!notifyOnReport,
-        notifyOnNewUser:      !!notifyOnNewUser,
+        emailEnabled:          !!enabled,
+        notifyOnNewRequest:    !!notifyOnNewRequest,
+        notifyOnComplete:      !!notifyOnComplete,
+        notifyOnCancel:        !!notifyOnCancel,
+        notifyOnComment:       !!notifyOnComment,
+        notifyOnReport:        !!notifyOnReport,
+        notifyOnNewUser:       !!notifyOnNewUser,
+        notifyOnDownloadFailed: notifyOnDownloadFailed !== false,
       },
       { upsert: true, new: true }
     );

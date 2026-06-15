@@ -23,7 +23,7 @@ const emailLogSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ['verification', 'password_reset', 'password_changed', 'book_completed', 'book_canceled', 'admin_comment', 'new_request', 'broadcast', 'invitation',
-           'book_completed_admin', 'request_canceled_admin', 'user_comment_admin', 'report_admin', 'new_user_admin'],
+           'book_completed_admin', 'request_canceled_admin', 'user_comment_admin', 'report_admin', 'new_user_admin', 'download_failed_admin'],
     required: true,
   },
 

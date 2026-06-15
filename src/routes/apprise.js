@@ -23,6 +23,7 @@ router.get('/config', requireAuth, async (req, res) => {
       enabled: false, appriseUrls: '',
       notifyOnNewRequest: true, notifyOnComplete: true, notifyOnCancel: true,
       notifyOnComment: true, notifyOnReport: true, notifyOnNewUser: false,
+      notifyOnDownloadFailed: true,
     });
   } catch (error) {
     console.error('Erreur récupération config Apprise:', error);
@@ -33,7 +34,7 @@ router.get('/config', requireAuth, async (req, res) => {
 // Mettre à jour la configuration Apprise
 router.put('/config', requireAuth, async (req, res) => {
   try {
-    const { enabled, appriseUrls, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser } = req.body;
+    const { enabled, appriseUrls, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser, notifyOnDownloadFailed } = req.body;
 
     if (typeof enabled !== 'boolean') {
       return res.status(400).json({ message: 'Le champ "enabled" est requis (boolean)' });
@@ -50,7 +51,8 @@ router.put('/config', requireAuth, async (req, res) => {
       notifyOnCancel:     notifyOnCancel     !== false,
       notifyOnComment:    notifyOnComment    !== false,
       notifyOnReport:     notifyOnReport     !== false,
-      notifyOnNewUser:    notifyOnNewUser    === true,
+      notifyOnNewUser:        notifyOnNewUser        === true,
+      notifyOnDownloadFailed: notifyOnDownloadFailed !== false,
       configuredBy: req.user.id
     });
 

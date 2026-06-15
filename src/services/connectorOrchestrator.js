@@ -3,8 +3,10 @@ import BookRequest from '../models/BookRequest.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import DownloadLog from '../models/DownloadLog.js';
 import { downloadFromValentine } from './valentineService.js';
-import { searchOnAnnasArchive, downloadFromAnnas } from './annasArchiveService.js';
+import { searchOnAnnasArchive, downloadFromAnnas, getAnnasArchiveConfig } from './annasArchiveService.js';
 import appriseService from './appriseService.js';
+import { sendDownloadFailedToAdminsEmail } from './emailService.js';
+import { sendPushToUser } from './webPushService.js';
 import { decrypt } from './cryptoService.js';
 
 async function logDownload({ bookRequest, connector, success, error = null, triggeredBy = 'auto' }) {
@@ -81,6 +83,42 @@ async function notifyCompletion(bookRequest) {
 }
 
 /**
+ * Notifie les admins qu'un téléchargement automatique a échoué (web push + email + Apprise).
+ */
+async function notifyAdminsDownloadFailed(bookRequest, annaUrl) {
+  try {
+    const emailDoc = await ConnectorSettings.findOne({ service: 'email' }).lean();
+    const emailEnabled   = emailDoc?.emailEnabled !== false;
+    const notifyOnFailed = emailDoc?.notifyOnDownloadFailed !== false;
+
+    const User   = mongoose.model('User');
+    const admins = await User.find({ role: 'admin' }).select('email username emailVerified _id');
+    const tasks  = [];
+
+    const adminsWithEmail = admins.filter(a => a.emailVerified && a.email);
+
+    if (emailEnabled && notifyOnFailed) {
+      for (const admin of admins) {
+        tasks.push(sendPushToUser(admin._id, {
+          title: '⚠️ Téléchargement échoué',
+          body:  `"${bookRequest.title}" nécessite un téléchargement manuel.`,
+          url:   '/admin',
+        }));
+      }
+      for (const admin of adminsWithEmail) {
+        tasks.push(sendDownloadFailedToAdminsEmail(admin, bookRequest, annaUrl));
+      }
+    }
+
+    tasks.push(appriseService.notifyDownloadFailed(bookRequest, annaUrl).catch(() => {}));
+    await Promise.allSettled(tasks);
+    console.log(`[Orchestrateur] Admins notifiés — téléchargement manuel requis pour "${bookRequest.title}"`);
+  } catch (e) {
+    console.error('[Orchestrateur] Erreur notification admin:', e.message);
+  }
+}
+
+/**
  * Téléchargement automatique avec fallback :
  *   1. Valentine (si activé)
  *   2. Anna's Archive (si activé et Valentine n'a rien trouvé)
@@ -90,6 +128,10 @@ async function notifyCompletion(bookRequest) {
 export async function downloadWithFallback(title, author, requestId, category = 'ebook', userId = null) {
   const connectorsTried = [];
   const bookRequest = await BookRequest.findById(requestId).lean();
+  // URL de fallback pour la notification — on utilise le domaine configuré (pas .org, bloqué dans certains pays)
+  const annaConfig = await getAnnasArchiveConfig().catch(() => null);
+  const annaBaseUrl = (annaConfig?.url || 'https://annas-archive.pk').replace(/\/$/, '');
+  let notificationAnnaUrl = `${annaBaseUrl}/search?q=${encodeURIComponent(title)}`;
   try {
     // ── Récupérer les credentials Valentine personnels du user (si disponibles) ─
     let userValentineCredentials = null;
@@ -163,13 +205,15 @@ export async function downloadWithFallback(title, author, requestId, category = 
         }
       } catch (err) {
         console.log(`[Orchestrateur] Anna's Archive indisponible: ${err.message}`);
+        if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
         return;
       }
     }
 
     if (!results.length) {
       console.log(`[Orchestrateur] Aucun résultat Anna's Archive pour "${title}"`);
-      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'valentine', success: false, error: 'Aucun résultat trouvé' });
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Aucun résultat trouvé' });
+      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
       return;
     }
 
@@ -180,7 +224,6 @@ export async function downloadWithFallback(title, author, requestId, category = 
     const scored = results
       .map(r => {
         const resVolume = extractVolumeNumber(r.title);
-        // Si la demande a un numéro de tome, le résultat doit avoir le même
         const volumeOk = reqVolume === null || resVolume === reqVolume;
         return {
           ...r,
@@ -199,16 +242,18 @@ export async function downloadWithFallback(title, author, requestId, category = 
     if (!scored.length) {
       console.log(`[Orchestrateur] Anna's Archive : aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Aucun résultat avec auteur compatible' });
+      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
       return;
     }
 
     const best = scored[0];
+    // Mettre à jour l'URL de notification avec la fiche md5 précise (accessible aussi depuis le catch)
+    if (best.md5) notificationAnnaUrl = `${annaBaseUrl}/md5/${best.md5}`;
     console.log(`[Orchestrateur] Anna's Archive → "${best.title}" / "${best.author}" (score auteur: ${best.authorScore.toFixed(2)})`);
 
     await downloadFromAnnas(best.md5, requestId, best.format);
     connectorsTried.push('annas-archive');
 
-    // Vérifier si Anna's Archive a complété la demande
     const afterAnnas = await BookRequest.findById(requestId).lean();
     if (afterAnnas?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Anna's Archive a complété "${title}"`);
@@ -216,11 +261,14 @@ export async function downloadWithFallback(title, author, requestId, category = 
       await notifyCompletion(afterAnnas);
     } else {
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Téléchargement Anna\'s Archive échoué' });
+      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
     }
 
   } catch (err) {
     console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
     await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'valentine', success: false, error: err.message }).catch(() => {});
+    // notificationAnnaUrl est défini avant le try, donc accessible ici (et mis à jour si un md5 a été trouvé)
+    if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl).catch(() => {});
   } finally {
     if (connectorsTried.length) {
       try {
