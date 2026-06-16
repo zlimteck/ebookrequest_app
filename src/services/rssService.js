@@ -3,7 +3,7 @@ import { parseStringPromise } from 'xml2js';
 
 const RSS_BASE_URL = process.env.RSS_FEED_URL || 'https://predb.me/?cats=books-ebooks&rss=1';
 
-function normalizeString(str) {
+export function normalizeString(str) {
   if (!str) return '';
   return str
     .toLowerCase()
@@ -15,7 +15,7 @@ function normalizeString(str) {
     .trim();
 }
 
-// Extrait auteur et titre depuis le format predb.me
+export // Extrait auteur et titre depuis le format predb.me
 // Ex: "Jeff.Kinney.-.Diary.Of.A.Wimpy.Kid.2025.RETAIL.EPUB.eBook-CTO"
 // Ex: "Wensley.Clarkson.The.Good.Doctor.2002.RETAiL.EPUB.eBook-NODE" (sans séparateur)
 function extractBookInfo(releaseTitle) {
@@ -54,7 +54,7 @@ function extractBookInfo(releaseTitle) {
   return { title: title.trim(), author: author.trim(), fullText };
 }
 
-function calculateMatchScore(searchTitle, searchAuthor, rssTitle, rssAuthor, rssFullText) {
+export function calculateMatchScore(searchTitle, searchAuthor, rssTitle, rssAuthor, rssFullText) {
   const normSearchTitle = normalizeString(searchTitle);
   const normSearchAuthor = normalizeString(searchAuthor);
   const normRssTitle = normalizeString(rssTitle);

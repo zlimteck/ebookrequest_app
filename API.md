@@ -561,6 +561,28 @@ curl "https://app.ndd.fr/api/connectors/annasarchive/search?q=Dune" \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/connectors/predb`
+```bash
+curl https://app.ndd.fr/api/connectors/predb \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/predb`
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/predb \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "url": "https://api.predb.fr", "apiKey": "ma-cle-api"}'
+```
+
+### `POST /api/connectors/predb/test`
+```bash
+curl -X POST https://app.ndd.fr/api/connectors/predb/test \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey": "ma-cle-api", "url": "https://api.predb.fr"}'
+```
+
 ---
 
 ## OPDS

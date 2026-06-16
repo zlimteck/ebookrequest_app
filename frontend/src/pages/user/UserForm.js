@@ -602,6 +602,9 @@ function UserForm() {
               <div>
                 <div className={styles.availabilityTitle}>{availabilityMeta[availabilityConf]?.label}</div>
                 <div className={styles.availabilityMessage}>{availability.message}</div>
+                {availability.sources?.length > 0 && (
+                  <div className={styles.availabilitySource}>Trouvé via : {availability.sources.join(' · ')}</div>
+                )}
               </div>
             </div>
           )}

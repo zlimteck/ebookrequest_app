@@ -1,4 +1,5 @@
 import express from 'express';
+import fetch from 'node-fetch';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import BookRequest from '../models/BookRequest.js';
@@ -8,6 +9,7 @@ import { invalidateAdminEmailPrefsCache } from '../controllers/bookRequestContro
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
 import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas, pingAnnasArchive } from '../services/annasArchiveService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
+import { pingPredbApi } from '../services/predbApiService.js';
 
 const router = express.Router();
 
@@ -194,6 +196,80 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
     const br = await BookRequest.findById(requestId).lean().catch(() => null);
     await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/connectors/predb ─────────────────────────────────────────────────
+router.get('/predb', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    let doc = await ConnectorSettings.findOne({ service: 'predb' }).lean();
+    if (!doc) doc = { service: 'predb', enabled: false, url: 'https://api.predb.fr', apiKey: '' };
+    res.json({
+      enabled: doc.enabled ?? false,
+      url: doc.url || 'https://api.predb.fr',
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/predb ─────────────────────────────────────────────────
+router.put('/predb', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, url, apiKey, _hasApiKey } = req.body;
+    const update = {
+      enabled: !!enabled,
+      url: url?.trim() || 'https://api.predb.fr',
+    };
+    if (apiKey && apiKey !== '••••••••') {
+      update.apiKey = encrypt(apiKey);
+    }
+    if (!apiKey && !_hasApiKey) {
+      update.apiKey = '';
+    }
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'predb' },
+      update,
+      { upsert: true, new: true }
+    );
+    res.json({
+      enabled: doc.enabled,
+      url: doc.url,
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── POST /api/connectors/predb/test ──────────────────────────────────────────
+router.post('/predb/test', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { apiKey, url } = req.body;
+    let realKey = apiKey;
+    if (apiKey === '••••••••') {
+      const doc = await ConnectorSettings.findOne({ service: 'predb' }).lean();
+      realKey = decrypt(doc?.apiKey || '') ?? doc?.apiKey ?? '';
+    }
+    if (!realKey) return res.status(400).json({ error: 'Clé API non renseignée' });
+
+    const baseUrl = (url || 'https://api.predb.fr').replace(/\/$/, '');
+    const testRes = await fetch(`${baseUrl}/api/v1/me`, {
+      headers: {
+        'X-API-Key': realKey,
+        'User-Agent': 'Mozilla/5.0 (compatible; EbookRequest/1.0)',
+      },
+    });
+    if (testRes.status === 401) throw new Error('Clé API invalide');
+    if (!testRes.ok) throw new Error(`HTTP ${testRes.status}`);
+    const data = await testRes.json();
+    const displayName = data.user?.username || data.username || data.user?.email || data.email || null;
+    res.json({ success: true, message: displayName ? `Connecté en tant que ${displayName} — predb.fr` : 'Connexion réussie — predb.fr' });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible' });
   }
 });
 

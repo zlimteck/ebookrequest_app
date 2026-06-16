@@ -8,6 +8,7 @@ import AIRequestLog from '../models/AIRequestLog.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { getValentineQuota } from '../services/valentineService.js';
 import { pingAnnasArchive, getAnnasArchiveConfig } from '../services/annasArchiveService.js';
+import { pingPredbApi } from '../services/predbApiService.js';
 import { testCalibreConnection } from '../services/calibreService.js';
 import { decrypt } from '../services/cryptoService.js';
 
@@ -58,6 +59,14 @@ async function checkAnnasArchiveConnector() {
     if (!config?.enabled) return { enabled: false, connected: false, error: null };
     await pingAnnasArchive();
     return { enabled: true, connected: true, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, error: err.message };
+  }
+}
+
+async function checkPredbApiConnector() {
+  try {
+    return await pingPredbApi();
   } catch (err) {
     return { enabled: true, connected: false, error: err.message };
   }
@@ -298,13 +307,14 @@ export const getAdminStats = async (req, res) => {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, predb, mcp] = await Promise.all([
       testAIProviderConnection(),
       checkFlareSolverr(),
       checkAppriseServer(),
       checkCalibreWeb(),
       checkValentineConnector(),
       checkAnnasArchiveConnector(),
+      checkPredbApiConnector(),
       checkMcpServer(),
     ]);
 
@@ -344,6 +354,11 @@ export const getServicesHealth = async (req, res) => {
           enabled: annasArchive.enabled,
           connected: annasArchive.connected,
           error: annasArchive.error || null,
+        },
+        predb: {
+          enabled: predb.enabled,
+          connected: predb.connected,
+          error: predb.error || null,
         },
         mcp: {
           enabled: mcp.enabled,

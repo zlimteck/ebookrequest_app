@@ -57,7 +57,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Backend** — Node.js, Express, MongoDB (Mongoose), JWT
 - **Notifications** — Email (SMTP), Push (VAPID), Apprise
 - **IA** — OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
-- **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo)
+- **Connecteurs** — Valentine (téléchargement auto), Anna's Archive (recherche + téléchargement via FlareSolverr), Calibre-Web (envoi + sync étagère Kobo), PreDB.fr (API de vérification de disponibilité)
 - **Visionneuse** — PDF (navigateur natif), EPUB (epub.js via react-reader), CBZ/CBR (JSZip)
 - **Conversion** — Calibre (`ebook-convert`) intégré dans l'image Docker — EPUB ↔ MOBI, AZW3, FB2 ; CBZ → PDF (JSZip + pdfkit, sans dépendance externe)
 - **Déploiement** — Docker, GitHub Actions, Docker Hub
@@ -71,7 +71,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - **Par auteur** — résultats filtrés en français, triés du plus récent au plus ancien
   - **Auteur + Titre combinés** — saisir `Prénom Nom Titre du livre` sans séparateur (ex : `Virginie Grimaldi D'autres printemps`)
   - **Scan de code-barres** — scanner l'ISBN directement depuis la caméra de l'appareil
-- Vérification de disponibilité à la soumission (flux PreDB)
+- Vérification de disponibilité à la soumission (flux RSS PreDB.me + API PreDB.fr)
 - Quota de demandes configurable par utilisateur (nombre + fenêtre glissante en jours)
 - Soumission admin au nom d'un autre utilisateur
 
@@ -254,7 +254,7 @@ npx web-push generate-vapid-keys
 | `APPRISE_CONFIG_PATH` | Chemin local vers le dossier de configuration Apprise (défaut : `./apprise-config`). Nécessaire si `APPRISE_STATEFUL_MODE=simple` est activé sur le conteneur Apprise. |
 | `TZ` | Fuseau horaire des conteneurs (ex : `Europe/Paris`). Utile pour que les logs s'affichent à la bonne heure. |
 | `FLARESOLVERR_URL` | URL du service FlareSolverr pour contourner les protections Cloudflare (défaut : `http://flaresolverr:8191`) |
-| `RSS_FEED_URL` | URL du flux RSS (PreDB) utilisé pour vérifier si un livre est récemment sorti et estimer sa disponibilité au moment de la demande (défaut : `https://predb.me/?cats=books-ebooks&rss=1`) |
+| `RSS_FEED_URL` | URL du flux RSS PreDB.me utilisé pour vérifier la disponibilité d'un livre à la soumission (défaut : `https://predb.me/?cats=books-ebooks&rss=1`). Optionnel si l'API PreDB.fr est configurée dans le panel admin. |
 | `MCP_PORT` | Port du serveur MCP (défaut : `3035`) |
 | `MCP_URL` | URL publique du serveur MCP (ex : `https://mcp.ndd.fr`). Affichée aux utilisateurs dans les paramètres. Optionnel — si absent, la section MCP est masquée. |
 | `MCP_INTERNAL_URL` | URL interne du serveur MCP pour le health check depuis le backend (défaut : `http://ebookrequest-mcp:3035`). Utile quand le backend et le MCP sont sur le même réseau Docker — évite de passer par l'URL publique. |
