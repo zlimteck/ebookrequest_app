@@ -304,18 +304,25 @@ export const getAdminStats = async (req, res) => {
 };
 
 // Santé des services
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = getProviderInfo();
     const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, predb, mcp] = await Promise.all([
-      testAIProviderConnection(),
-      checkFlareSolverr(),
-      checkAppriseServer(),
-      checkCalibreWeb(),
-      checkValentineConnector(),
-      checkAnnasArchiveConnector(),
-      checkPredbApiConnector(),
-      checkMcpServer(),
+      withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
+      withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
+      withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
+      withTimeout(checkCalibreWeb(), 6000, { enabled: false, connected: false, error: 'timeout' }),
+      withTimeout(checkValentineConnector(), 8000, { enabled: true, connected: false, quota: null, error: 'timeout' }),
+      withTimeout(checkAnnasArchiveConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkPredbApiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkMcpServer(), 6000, { enabled: false, connected: false, error: 'timeout' }),
     ]);
 
     res.json({
