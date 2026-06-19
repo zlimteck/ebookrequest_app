@@ -79,7 +79,7 @@ const ProfilePage = () => {
           )}
           <div className={styles.userInfo}>
             <h1 className={styles.username}>{user.username}</h1>
-            <span className={styles.role}>{user.role === 'admin' ? '⚡ Administrateur' : '👤 Utilisateur'}</span>
+            <span className={styles.role}>{user.role === 'admin' ? 'Administrateur' : 'Utilisateur'}</span>
             <span className={styles.since}>Membre depuis {memberSince}</span>
           </div>
         </div>
