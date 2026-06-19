@@ -535,3 +535,61 @@ input:focus + .slider {
 .valentineQuotaBar span {
   opacity: 0.7;
 }
+
+/* ── Apparence / thème ── */
+.fieldDesc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: -0.5rem 0 1rem 0;
+}
+
+.themeOptions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.themeOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--color-border);
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.themeOption:hover {
+  border-color: var(--color-accent);
+  background: rgba(99, 102, 241, 0.05);
+  color: var(--color-text);
+}
+
+.themeOptionActive {
+  border-color: var(--color-accent);
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--color-accent);
+}
+
+.themeOptionIcon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.themeOptionLabel {
+  font-weight: 600;
+}
+
+.themeOptionDesc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+}

@@ -1031,7 +1031,7 @@ const UserDashboard = () => {
                   onChange={e => setEditForm(f => ({ ...f, format: e.target.value }))}
                 >
                   <option value="">— Non précisé —</option>
-                  {['epub', 'pdf', 'mobi'].map(fmt => (
+                  {['epub', 'mobi', 'azw3', 'fb2', 'cbz', 'cbr', 'pdf'].map(fmt => (
                     <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
                   ))}
                 </select>

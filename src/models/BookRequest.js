@@ -97,7 +97,7 @@ const bookRequestSchema = new mongoose.Schema({
     seenByUser:  { type: Boolean, default: false },
     seenByAdmin: { type: Boolean, default: false },
   }],
-  format: { type: String, enum: ['epub', 'pdf', 'mobi', ''], default: '' },
+  format: { type: String, enum: ['epub', 'pdf', 'mobi', 'azw3', 'fb2', 'cbz', 'cbr', ''], default: '' },
   category: { type: String, enum: ['ebook', 'comic', 'manga', ''], default: 'ebook' },
   statusHistory: [{
     status: { type: String },

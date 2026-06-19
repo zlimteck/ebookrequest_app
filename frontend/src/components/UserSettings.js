@@ -2,13 +2,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import axiosAdmin from '../axiosAdmin';
 import styles from './UserSettings.module.css';
+import { useTheme } from '../context/ThemeContext';
 import { compressImage } from '../utils/imageCompressor';
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed } from '../serviceWorkerRegistration';
 import TwoFactorSetup from './TwoFactorSetup';
 
 import { getAvatarColor } from '../utils/avatarColor';
 
+const THEME_OPTIONS = [
+  {
+    key: 'dark', label: 'Sombre',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  },
+  {
+    key: 'light', label: 'Clair',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  },
+  {
+    key: 'auto', label: 'Auto', desc: 'Système',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+  },
+];
+
 const UserSettings = () => {
+  const { theme, setTheme } = useTheme();
   const [user, setUser] = useState({
     email: '',
     username: '',
@@ -576,6 +593,32 @@ const UserSettings = () => {
             <button type="submit" className={styles.btnPrimary} disabled={isSaving}>
               {isSaving ? 'Enregistrement...' : 'Enregistrer'}
             </button>
+          </div>
+        </div>
+
+        {/* ── Apparence ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+            Apparence
+          </h2>
+          <p className={styles.fieldDesc}>Choisissez le thème de l'interface.</p>
+          <div className={styles.themeOptions}>
+            {THEME_OPTIONS.map(opt => (
+              <button
+                key={opt.key}
+                type="button"
+                className={`${styles.themeOption} ${theme === opt.key ? styles.themeOptionActive : ''}`}
+                onClick={() => setTheme(opt.key)}
+              >
+                <span className={styles.themeOptionIcon}>{opt.icon}</span>
+                <span className={styles.themeOptionLabel}>
+                  {opt.label}{opt.desc && <span className={styles.themeOptionDesc}> — {opt.desc}</span>}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
