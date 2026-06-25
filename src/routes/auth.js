@@ -252,12 +252,13 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     // updateOne pour éviter le hook pre-save (pas de hachage accidentel du mot de passe)
     await User.updateOne(
       { _id: user._id },
       {
         $set: {
-          resetPasswordToken: token,
+          resetPasswordToken: tokenHash,
           resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000), // 1h
         },
       }
@@ -282,8 +283,9 @@ router.post('/reset-password/:token', async (req, res) => {
       return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' });
     }
 
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: tokenHash,
       resetPasswordExpires: { $gt: new Date() },
     });
 

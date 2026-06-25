@@ -49,6 +49,11 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET non défini. Le serveur refuse de démarrer.');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 
@@ -56,7 +61,14 @@ const PORT = process.env.PORT || 5001;
 const corsOptions = {
   origin: function (origin, callback) {
     // En développement, autoriser toutes les origines
-    if (process.env.NODE_ENV === 'development' || !origin) {
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    // Rejeter l'origine "null" string (iframes sandbox) mais autoriser l'absence d'origin (requêtes internes)
+    if (origin === 'null') {
+      return callback(new Error('Null origin not allowed'));
+    }
+    if (!origin) {
       return callback(null, true);
     }
 
@@ -84,9 +96,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Augmentation des limites pour gérer les fichiers jusqu'à 500MB
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Faire confiance au reverse proxy (nginx) pour les vraies IPs clients
 app.set('trust proxy', 1);

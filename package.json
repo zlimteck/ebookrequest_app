@@ -27,7 +27,7 @@
     "multer": "^2.1.1",
     "node-fetch": "^3.3.2",
     "node-pushover": "^1.0.0",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.1",
     "openai": "^4.104.0",
     "otplib": "^13.4.0",
     "pdfkit": "^0.18.0",

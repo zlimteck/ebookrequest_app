@@ -14,14 +14,18 @@ export async function requireAuth(req, res, next) {
   // Essai JWT d'abord
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const user = await User.findById(decoded.id).select('isActive role').lean();
+    if (!user || user.isActive === false) {
+      return res.status(401).json({ error: 'Compte désactivé ou introuvable.' });
+    }
+    req.user = { ...decoded, role: user.role };
     return next();
   } catch {}
 
   // Fallback : opdsToken (utilisé par le serveur MCP)
   try {
-    const user = await User.findOne({ opdsToken: token }).select('_id username role').lean();
-    if (user) {
+    const user = await User.findOne({ opdsToken: token }).select('_id username role isActive').lean();
+    if (user && user.isActive !== false) {
       req.user = { id: user._id.toString(), username: user.username, role: user.role };
       return next();
     }

@@ -4,13 +4,13 @@
  * Aucun serveur externe requis — appel direct en subprocess.
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,7 +41,7 @@ export async function convertViaCalibреWeb(filePath, fromFormat, toFormat, boo
 
   // Vérifier que ebook-convert est disponible
   try {
-    await execAsync('which ebook-convert');
+    await execFileAsync('which', ['ebook-convert']);
   } catch {
     throw new Error('ebook-convert n\'est pas disponible sur ce serveur. Contactez l\'administrateur.');
   }
@@ -60,8 +60,8 @@ export async function convertViaCalibреWeb(filePath, fromFormat, toFormat, boo
   };
 
   try {
-    const { stderr } = await execAsync(
-      `ebook-convert "${filePath}" "${outPath}"`,
+    const { stderr } = await execFileAsync(
+      'ebook-convert', [filePath, outPath],
       { timeout: 120000, env }
     );
     if (stderr) console.warn(`[ebook-convert] ${stderr.slice(0, 300)}`);

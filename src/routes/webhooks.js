@@ -8,7 +8,7 @@ const router = express.Router();
 // https://resend.com/docs/dashboard/webhooks/introduction
 function verifyResendSignature(req) {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret) return true; // Si pas de secret configuré, on accepte tout (dev)
+  if (!secret) return false; // Fail closed — rejeter si secret non configuré
 
   const svixId        = req.headers['svix-id'];
   const svixTimestamp = req.headers['svix-timestamp'];
@@ -29,7 +29,11 @@ function verifyResendSignature(req) {
 
   // svix-signature peut contenir plusieurs signatures (v1,XXXX v1,YYYY)
   const signatures = svixSignature.split(' ').map(s => s.replace(/^v1,/, ''));
-  return signatures.some(sig => sig === hmac);
+  return signatures.some(sig => {
+    try {
+      return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(hmac));
+    } catch { return false; }
+  });
 }
 
 // Mapper les types d'événements Resend vers nos statuts

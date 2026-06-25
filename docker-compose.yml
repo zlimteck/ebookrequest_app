@@ -65,7 +65,7 @@ services:
     volumes:
       - ${APPRISE_CONFIG_PATH:-./apprise-config}:/config
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -74,4 +74,4 @@ services:
     environment:
       - LOG_LEVEL=info
     ports:
-      - "8191:8191"
+      - "127.0.0.1:8191:8191"
