@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import cookieParser from 'cookie-parser';
 import bookRequestRoutes from './routes/bookRequest.js';
 import authRoutes from './routes/auth.js';
 import twoFactorRoutes from './routes/twoFactor.js';
@@ -96,6 +97,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -109,7 +111,7 @@ const authLimiter = rateLimit({
   message: { error: 'Trop de tentatives, réessayez dans 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/setup-status' || req.path === '/setup',
+  skip: (req) => req.path === '/setup-status' || req.path === '/setup' || req.path === '/check-token' || req.path === '/logout',
 });
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute

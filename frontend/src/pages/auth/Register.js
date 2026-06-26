@@ -35,7 +35,6 @@ function RegisterWithToken({ token }) {
         username: form.username.trim(),
         password: form.password,
       });
-      localStorage.setItem('token',    res.data.token);
       localStorage.setItem('role',     res.data.role);
       localStorage.setItem('username', res.data.user.username);
       setStep('done');

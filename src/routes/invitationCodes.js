@@ -8,6 +8,8 @@ import { sendVerificationEmail, sendNewUserToAdminsEmail } from '../services/ema
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
+import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
+
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
@@ -185,10 +187,10 @@ router.post('/register', async (req, res) => {
 
     const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 
+    res.cookie('token', jwtToken, COOKIE_OPTIONS);
     res.status(201).json({
       success: true,
       message: 'Compte créé ! Un email de vérification a été envoyé.',
-      token: jwtToken,
       role: user.role,
       user: { id: user._id, username: user.username, email: user.email, role: user.role },
     });

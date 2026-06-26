@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axiosAdmin from '../../axiosAdmin';
+import { checkAuth } from '../../services/authService';
 import styles from './VerifyEmail.module.css';
 
 // Fonction utilitaire pour extraire le token de l'URL
@@ -26,17 +27,16 @@ const VerifyEmail = () => {
         return;
       }
 
-      // Vérifier si l'utilisateur est connecté
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) {
+      // Vérifier si l'utilisateur est connecté (via cookie)
+      const { isAuthenticated: authed } = await checkAuth();
+      if (!authed) {
         localStorage.setItem('pendingEmailVerification', token);
         window.location.href = '/login';
         return;
       }
 
       try {
-const response = await axiosAdmin.get(`/api/users/verify-email/${token}`, {
-          headers: { 'Authorization': `Bearer ${currentToken}` },
+        const response = await axiosAdmin.get(`/api/users/verify-email/${token}`, {
           validateStatus: status => status < 500
         });
         if (response.data.success) {

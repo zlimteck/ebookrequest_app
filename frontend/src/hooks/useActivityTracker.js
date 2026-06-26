@@ -12,9 +12,7 @@ const useActivityTracker = () => {
     // Fonction pour mettre à jour l'activité
     const updateActivity = async () => {
       try {
-await axiosAdmin.post('/api/activity', {}, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
+await axiosAdmin.post('/api/activity', {});
       } catch (error) {
         console.error('Erreur lors de la mise à jour de l\'activité:', error);
       }

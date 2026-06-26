@@ -40,6 +40,7 @@ function App() {
   React.useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatar, setAvatar] = useState(null);
@@ -57,7 +58,6 @@ function App() {
         try {
           const { data } = await axiosAdmin.get('/api/auth/setup-status');
           if (data.setupRequired) {
-            localStorage.removeItem('token');
             localStorage.removeItem('role');
             localStorage.removeItem('username');
             nav('/setup', { replace: true });
@@ -83,10 +83,11 @@ function App() {
       }
 
       try {
-        const { isAuthenticated, user } = await checkAuth();
-        if (isAuthenticated && user) {
+        const { isAuthenticated: authed, user } = await checkAuth();
+        if (authed && user) {
           localStorage.setItem('role', user.role);
           localStorage.setItem('username', user.username);
+          setIsAuthenticated(true);
           setIsAdmin(user.role === 'admin');
           if (user.avatar) setAvatar(user.avatar);
 
@@ -131,7 +132,6 @@ function App() {
   const isResetPage = location.pathname.startsWith('/reset-password/');
   const isRegisterPage = location.pathname === '/register';
   const isSetupPage = location.pathname === '/setup';
-  const token = localStorage.getItem('token');
 
   if (isSetupPage) {
     return <SetupPage />;
@@ -139,17 +139,6 @@ function App() {
 
   if (isRegisterPage) {
     return <Register />;
-  }
-
-  if (!isVerifyEmailPage && !isForgotPage && !isResetPage) {
-    if (!token && !isAuthPage) {
-      return <Navigate to="/login" replace state={{ from: location }} />;
-    }
-    const hasPendingVerification = localStorage.getItem('pendingEmailVerification');
-    if (token && isAuthPage && !hasPendingVerification) {
-      const role = localStorage.getItem('role');
-      return <Navigate to={role === 'admin' ? '/admin' : '/dashboard'} replace />;
-    }
   }
 
   if (isLoading) {
@@ -172,6 +161,18 @@ function App() {
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
+  }
+
+  // Guard d'auth (après le spinner — la session est vérifiée via cookie)
+  if (!isVerifyEmailPage && !isForgotPage && !isResetPage) {
+    if (!isAuthenticated && !isAuthPage) {
+      return <Navigate to="/login" replace state={{ from: location }} />;
+    }
+    const hasPendingVerification = localStorage.getItem('pendingEmailVerification');
+    if (isAuthenticated && isAuthPage && !hasPendingVerification) {
+      const role = localStorage.getItem('role');
+      return <Navigate to={role === 'admin' ? '/admin' : '/dashboard'} replace />;
+    }
   }
 
   if (location.pathname.startsWith('/verify-email/')) {
@@ -253,7 +254,7 @@ function App() {
         onLogout={handleLogout}
       />
 
-      {token && <InstallPWABanner />}
+      {isAuthenticated && <InstallPWABanner />}
 
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -268,7 +269,7 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            token ?
+            isAuthenticated ?
               <UserDashboard /> :
               <Navigate to="/login" state={{ from: '/dashboard' }} replace />
           }
@@ -276,32 +277,32 @@ function App() {
         <Route
           path="/settings"
           element={
-            token ?
+            isAuthenticated ?
               <UserSettings /> :
               <Navigate to="/login" state={{ from: '/settings' }} replace />
           }
         />
         <Route
           path="/reading"
-          element={token ? <ReadingPage /> : <Navigate to="/login" state={{ from: '/reading' }} replace />}
+          element={isAuthenticated ? <ReadingPage /> : <Navigate to="/login" state={{ from: '/reading' }} replace />}
         />
         <Route
           path="/discover"
           element={
-            token ?
+            isAuthenticated ?
               <DiscoverPage /> :
               <Navigate to="/login" state={{ from: '/discover' }} replace />
           }
         />
         <Route
           path="/profile"
-          element={token ? <ProfilePage /> : <Navigate to="/login" state={{ from: '/profile' }} replace />}
+          element={isAuthenticated ? <ProfilePage /> : <Navigate to="/login" state={{ from: '/profile' }} replace />}
         />
         <Route
           path="/verify-email/:token"
           element={<VerifyEmail />}
         />
-        <Route path="/" element={token ? <UserForm /> : <Navigate to="/login" replace />} />
+        <Route path="/" element={isAuthenticated ? <UserForm /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>

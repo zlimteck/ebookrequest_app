@@ -64,7 +64,6 @@ function SetupPage() {
         email: form.email,
         password: form.password,
       });
-      localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
       localStorage.setItem('username', data.user.username);
       // Rechargement complet pour que verifyAuth initialise isAdmin correctement

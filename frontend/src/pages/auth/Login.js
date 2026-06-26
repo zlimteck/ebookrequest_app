@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axiosAdmin from '../../axiosAdmin';
 import styles from '../user/UserForm.module.css';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { REACT_APP_API_URL } from '../../config';
-import { checkAuth } from '../../services/authService';
 
 function Login() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ username: '', password: '' });
   const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const verifyToken = searchParams.get('verify');
 
   // ── État 2FA ──
@@ -23,79 +18,22 @@ function Login() {
   const [recoveryCode, setRecoveryCode] = useState('');
   const [is2FALoading, setIs2FALoading] = useState(false);
 
-  // Si un token de vérification est présent dans l'URL, on le sauvegarde
+  // Sauvegarder le token de vérification email si présent dans l'URL
   useEffect(() => {
     if (verifyToken && verifyToken !== 'undefined') {
       localStorage.setItem('pendingEmailVerification', verifyToken);
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, cleanUrl);
+      window.history.replaceState({}, document.title, window.location.pathname);
       toast.info('Veuillez vous connecter pour finaliser la vérification de votre email');
     }
   }, [verifyToken]);
-
-  // Vérifier si l'utilisateur est déjà connecté
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const { isAuthenticated, user } = await checkAuth();
-        if (isAuthenticated && user) {
-          const urlParams = new URLSearchParams(window.location.search);
-          const verifyToken = urlParams.get('verify');
-          if (verifyToken) {
-            localStorage.setItem('pendingEmailVerification', verifyToken);
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-          const pendingVerification = localStorage.getItem('pendingEmailVerification');
-          if (pendingVerification) {
-            const redirectUrl = `/verify-email/${pendingVerification}`;
-            localStorage.removeItem('pendingEmailVerification');
-            setTimeout(() => {
-              window.location.href = redirectUrl;
-            }, 100);
-            return;
-          }
-          const redirectPath = user.role === 'admin' ? '/admin' : '/dashboard';
-          navigate(redirectPath);
-        } else {
-          const urlParams = new URLSearchParams(window.location.search);
-          const verifyToken = urlParams.get('verify');
-          if (verifyToken) {
-            localStorage.setItem('pendingEmailVerification', verifyToken);
-            window.history.replaceState({}, document.title, window.location.pathname);
-            toast.info('Veuillez vous connecter pour finaliser la vérification de votre email');
-          }
-        }
-      } catch (error) {
-        // Erreur silencieuse
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      verifyAuth().catch(err => {
-        console.error('Erreur non gérée dans verifyAuth:', err);
-      });
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [navigate]);
-
-  if (isLoading) {
-    return null;
-  }
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // ── Redirige après un login réussi (token reçu) ──
+  // ── Redirige après un login réussi ──
   const handleLoginSuccess = (data) => {
-    const userToken = data.token;
     const userData = data.user || {};
-    localStorage.setItem('token', userToken);
     if (userData.role) localStorage.setItem('role', userData.role);
     if (userData.username) localStorage.setItem('username', userData.username);
     const pendingVerification = localStorage.getItem('pendingEmailVerification');
@@ -126,7 +64,7 @@ function Login() {
         return;
       }
 
-      if (res.data.token) {
+      if (res.data.user) {
         handleLoginSuccess(res.data);
       } else {
         let errorMessage;
@@ -162,7 +100,7 @@ function Login() {
         code: totpCode,
       }, { validateStatus: status => status < 500 });
 
-      if (res.data.token) {
+      if (res.data.user) {
         handleLoginSuccess(res.data);
       } else {
         const errorMessage = res.data?.error || 'Code invalide.';
@@ -190,7 +128,7 @@ function Login() {
         recoveryCode,
       }, { validateStatus: status => status < 500 });
 
-      if (res.data.token) {
+      if (res.data.user) {
         handleLoginSuccess(res.data);
       } else {
         const errorMessage = res.data?.error || 'Code de récupération invalide.';

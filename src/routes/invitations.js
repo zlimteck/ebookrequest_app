@@ -1,6 +1,5 @@
 import express from 'express';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import Invitation from '../models/Invitation.js';
@@ -8,6 +7,8 @@ import User from '../models/User.js';
 import { sendInvitationEmail, sendNewUserToAdminsEmail } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
+
+import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
@@ -144,10 +145,9 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'Ce nom d\'utilisateur est déjà utilisé.' });
     }
 
-    const hash = await bcrypt.hash(password, 12);
     const user = await User.create({
       username: username.toLowerCase().trim(),
-      password: hash,
+      password,
       email: invitation.email,
       emailVerified: true, // Email validé via l'invitation
       role: 'user',
@@ -169,9 +169,9 @@ router.post('/register', async (req, res) => {
 
     const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 
+    res.cookie('token', jwtToken, COOKIE_OPTIONS);
     res.status(201).json({
       success: true,
-      token: jwtToken,
       role: user.role,
       user: { id: user._id, username: user.username, email: user.email, role: user.role },
     });

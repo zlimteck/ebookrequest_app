@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { checkAuth as checkAuthService, logout as logoutService } from '../services/authService';
+import { logout as logoutService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -8,27 +8,16 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const { isAuthenticated, user: authUser } = await checkAuthService();
-        if (isAuthenticated && authUser) {
-          setUser(authUser);
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('Erreur de vérification d\'authentification:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    verifyAuth();
+    // Initialiser depuis localStorage (App.js gère la vérification API)
+    const username = localStorage.getItem('username');
+    const role = localStorage.getItem('role');
+    if (username && role) {
+      setUser({ username, role });
+    }
+    setLoading(false);
   }, []);
 
-  const login = (userData, token) => {
-    localStorage.setItem('token', token);
+  const login = (userData) => {
     setUser(userData);
   };
 

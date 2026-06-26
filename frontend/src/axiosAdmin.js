@@ -10,18 +10,6 @@ const axiosAdmin = axios.create({
   withCredentials: true // Important pour les cookies de session
 });
 
-// Intercepteur pour ajouter le token d'authentification
-axiosAdmin.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
 // Gestion des erreurs globales
 axiosAdmin.interceptors.response.use(
   (response) => response,
@@ -31,11 +19,14 @@ axiosAdmin.interceptors.response.use(
       error.message = 'Le serveur met trop de temps à répondre. Veuillez réessayer.';
     } else if (error.response) {
       if (error.response.status === 401) {
-        console.error('Erreur d\'authentification:', error.response.data);
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        localStorage.removeItem('username');
-        window.location.href = '/login';
+        const isCheckToken = error.config?.url?.includes('/api/auth/check-token');
+        const isOnLoginPage = window.location.pathname === '/login';
+        if (!isCheckToken && !isOnLoginPage) {
+          console.error('Erreur d\'authentification:', error.response.data);
+          localStorage.removeItem('role');
+          localStorage.removeItem('username');
+          window.location.href = '/login';
+        }
       } else if (error.response.status >= 500) {
         console.error('Erreur serveur:', error.response.data);
         error.message = 'Erreur serveur. Veuillez réessayer plus tard.';

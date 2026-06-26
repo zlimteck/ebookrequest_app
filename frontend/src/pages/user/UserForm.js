@@ -127,13 +127,7 @@ function UserForm() {
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        if (isMounted) {
-          navigate('/login', { state: { from: '/' } });
-        }
-      } else {
-        if (isMounted) {
+      if (isMounted) {
           setIsAuthenticated(true);
           const promises = [fetchExistingRequests(), fetchQuota()];
           if (localStorage.getItem('role') === 'admin') promises.push(fetchUsers());
@@ -164,7 +158,6 @@ function UserForm() {
               checkAvailability(prefill.title, prefill.author);
             }
           }
-        }
       }
     };
 

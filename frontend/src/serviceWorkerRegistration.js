@@ -58,13 +58,10 @@ export async function subscribeToPush(apiUrl) {
   });
 
   // Envoie la souscription au backend
-  const token = localStorage.getItem('token');
   await fetch(`${apiUrl}/api/push/subscribe`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ subscription })
   });
 
@@ -82,13 +79,10 @@ export async function unsubscribeFromPush(apiUrl) {
   const endpoint = subscription.endpoint;
   await subscription.unsubscribe();
 
-  const token = localStorage.getItem('token');
   await fetch(`${apiUrl}/api/push/unsubscribe`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint })
   });
 }

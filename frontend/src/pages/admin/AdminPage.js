@@ -424,7 +424,7 @@ function AdminPage() {
       try {
         const res = await fetch('/api/admin/logs/system/sse-token', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          credentials: 'include',
         });
         if (!res.ok || cancelled) return;
         const { sseToken } = await res.json();
@@ -936,7 +936,6 @@ function AdminPage() {
                                     e.stopPropagation();
                                     try {
                                       await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next }, {
-                                        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
                                       });
                                       setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
                                     } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
@@ -1305,9 +1304,7 @@ function AdminPage() {
                           onClick={async e => {
                             e.stopPropagation();
                             try {
-                              await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next }, {
-                                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-                              });
+                              await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next });
                               setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
                             } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
                           }}

@@ -6,6 +6,8 @@ import User from '../models/User.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 
+import { COOKIE_OPTIONS, clearCookieOptions } from '../utils/cookieOptions.js';
+
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
@@ -71,9 +73,9 @@ router.post('/setup', async (req, res) => {
       { expiresIn: '30d' }
     );
 
+    res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
       success: true,
-      token,
       role: admin.role,
       user: {
         id: admin._id,
@@ -169,12 +171,13 @@ router.post('/register', requireAuth, requireAdmin, async (req, res) => {
 // Connexion
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    
+    const { username: rawUsername, password } = req.body;
+    const username = rawUsername?.toLowerCase().trim();
+
     if (!username || !password) {
       return res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis.' });
     }
-    
+
     // Récupérer l'utilisateur avec le mot de passe
     const user = await User.findOne({ username }).select('+password');
     
@@ -213,11 +216,8 @@ router.post('/login', async (req, res) => {
       role: user.role
     }, JWT_SECRET, { expiresIn: '30d' });
 
-    const userResponse = user.toObject();
-    delete userResponse.password;
-
+    res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
-      token,
       role: user.role,
       user: {
         id: user._id,
@@ -323,6 +323,12 @@ router.post('/reset-password/:token', async (req, res) => {
     console.error('Erreur reset-password:', err);
     res.status(500).json({ error: 'Erreur serveur.' });
   }
+});
+
+// Déconnexion : efface le cookie httpOnly
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', clearCookieOptions());
+  res.json({ success: true });
 });
 
 export default router;

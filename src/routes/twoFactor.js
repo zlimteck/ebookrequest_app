@@ -7,6 +7,8 @@ import QRCode from 'qrcode';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 
+import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
+
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
@@ -173,8 +175,8 @@ router.post('/verify-login', async (req, res) => {
       $set: { lastLogin: new Date(), lastActivity: new Date() }
     });
 
+    res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
-      token,
       role: user.role,
       user: { id: user._id, username: user.username, email: user.email, role: user.role }
     });
@@ -234,8 +236,8 @@ router.post('/recover', async (req, res) => {
       $set: { lastLogin: new Date(), lastActivity: new Date() }
     });
 
+    res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
-      token,
       role: user.role,
       user: { id: user._id, username: user.username, email: user.email, role: user.role }
     });

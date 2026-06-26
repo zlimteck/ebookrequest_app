@@ -5,11 +5,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
 // Vérification du token JWT ou opdsToken (pour MCP)
 export async function requireAuth(req, res, next) {
+  // Cookie (navigateur) → Authorization header (MCP / OPDS API clients)
+  const cookieToken = req.cookies?.token;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const token = cookieToken || (authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null);
+
+  if (!token) {
     return res.status(401).json({ error: 'Token manquant.' });
   }
-  const token = authHeader.split(' ')[1];
 
   // Essai JWT d'abord
   try {

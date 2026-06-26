@@ -75,9 +75,6 @@ const NotificationBell = () => {
   const isAdmin     = localStorage.getItem('role') === 'admin';
 
   const fetchNotifications = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
     let allNotifs   = [];
     let adminNotifs = [];
 
