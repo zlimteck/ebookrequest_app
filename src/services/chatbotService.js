@@ -92,15 +92,16 @@ const USER_TOOLS = [
     type: 'function',
     function: {
       name: 'submit_request',
-      description: 'Soumet une nouvelle demande de livre',
+      description: 'Soumet une nouvelle demande de livre, manga ou comic',
       parameters: {
         type: 'object',
         properties: {
-          title:  { type: 'string', description: 'Titre du livre' },
-          author: { type: 'string', description: 'Auteur du livre' },
-          format: { type: 'string', enum: ['epub', 'pdf', 'mobi'], description: 'Format souhaité (défaut: epub)' },
+          title:    { type: 'string', description: 'Titre du livre' },
+          author:   { type: 'string', description: 'Auteur du livre (optionnel — sera cherché via Google Books si absent)' },
+          format:   { type: 'string', enum: ['epub', 'pdf', 'mobi', 'azw3', 'fb2', 'cbz', 'cbr'], description: 'Format souhaité (défaut: epub pour ebook, cbz pour manga/comic)' },
+          category: { type: 'string', enum: ['ebook', 'comic', 'manga'], description: 'Type de contenu (défaut: ebook)' },
         },
-        required: ['title', 'author'],
+        required: ['title'],
         additionalProperties: false,
       },
     },
@@ -199,7 +200,9 @@ async function toolSearchBooks(query) {
   }
 }
 
-async function toolSubmitRequest(userId, { title, author, format = 'epub' }) {
+async function toolSubmitRequest(userId, { title, author = '', format, category = 'ebook' }) {
+  const isMangaComic = category === 'manga' || category === 'comic';
+  if (!format) format = isMangaComic ? 'cbz' : 'epub';
   const user = await User.findById(userId).select('role requestLimit requestLimitDays username').lean();
   if (!user) return { error: 'Utilisateur introuvable.' };
 
@@ -223,16 +226,30 @@ async function toolSubmitRequest(userId, { title, author, format = 'epub' }) {
   }).lean();
   if (existing) return { error: `Une demande pour "${title}" existe déjà (statut : ${existing.status}).` };
 
-  let link = `https://www.google.com/search?q=${encodeURIComponent(`${title} ${author} ${format}`)}`;
+  let link        = `https://www.google.com/search?q=${encodeURIComponent(`${title} ${author} ${format}`)}`;
+  let thumbnail   = '';
+  let description = '';
+  let pageCount   = 0;
+
   try {
     if (GOOGLE_BOOKS_KEY) {
+      const query = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
       const resp = await axios.get('https://www.googleapis.com/books/v1/volumes', {
-        params: { q: `intitle:${title} inauthor:${author}`, key: GOOGLE_BOOKS_KEY, maxResults: 1 },
+        params: { q: query, key: GOOGLE_BOOKS_KEY, maxResults: 1 },
         timeout: 5000,
       });
-      if (resp.data.items?.[0]) link = resp.data.items[0].volumeInfo.infoLink || link;
+      const info = resp.data.items?.[0]?.volumeInfo;
+      if (info) {
+        if (!author && info.authors?.length) author = info.authors.join(', ');
+        link        = info.previewLink || info.infoLink || link;
+        thumbnail   = info.imageLinks?.thumbnail || '';
+        description = info.description || '';
+        pageCount   = info.pageCount || 0;
+      }
     }
   } catch {}
+
+  if (!author) author = 'Inconnu';
 
   const request = new BookRequest({
     user: userId,
@@ -240,7 +257,11 @@ async function toolSubmitRequest(userId, { title, author, format = 'epub' }) {
     title: title.trim(),
     author: author.trim(),
     format,
+    category,
     link,
+    thumbnail,
+    description,
+    pageCount,
     status: 'pending',
   });
   await request.save();
