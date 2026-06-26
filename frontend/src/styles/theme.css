@@ -1,3 +1,9 @@
+/* ─── iOS Safari : empêcher le zoom automatique sur les champs de saisie ─── */
+/* iOS zoome quand font-size < 16px — ce !important est intentionnel       */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
 /* ─── Thème clair — surcharge toutes les variables :root des modules ─── */
 /* html[data-theme="light"] a une spécificité (0,1,1) > :root (0,1,0)    */
 

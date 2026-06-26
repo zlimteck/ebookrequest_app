@@ -103,7 +103,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive valentine.username'
+      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive chatbotEnabled chatbotDailyLimit valentine.username'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {
@@ -180,6 +180,15 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       }
       updates.requestLimitDays = parsed;
     }
+
+    const { chatbotDailyLimit } = req.body;
+    if (chatbotDailyLimit !== undefined) {
+      const parsed = parseInt(chatbotDailyLimit, 10);
+      if (isNaN(parsed) || parsed < 1 || parsed > 100) {
+        return res.status(400).json({ error: 'La limite journalière du chatbot doit être entre 1 et 100.' });
+      }
+      updates.chatbotDailyLimit = parsed;
+    }
     
     if (password) {
       if (password.length < 8) {
@@ -249,6 +258,20 @@ router.patch('/:id/toggle-active', requireAuth, requireAdmin, async (req, res) =
   } catch (error) {
     console.error('Erreur toggle-active:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour du statut' });
+  }
+});
+
+// Activer / désactiver l'accès au chatbot (admin seulement)
+router.patch('/:id/toggle-chatbot', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('chatbotEnabled');
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    const newValue = !user.chatbotEnabled;
+    await User.findByIdAndUpdate(req.params.id, { $set: { chatbotEnabled: newValue } });
+    res.json({ chatbotEnabled: newValue });
+  } catch (error) {
+    console.error('Erreur toggle-chatbot:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
   }
 });
 

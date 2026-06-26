@@ -112,7 +112,16 @@ const userSchema = new mongoose.Schema({
   valentine: {
     username: { type: String, default: '' },
     password: { type: String, default: '' }, // chiffré via cryptoService
-  }
+  },
+  chatbotEnabled: {
+    type: Boolean,
+    default: false,
+  },
+  chatbotDailyLimit: {
+    type: Number,
+    default: 10,
+    min: 1,
+  },
 }, {
   timestamps: true
 });

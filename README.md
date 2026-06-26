@@ -111,10 +111,18 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 
 **Découverte & IA**
 - Page Découverte (tendances, bestsellers, recommandations IA)
+- **EbookRequest AI** — chatbot intégré (icône flottante bas-droite) avec function calling :
+  - Consulter ses demandes, sa bibliothèque et ses statistiques de quota
+  - Rechercher un livre via Google Books et soumettre une demande directement
+  - Outils admin : demandes en attente et statistiques globales
+  - Accès activé par utilisateur depuis le panel admin, quota journalier configurable par utilisateur (défaut : 10 messages/jour)
+  - Compatible OpenAI, Claude (Anthropic) et Ollama — utilise le même fournisseur IA que le reste de l'application
+  - Non affiché si aucune clé API n'est configurée
 
 **Administration**
 - Panel admin avec statistiques et logs
 - Visionneuse de logs système en temps réel
+- **Recherche globale** (`⌘K` / `Ctrl+K` ou barre dans le menu) — résultats groupés par catégorie : demandes, bibliothèque, utilisateurs (admin)
 
 **Intégration (MCP)**
 - Serveur MCP pour gérer ses demandes directement depuis un assistant IA

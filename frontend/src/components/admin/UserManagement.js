@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
 import { getAvatarColor } from '../../utils/avatarColor';
@@ -40,16 +41,17 @@ const SORT_OPTIONS = [
 ];
 
 const UserManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false });
+  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, chatbotDailyLimit: 10 });
   const [errors, setErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
   const [userStats, setUserStats] = useState(null);
 
   const filteredUsers = users.filter(user => {
@@ -152,14 +154,14 @@ const UserManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false });
+    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, chatbotDailyLimit: 10 });
     setErrors({});
     setShowModal(false);
   };
 
   const handleEdit = (user) => {
     const unlimited = (user.requestLimit ?? 10) < 0;
-    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited });
+    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited, chatbotDailyLimit: user.chatbotDailyLimit ?? 10 });
     setUserStats(null);
     setShowModal(true);
     axiosAdmin.get(`/api/admin/user-stats/${user._id}`)
@@ -172,6 +174,16 @@ const UserManagement = () => {
       const res = await axiosAdmin.patch(`/api/admin/users/${user._id}/toggle-active`);
       setUsers(prev => prev.map(u => u._id === user._id ? { ...u, isActive: res.data.isActive } : u));
       toast.success(res.data.isActive ? `${user.username} activé` : `${user.username} désactivé`);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
+    }
+  };
+
+  const handleToggleChatbot = async (user) => {
+    try {
+      const res = await axiosAdmin.patch(`/api/admin/users/${user._id}/toggle-chatbot`);
+      setUsers(prev => prev.map(u => u._id === user._id ? { ...u, chatbotEnabled: res.data.chatbotEnabled } : u));
+      toast.success(res.data.chatbotEnabled ? `Chatbot activé pour ${user.username}` : `Chatbot désactivé pour ${user.username}`);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
     }
@@ -425,6 +437,37 @@ const UserManagement = () => {
                       onChange={handleInputChange} className={styles.formInput} min="1" />
                   </div>
                 </div>
+
+                {formData._id && (() => {
+                  const editedUser = users.find(u => u._id === formData._id);
+                  return (
+                    <div className={styles.formGroup} style={{ marginTop: '1rem' }}>
+                      <label>EbookRequest AI</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <input
+                          type="number"
+                          name="chatbotDailyLimit"
+                          value={formData.chatbotDailyLimit}
+                          onChange={handleInputChange}
+                          className={styles.formInput}
+                          min="1"
+                          max="100"
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>msg/jour</span>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!editedUser?.chatbotEnabled}
+                            onChange={() => handleToggleChatbot(editedUser)}
+                            style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }}
+                          />
+                          Accès chatbot IA
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {formData._id && (
                   <>

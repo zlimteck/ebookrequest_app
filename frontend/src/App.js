@@ -20,6 +20,8 @@ import NotFound from './pages/NotFound';
 import NotificationBell from './components/NotificationBell';
 import NavDrawer from './components/NavDrawer';
 import InstallPWABanner from './components/InstallPWABanner';
+import GlobalSearch from './components/GlobalSearch';
+import ChatBot from './components/ChatBot';
 import styles from './styles/Navbar.module.css';
 import axiosAdmin from './axiosAdmin';
 import { checkAuth, logout as authLogout } from './services/authService';
@@ -43,6 +45,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [avatar, setAvatar] = useState(null);
 
   useActivityTracker();
@@ -118,6 +121,19 @@ function App() {
     window.addEventListener('avatarUpdated', handleAvatarUpdate);
     return () => window.removeEventListener('avatarUpdated', handleAvatarUpdate);
   }, []);
+
+  // ⌘K / Ctrl+K — ouvrir/fermer la recherche globale
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     authLogout();
@@ -252,9 +268,12 @@ function App() {
         username={username}
         role={role}
         onLogout={handleLogout}
+        onSearchOpen={() => { setDrawerOpen(false); setSearchOpen(true); }}
       />
 
       {isAuthenticated && <InstallPWABanner />}
+      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
+      <ChatBot />
 
       <Routes>
         <Route path="/login" element={<Login />} />

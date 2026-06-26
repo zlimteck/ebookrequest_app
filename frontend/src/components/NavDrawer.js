@@ -76,7 +76,7 @@ const ADMIN_ITEM = {
   exact: false,
 };
 
-const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout }) => {
+const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout, onSearchOpen }) => {
   const location = useLocation();
   const drawerRef = useRef(null);
 
@@ -131,6 +131,15 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout 
             </svg>
           </button>
         </div>
+
+        {/* Barre de recherche */}
+        <button className={styles.drawerSearch} onClick={onSearchOpen} aria-label="Ouvrir la recherche">
+          <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span className={styles.drawerSearchText}>Rechercher…</span>
+          <span className={styles.drawerSearchKbd}>⌘K</span>
+        </button>
 
         {/* Liens de navigation */}
         <nav className={styles.drawerNav}>
