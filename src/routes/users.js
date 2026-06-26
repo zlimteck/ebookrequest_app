@@ -17,10 +17,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Tous les champs sont obligatoires' });
     }
     
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
     }
-    
+    const passwordStrength = [/[a-z]/.test(password), /[A-Z]/.test(password), /[0-9]/.test(password), /[!@#$%^&*(),.?":{}|<>]/.test(password)].filter(Boolean).length;
+    if (passwordStrength < 3) {
+      return res.status(400).json({ error: 'Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.' });
+    }
+
     // Vérifier si l'utilisateur existe déjà
     const existingUser = await User.findOne({ 
       $or: [
@@ -177,11 +181,16 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       updates.requestLimitDays = parsed;
     }
     
-    if (password && password.length >= 6) {
+    if (password) {
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
+      }
+      const passwordStrength = [/[a-z]/.test(password), /[A-Z]/.test(password), /[0-9]/.test(password), /[!@#$%^&*(),.?":{}|<>]/.test(password)].filter(Boolean).length;
+      if (passwordStrength < 3) {
+        return res.status(400).json({ error: 'Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.' });
+      }
       const hash = await bcrypt.hash(password, 10);
       updates.password = hash;
-    } else if (password) {
-      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
     }
     
     // Mettre à jour l'utilisateur

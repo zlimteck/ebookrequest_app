@@ -41,12 +41,17 @@ async function initAdmin() {
 
     console.log('\n=== Création du compte administrateur ===');
     const username = await rl.question('Nom d\'utilisateur admin: ');
-    const password = await rl.question('Mot de passe (min 6 caractères): ', {
+    const password = await rl.question('Mot de passe (min 8 caractères, majuscule, chiffre ou caractère spécial): ', {
       hideEchoBack: true
     });
 
-    if (password.length < 6) {
-      console.error('Erreur: Le mot de passe doit contenir au moins 6 caractères');
+    if (password.length < 8) {
+      console.error('Erreur: Le mot de passe doit contenir au moins 8 caractères');
+      process.exit(1);
+    }
+    const passwordStrength = [/[a-z]/.test(password), /[A-Z]/.test(password), /[0-9]/.test(password), /[!@#$%^&*(),.?":{}|<>]/.test(password)].filter(Boolean).length;
+    if (passwordStrength < 3) {
+      console.error('Erreur: Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.');
       process.exit(1);
     }
 

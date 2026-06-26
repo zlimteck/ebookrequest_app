@@ -121,7 +121,8 @@ const UserManagement = () => {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
     if (!formData._id || formData.password) {
       if (!formData.password) newErrors.password = 'Le mot de passe est requis';
-      else if (formData.password.length < 6) newErrors.password = 'Minimum 6 caractères';
+      else if (formData.password.length < 8) newErrors.password = 'Minimum 8 caractères';
+      else if ([/[a-z]/, /[A-Z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/].filter(r => r.test(formData.password)).length < 3) newErrors.password = 'Mot de passe trop faible (minuscule, majuscule, chiffre ou caractère spécial requis)';
     }
     if (!formData.role) newErrors.role = 'Le rôle est requis';
     setErrors(newErrors);

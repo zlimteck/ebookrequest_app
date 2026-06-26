@@ -26,7 +26,8 @@ function RegisterWithToken({ token }) {
     e.preventDefault();
     setMessage('');
     if (form.password !== form.confirm) { setMessage('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < 6)       { setMessage('Le mot de passe doit contenir au moins 6 caractères.'); return; }
+    if (form.password.length < 8)       { setMessage('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if ([/[a-z]/, /[A-Z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/].filter(r => r.test(form.password)).length < 3) { setMessage('Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.'); return; }
     setLoading(true);
     try {
       const res = await axiosAdmin.post('/api/invitations/register', {
@@ -81,7 +82,7 @@ function RegisterWithToken({ token }) {
         style={{ opacity: 0.65, cursor: 'not-allowed' }} />
       <input className={styles.input} type="text" placeholder="Nom d'utilisateur"
         value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} required autoFocus />
-      <input className={styles.input} type="password" placeholder="Mot de passe (min. 6 caractères)"
+      <input className={styles.input} type="password" placeholder="Mot de passe (min. 8 caractères)"
         value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
       <input className={styles.input} type="password" placeholder="Confirmer le mot de passe"
         value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} required />
@@ -114,7 +115,8 @@ function RegisterWithCode() {
     e.preventDefault();
     setMessage('');
     if (form.password !== form.confirm) { setMessage('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < 6)       { setMessage('Le mot de passe doit contenir au moins 6 caractères.'); return; }
+    if (form.password.length < 8)       { setMessage('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if ([/[a-z]/, /[A-Z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/].filter(r => r.test(form.password)).length < 3) { setMessage('Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.'); return; }
     setLoading(true);
     try {
       const res = await axiosAdmin.post('/api/invitation-codes/register', {
@@ -162,7 +164,7 @@ function RegisterWithCode() {
         value={form.username} onChange={handleChange} autoComplete="username" required autoFocus />
       <input className={styles.input} type="email" name="email" placeholder="Adresse email"
         value={form.email} onChange={handleChange} autoComplete="email" required />
-      <input className={styles.input} type="password" name="password" placeholder="Mot de passe (min. 6 caractères)"
+      <input className={styles.input} type="password" name="password" placeholder="Mot de passe (min. 8 caractères)"
         value={form.password} onChange={handleChange} autoComplete="new-password" required />
       <input className={styles.input} type="password" name="confirm" placeholder="Confirmer le mot de passe"
         value={form.confirm} onChange={handleChange} autoComplete="new-password" required />

@@ -480,6 +480,12 @@ input:focus + .slider {
   margin-top: 1rem;
 }
 
+.btnRowStart {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 1rem;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .pageWrapper {

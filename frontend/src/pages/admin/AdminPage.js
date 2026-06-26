@@ -417,27 +417,40 @@ function AdminPage() {
   useEffect(() => {
     if (activeTab !== 'logs' || logSubTab !== 'system' || !followMode) return;
 
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    let es;
+    let cancelled = false;
 
-    const es = new EventSource(`/api/admin/logs/system/stream?token=${encodeURIComponent(token)}`);
-
-    es.onmessage = (e) => {
+    const connect = async () => {
       try {
-        const line = JSON.parse(e.data);
-        setSystemLogs(prev => {
-          const next = [...prev, line];
-          return next.length > 500 ? next.slice(next.length - 500) : next;
+        const res = await fetch('/api/admin/logs/system/sse-token', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
+        if (!res.ok || cancelled) return;
+        const { sseToken } = await res.json();
+        if (cancelled) return;
+
+        es = new EventSource(`/api/admin/logs/system/stream?token=${encodeURIComponent(sseToken)}`);
+
+        es.onmessage = (e) => {
+          try {
+            const line = JSON.parse(e.data);
+            setSystemLogs(prev => {
+              const next = [...prev, line];
+              return next.length > 500 ? next.slice(next.length - 500) : next;
+            });
+          } catch { /* ignorer */ }
+        };
+
+        es.onerror = () => { es.close(); };
       } catch { /* ignorer */ }
     };
 
-    es.onerror = () => {
-      es.close();
-    };
+    connect();
 
     return () => {
-      es.close();
+      cancelled = true;
+      if (es) es.close();
     };
   }, [activeTab, logSubTab, followMode]);
 

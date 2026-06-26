@@ -16,7 +16,8 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) { setError('Minimum 6 caractères.'); return; }
+    if (password.length < 8) { setError('Minimum 8 caractères.'); return; }
+    if ([/[a-z]/, /[A-Z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/].filter(r => r.test(password)).length < 3) { setError('Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.'); return; }
     if (password !== confirm) { setError('Les mots de passe ne correspondent pas.'); return; }
     try {
       setLoading(true);

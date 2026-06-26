@@ -1006,9 +1006,8 @@ const UserSettings = () => {
               <>
                 <FieldRow label="Hôte" value={baseOpdsUrl} mono />
                 <FieldRow label="Port" value={opdsPort} />
-                <FieldRow label="Mot de passe" value={opdsToken} mono password />
                 <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem' }}>
-                  Le nom d'utilisateur peut être n'importe quoi. Le mot de passe est votre token d'accès.
+                  Le nom d'utilisateur peut être n'importe quoi. Le mot de passe est votre token d'accès (voir ci-dessus).
                 </p>
                 {/* URL directe pour Calibre / apps sans Basic Auth */}
                 <details style={{ marginTop: '0.5rem' }}>

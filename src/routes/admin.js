@@ -1,5 +1,5 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { getAdminStats, getServicesHealth } from '../controllers/adminController.js';
 import DownloadLog from '../models/DownloadLog.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -14,23 +14,28 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// Map des tokens SSE éphémères : token → expiresAt
+const sseTokens = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, exp] of sseTokens) {
+    if (exp < now) sseTokens.delete(t);
+  }
+}, 60000);
+
 // ── Route SSE (doit être AVANT requireAuth car EventSource ne peut pas envoyer
-//    de header Authorization → auth manuelle via query param ?token=<jwt>)
+//    de header Authorization → token éphémère via POST /sse-token)
 router.get('/logs/system/stream', (req, res) => {
-  const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
   const token = req.query.token;
   if (!token) {
     return res.status(401).json({ error: 'Token manquant.' });
   }
-  let decoded;
-  try {
-    decoded = jwt.verify(token, JWT_SECRET);
-  } catch {
-    return res.status(401).json({ error: 'Token invalide.' });
+  const expiresAt = sseTokens.get(token);
+  if (!expiresAt || expiresAt < Date.now()) {
+    sseTokens.delete(token);
+    return res.status(401).json({ error: 'Token SSE invalide ou expiré.' });
   }
-  if (!decoded || decoded.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
-  }
+  sseTokens.delete(token); // usage unique
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -58,6 +63,14 @@ router.get('/logs/system/stream', (req, res) => {
 // ── Toutes les routes suivantes requièrent auth + rôle admin ──
 router.use(requireAuth);
 router.use(requireAdmin);
+
+// Génère un token SSE éphémère (60s, usage unique) pour l'endpoint stream
+router.post('/logs/system/sse-token', (req, res) => {
+  const token = crypto.randomUUID();
+  sseTokens.set(token, Date.now() + 60000);
+  res.json({ sseToken: token });
+});
+
 router.get('/stats', getAdminStats);
 router.get('/health', getServicesHealth);
 

@@ -125,8 +125,12 @@ router.post('/register', async (req, res) => {
     if (!token || !username || !password) {
       return res.status(400).json({ error: 'Token, nom d\'utilisateur et mot de passe requis.' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
+    }
+    const passwordStrength = [/[a-z]/.test(password), /[A-Z]/.test(password), /[0-9]/.test(password), /[!@#$%^&*(),.?":{}|<>]/.test(password)].filter(Boolean).length;
+    if (passwordStrength < 3) {
+      return res.status(400).json({ error: 'Mot de passe trop faible. Utilisez au moins 3 des éléments suivants : minuscule, majuscule, chiffre, caractère spécial.' });
     }
 
     const invitation = await Invitation.findOne({ token, status: 'pending' });
