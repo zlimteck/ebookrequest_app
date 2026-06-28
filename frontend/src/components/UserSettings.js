@@ -42,6 +42,13 @@ const UserSettings = () => {
   const [passkeyShowNameForm, setPasskeyShowNameForm] = useState(false);
   const [passkeyConfirmDelete, setPasskeyConfirmDelete] = useState(null); // credentialID en attente de confirmation
   const [passkeyDeleting, setPasskeyDeleting] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionRevoking, setSessionRevoking] = useState(null);
+  const [sessionConfirmRevoke, setSessionConfirmRevoke] = useState(null);
+  const [sessionConfirmRevokeAll, setSessionConfirmRevokeAll] = useState(false);
+  const [sessionsPage, setSessionsPage] = useState(1);
+  const SESSIONS_PER_PAGE = 5;
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -187,6 +194,7 @@ const UserSettings = () => {
     fetchValentineConfig();
     fetchMcpInfo();
     fetchPasskeys();
+    fetchSessions();
   }, []);
 
   useEffect(() => {
@@ -567,6 +575,48 @@ const UserSettings = () => {
       toast.error('Erreur lors de la suppression.');
     } finally {
       setPasskeyDeleting(null);
+    }
+  };
+
+  // ── Session handlers ──────────────────────────────────────────────────────
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await axiosAdmin.get('/api/sessions');
+      const data = res.data || [];
+      setSessions([...data.filter(s => s.isCurrent), ...data.filter(s => !s.isCurrent)]);
+      setSessionsPage(1);
+    } catch {
+      toast.error('Impossible de charger les sessions.');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (id) => {
+    setSessionRevoking(id);
+    try {
+      await axiosAdmin.delete(`/api/sessions/${id}`);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      setSessionConfirmRevoke(null);
+      toast.success('Session révoquée.');
+    } catch {
+      toast.error('Impossible de révoquer la session.');
+    } finally {
+      setSessionRevoking(null);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    setSessionRevoking('all');
+    try {
+      await axiosAdmin.delete('/api/sessions');
+      setSessions(prev => prev.filter(s => s.isCurrent));
+      toast.success('Toutes les autres sessions ont été révoquées.');
+    } catch {
+      toast.error('Impossible de révoquer les sessions.');
+    } finally {
+      setSessionRevoking(null);
     }
   };
 
@@ -1549,6 +1599,184 @@ const UserSettings = () => {
               is2FAEnabled={twoFactorEnabled}
               onDone={(enabled) => setTwoFactorEnabled(Boolean(enabled))}
             />
+          </div>
+
+          <div className={styles.divider} />
+
+          {/* ── Sessions actives ── */}
+          <div className={styles.toggleRow} style={{ cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: '0.75rem', borderBottom: 'none', paddingBottom: 0 }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Sessions actives</p>
+                <p className={styles.toggleDesc}>Appareils connectés à votre compte</p>
+              </div>
+            </div>
+
+            {sessionsLoading && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: 0 }}>Chargement...</p>
+            )}
+
+            {!sessionsLoading && sessions.length === 0 && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: 0 }}>Aucune session active.</p>
+            )}
+
+            {!sessionsLoading && sessions.length > 0 && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {sessions.slice((sessionsPage - 1) * SESSIONS_PER_PAGE, sessionsPage * SESSIONS_PER_PAGE).map(s => (
+                  <div key={s.id} style={{
+                    padding: '0.65rem 0.9rem',
+                    background: 'var(--color-bg3)',
+                    border: `1px solid ${s.isCurrent ? 'var(--color-accent, #a78bfa)' : 'var(--color-border)'}`,
+                    borderRadius: '8px',
+                  }}>
+                    {sessionConfirmRevoke === s.id ? (
+                      /* Confirmation inline de révocation */
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#ef4444' }}>
+                          Révoquer cette session ?
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className={styles.btnDanger}
+                            onClick={() => { setSessionConfirmRevoke(null); handleRevokeSession(s.id); }}
+                            disabled={sessionRevoking === s.id}
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                          >
+                            {sessionRevoking === s.id ? 'Révocation...' : 'Confirmer'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.btnOutline}
+                            onClick={() => setSessionConfirmRevoke(null)}
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Affichage normal */
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            {s.browser} · {s.os}
+                            {s.isCurrent && (
+                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#fff', background: 'var(--color-accent, #a78bfa)', borderRadius: '4px', padding: '1px 6px', letterSpacing: '0.01em' }}>
+                                Session courante
+                              </span>
+                            )}
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontFamily: 'monospace', display: 'block', marginTop: '0.1rem' }}>
+                            {(s.ip || '—').replace(/^::ffff:/, '')}{s.location ? ` · ${s.location}` : ''}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', marginTop: '0.1rem' }}>
+                            {s.loginMethod === 'passkey' ? 'Passkey' : s.loginMethod === '2fa' ? '2FA' : s.loginMethod === 'invitation' ? 'Invitation' : 'Mot de passe'}
+                            {' · '}
+                            {new Date(s.lastActivity).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {!s.isCurrent && (
+                          <button
+                            type="button"
+                            onClick={() => setSessionConfirmRevoke(s.id)}
+                            disabled={sessionRevoking === 'all'}
+                            title="Révoquer"
+                            style={{
+                              width: 32, height: 32, flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              borderRadius: 'var(--radius)', border: '1px solid var(--color-border)',
+                              background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                              <polyline points="16 17 21 12 16 7"/>
+                              <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Pagination */}
+                {sessions.length > SESSIONS_PER_PAGE && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className={styles.btnOutline}
+                      onClick={() => setSessionsPage(p => p - 1)}
+                      disabled={sessionsPage === 1}
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                    >
+                      ← Précédent
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                      {sessionsPage} / {Math.ceil(sessions.length / SESSIONS_PER_PAGE)}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.btnOutline}
+                      onClick={() => setSessionsPage(p => p + 1)}
+                      disabled={sessionsPage >= Math.ceil(sessions.length / SESSIONS_PER_PAGE)}
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem' }}
+                    >
+                      Suivant →
+                    </button>
+                  </div>
+                )}
+
+                {/* Révoquer tout — confirmation inline */}
+                {sessions.filter(s => !s.isCurrent).length >= 1 && (
+                  sessionConfirmRevokeAll ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#ef4444' }}>
+                        Révoquer toutes les autres sessions ?
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className={styles.btnDanger}
+                          onClick={() => { setSessionConfirmRevokeAll(false); handleRevokeAllSessions(); }}
+                          disabled={sessionRevoking === 'all'}
+                          style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                        >
+                          {sessionRevoking === 'all' ? 'Révocation...' : 'Confirmer'}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.btnOutline}
+                          onClick={() => setSessionConfirmRevokeAll(false)}
+                          style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.btnOutline}
+                      onClick={() => setSessionConfirmRevokeAll(true)}
+                      disabled={sessionRevoking === 'all'}
+                      style={{ alignSelf: 'flex-start', color: '#ef4444', borderColor: '#ef4444' }}
+                    >
+                      Révoquer toutes les autres sessions
+                    </button>
+                  )
+                )}
+              </div>
+            )}
           </div>
         </div>
 

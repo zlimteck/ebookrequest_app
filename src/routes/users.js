@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { sendVerificationEmail } from '../services/emailService.js';
 
@@ -284,11 +285,13 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
     
     const user = await User.findByIdAndDelete(id);
-    
+
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
-    
+
+    await Session.deleteMany({ userId: id });
+
     res.json({ message: 'Utilisateur supprimé avec succès' });
   } catch (error) {
     console.error('Erreur lors de la suppression de l\'utilisateur:', error);

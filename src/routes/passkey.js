@@ -10,6 +10,7 @@ import {
 } from '@simplewebauthn/server';
 import { requireAuth } from '../middleware/auth.js';
 import User from '../models/User.js';
+import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
 
 // Validates a base64url string (credential ID format)
@@ -230,7 +231,12 @@ router.post('/authenticate-verify', async (req, res) => {
 
     // Une passkey avec userVerification=required est MFA par définition (possession + biométrie/PIN).
     // Le TOTP n'est pas redemandé — cohérent avec Apple, Google, Microsoft.
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+    const sid = await createSession(user._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: 'passkey',
+    });
+    const token = jwt.sign({ id: user._id, role: user.role, sid }, JWT_SECRET, { expiresIn: '30d' });
     res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
       role: user.role,

@@ -6,7 +6,7 @@ import { generate, verify, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
-
+import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
 
 const router = express.Router();
@@ -169,11 +169,16 @@ router.post('/verify-login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Code invalide' });
 
     // Émettre le JWT complet
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
-
     await User.updateOne({ _id: user._id }, {
       $set: { lastLogin: new Date(), lastActivity: new Date() }
     });
+
+    const sid = await createSession(user._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: '2fa',
+    });
+    const token = jwt.sign({ id: user._id, role: user.role, sid }, JWT_SECRET, { expiresIn: '30d' });
 
     res.cookie('token', token, COOKIE_OPTIONS);
     res.json({
@@ -230,11 +235,16 @@ router.post('/recover', async (req, res) => {
     );
 
     // Émettre le JWT complet
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
-
     await User.updateOne({ _id: user._id }, {
       $set: { lastLogin: new Date(), lastActivity: new Date() }
     });
+
+    const sid = await createSession(user._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: '2fa',
+    });
+    const token = jwt.sign({ id: user._id, role: user.role, sid }, JWT_SECRET, { expiresIn: '30d' });
 
     res.cookie('token', token, COOKIE_OPTIONS);
     res.json({

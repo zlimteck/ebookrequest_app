@@ -3,9 +3,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
-
+import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS, clearCookieOptions } from '../utils/cookieOptions.js';
 
 const router = express.Router();
@@ -67,8 +68,13 @@ router.post('/setup', async (req, res) => {
     await admin.save();
 
     // Connecter automatiquement après la création
+    const sid = await createSession(admin._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: 'password',
+    });
     const token = jwt.sign(
-      { id: admin._id, role: admin.role },
+      { id: admin._id, role: admin.role, sid },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -211,9 +217,15 @@ router.post('/login', async (req, res) => {
       { $set: { lastLogin: new Date(), lastActivity: new Date() } }
     );
 
+    const sid = await createSession(user._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: 'password',
+    });
     const token = jwt.sign({
       id: user._id,
-      role: user.role
+      role: user.role,
+      sid,
     }, JWT_SECRET, { expiresIn: '30d' });
 
     res.cookie('token', token, COOKIE_OPTIONS);
@@ -318,6 +330,9 @@ router.post('/reset-password/:token', async (req, res) => {
       }
     );
 
+    // Révoquer toutes les sessions — le compte vient d'être récupéré via email
+    await Session.deleteMany({ userId: user._id });
+
     res.json({ message: 'Mot de passe réinitialisé avec succès.' });
   } catch (err) {
     console.error('Erreur reset-password:', err);
@@ -325,8 +340,17 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
-// Déconnexion : efface le cookie httpOnly
-router.post('/logout', (req, res) => {
+// Déconnexion : efface le cookie et révoque la session
+router.post('/logout', async (req, res) => {
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
+      if (decoded.sid) {
+        await Session.deleteOne({ _id: decoded.sid });
+      }
+    } catch {} // toujours effacer le cookie même si le token est invalide
+  }
   res.clearCookie('token', clearCookieOptions());
   res.json({ success: true });
 });

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { sendVerificationEmail, sendPasswordChangedEmail } from '../services/emailService.js';
+import Session from '../models/Session.js';
 
 const User = mongoose.model('User');
 
@@ -290,7 +291,10 @@ export const changePassword = async (req, res) => {
     user.passwordChangedAt = Date.now();
     
     await user.save();
-    
+
+    // Révoquer toutes les sessions sauf la courante
+    await Session.deleteMany({ userId: user._id, _id: { $ne: req.sessionId } });
+
     // Essayer d'envoyer une notification par email (optionnel) si l'email est valide
     if (user.email && 
         typeof user.email === 'string' && 

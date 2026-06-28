@@ -8,6 +8,7 @@ import { sendInvitationEmail, sendNewUserToAdminsEmail } from '../services/email
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
+import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
 
 const router = express.Router();
@@ -167,7 +168,12 @@ router.post('/register', async (req, res) => {
         sendNewUserToAdminsEmail(admin, user.username, invitation.email).catch(() => {}));
     }).catch(() => {});
 
-    const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+    const sid = await createSession(user._id, {
+      ip: getClientIP(req),
+      userAgent: req.headers['user-agent'] || '',
+      loginMethod: 'invitation',
+    });
+    const jwtToken = jwt.sign({ id: user._id, role: user.role, sid }, JWT_SECRET, { expiresIn: '30d' });
 
     res.cookie('token', jwtToken, COOKIE_OPTIONS);
     res.status(201).json({

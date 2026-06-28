@@ -4,6 +4,7 @@ initLogBuffer();
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
@@ -42,6 +43,8 @@ import mcpRoutes from './routes/mcp.js';
 import searchRoutes from './routes/search.js';
 import chatbotRoutes from './routes/chatbot.js';
 import passkeyRoutes from './routes/passkey.js';
+import sessionsRoutes from './routes/sessions.js';
+import activityTracker from './middleware/activityTracker.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
 import { startValentineCron } from './services/valentineCron.js';
@@ -99,6 +102,7 @@ const corsOptions = {
   exposedHeaders: ['Content-Disposition']
 };
 
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
@@ -145,6 +149,8 @@ app.use('/api/auth/2fa', twoFactorLimiter, twoFactorRoutes);
 app.use('/api/auth', authLimiter);
 app.use('/api', generalLimiter);
 
+app.use(activityTracker);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/requests', bookRequestRoutes);
 app.use('/api/books', googleBooksRoutes);
@@ -173,6 +179,7 @@ app.use('/api/mcp', mcpRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/auth/passkey', passkeyRoutes);
+app.use('/api/sessions', sessionsRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));
