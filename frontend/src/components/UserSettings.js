@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { compressImage } from '../utils/imageCompressor';
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed } from '../serviceWorkerRegistration';
 import TwoFactorSetup from './TwoFactorSetup';
+import { startRegistration } from '@simplewebauthn/browser';
 
 import { getAvatarColor } from '../utils/avatarColor';
 
@@ -35,6 +36,12 @@ const UserSettings = () => {
     }
   });
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [passkeys, setPasskeys] = useState([]);
+  const [passkeyRegistering, setPasskeyRegistering] = useState(false);
+  const [passkeyNameInput, setPasskeyNameInput] = useState('');
+  const [passkeyShowNameForm, setPasskeyShowNameForm] = useState(false);
+  const [passkeyConfirmDelete, setPasskeyConfirmDelete] = useState(null); // credentialID en attente de confirmation
+  const [passkeyDeleting, setPasskeyDeleting] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -167,12 +174,19 @@ const UserSettings = () => {
         setMcpInfo(res.data);
       } catch { /* silencieux */ }
     };
+    const fetchPasskeys = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/auth/passkey/list');
+        setPasskeys(res.data || []);
+      } catch { /* silencieux */ }
+    };
     fetchUserData();
     fetchOpdsToken();
     fetchCalibreConfig();
     fetchAppriseStatus();
     fetchValentineConfig();
     fetchMcpInfo();
+    fetchPasskeys();
   }, []);
 
   useEffect(() => {
@@ -505,6 +519,54 @@ const UserSettings = () => {
       });
     } catch {
       toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  // ── Passkey handlers ──────────────────────────────────────────────────────
+  const handleAddPasskey = async () => {
+    const name = passkeyNameInput.trim() || 'Ma Passkey';
+    setPasskeyRegistering(true);
+    try {
+      const optRes = await axiosAdmin.post('/api/auth/passkey/register-options', {});
+      let regResponse;
+      try {
+        regResponse = await startRegistration({ optionsJSON: optRes.data });
+      } catch (err) {
+        if (err.name !== 'NotAllowedError') {
+          toast.error('Passkey non disponible ou annulée.');
+        }
+        return;
+      }
+      const verifyRes = await axiosAdmin.post('/api/auth/passkey/register-verify', {
+        response: regResponse,
+        name,
+      }, { validateStatus: s => s < 500 });
+      if (verifyRes.data.success) {
+        setPasskeys(prev => [...prev, verifyRes.data.passkey]);
+        setPasskeyShowNameForm(false);
+        setPasskeyNameInput('');
+        toast.success('Passkey enregistrée avec succès.');
+      } else {
+        toast.error(verifyRes.data.error || 'Erreur lors de l\'enregistrement.');
+      }
+    } catch {
+      toast.error('Impossible d\'enregistrer la passkey.');
+    } finally {
+      setPasskeyRegistering(false);
+    }
+  };
+
+  const handleDeletePasskey = async (credentialID) => {
+    setPasskeyDeleting(credentialID);
+    try {
+      await axiosAdmin.delete(`/api/auth/passkey/${encodeURIComponent(credentialID)}`);
+      setPasskeys(prev => prev.filter(pk => pk.credentialID !== credentialID));
+      setPasskeyConfirmDelete(null);
+      toast.success('Passkey supprimée.');
+    } catch {
+      toast.error('Erreur lors de la suppression.');
+    } finally {
+      setPasskeyDeleting(null);
     }
   };
 
@@ -1262,25 +1324,7 @@ const UserSettings = () => {
             Sécurité
           </h2>
 
-          {/* ── 2FA ── */}
-          <div className={styles.toggleRow} style={{ cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: '0.75rem', borderBottom: 'none', paddingBottom: 0 }}>
-            <div className={styles.toggleInfo}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-              <div>
-                <p className={styles.toggleLabel}>Authentification à deux facteurs</p>
-                <p className={styles.toggleDesc}>Protégez votre compte avec un code TOTP</p>
-              </div>
-            </div>
-            <TwoFactorSetup
-              is2FAEnabled={twoFactorEnabled}
-              onDone={(enabled) => setTwoFactorEnabled(Boolean(enabled))}
-            />
-          </div>
-
-          <div className={styles.divider} />
-
+          {/* ── Mot de passe ── */}
           <div className={styles.toggleRow} style={{ cursor: 'pointer' }} onClick={() => setShowChangePassword(v => !v)}>
             <div className={styles.toggleInfo}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
@@ -1346,6 +1390,166 @@ const UserSettings = () => {
               </div>
             </div>
           )}
+
+          {/* ── Passkeys ── */}
+          <div className={styles.toggleRow} style={{ cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: '0.75rem', borderBottom: 'none', paddingBottom: 0 }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Passkeys</p>
+                <p className={styles.toggleDesc}>Connexion sans mot de passe (biométrie, PIN)</p>
+              </div>
+            </div>
+
+            {/* Liste des passkeys existantes */}
+            {passkeys.length > 0 && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {passkeys.map(pk => (
+                  <div key={pk.credentialID} style={{
+                    padding: '0.65rem 0.9rem',
+                    background: 'var(--color-bg3)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                  }}>
+                    {passkeyConfirmDelete === pk.credentialID ? (
+                      /* Confirmation inline de suppression */
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#ef4444' }}>
+                          Supprimer «&nbsp;{pk.name}&nbsp;» ?
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className={styles.btnDanger}
+                            onClick={() => handleDeletePasskey(pk.credentialID)}
+                            disabled={passkeyDeleting === pk.credentialID}
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                          >
+                            {passkeyDeleting === pk.credentialID ? 'Suppression...' : 'Confirmer'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.btnOutline}
+                            onClick={() => setPasskeyConfirmDelete(null)}
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.82rem' }}
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Affichage normal */
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {pk.name}
+                          </span>
+                          {pk.createdAt && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                              Ajoutée le {new Date(pk.createdAt).toLocaleDateString('fr-FR')}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPasskeyConfirmDelete(pk.credentialID)}
+                          title="Supprimer"
+                          style={{
+                            width: 32, height: 32, flexShrink: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: 'var(--radius)', border: '1px solid var(--color-border)',
+                            background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {passkeys.length === 0 && !passkeyShowNameForm && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                Aucune passkey enregistrée.
+              </p>
+            )}
+
+            {/* Formulaire d'ajout : saisie du nom puis déclenchement biométrie */}
+            {passkeyShowNameForm ? (
+              <div style={{ width: '100%' }}>
+                <div className={styles.fieldRow}>
+                  <label className={styles.fieldLabel}>Nom de la passkey</label>
+                  <input
+                    type="text"
+                    className={styles.fieldInput}
+                    placeholder="ex : MacBook Touch ID, iPhone Face ID…"
+                    value={passkeyNameInput}
+                    onChange={e => setPasskeyNameInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleAddPasskey();
+                      if (e.key === 'Escape') { setPasskeyShowNameForm(false); setPasskeyNameInput(''); }
+                    }}
+                    maxLength={50}
+                    autoFocus
+                  />
+                </div>
+                <div className={styles.cardActions}>
+                  <button
+                    type="button"
+                    className={styles.btnOutline}
+                    onClick={() => { setPasskeyShowNameForm(false); setPasskeyNameInput(''); }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.btnPrimary}
+                    onClick={handleAddPasskey}
+                    disabled={passkeyRegistering}
+                  >
+                    {passkeyRegistering ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={styles.btnOutline}
+                onClick={() => setPasskeyShowNameForm(true)}
+              >
+                Ajouter une passkey
+              </button>
+            )}
+          </div>
+
+          <div className={styles.divider} />
+
+          {/* ── 2FA ── */}
+          <div className={styles.toggleRow} style={{ cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: '0.75rem', borderBottom: 'none', paddingBottom: 0 }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Authentification à deux facteurs</p>
+                <p className={styles.toggleDesc}>Protégez votre compte avec un code TOTP</p>
+              </div>
+            </div>
+            <TwoFactorSetup
+              is2FAEnabled={twoFactorEnabled}
+              onDone={(enabled) => setTwoFactorEnabled(Boolean(enabled))}
+            />
+          </div>
         </div>
 
     </div>

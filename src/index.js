@@ -41,6 +41,7 @@ import opdsAdminRoutes from './routes/opdsAdmin.js';
 import mcpRoutes from './routes/mcp.js';
 import searchRoutes from './routes/search.js';
 import chatbotRoutes from './routes/chatbot.js';
+import passkeyRoutes from './routes/passkey.js';
 import { createRequire } from 'module';
 import { initializeTrendingBooksCache } from './services/trendingBooksService.js';
 import { startValentineCron } from './services/valentineCron.js';
@@ -171,6 +172,7 @@ app.use('/api/connectors', connectorsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/auth/passkey', passkeyRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));

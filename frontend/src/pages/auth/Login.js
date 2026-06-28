@@ -3,6 +3,7 @@ import axiosAdmin from '../../axiosAdmin';
 import styles from '../user/UserForm.module.css';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { startAuthentication } from '@simplewebauthn/browser';
 
 function Login() {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,7 @@ function Login() {
   const [useRecovery, setUseRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState('');
   const [is2FALoading, setIs2FALoading] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
 
   // Sauvegarder le token de vérification email si présent dans l'URL
   useEffect(() => {
@@ -45,6 +47,47 @@ function Login() {
     }
     const redirectPath = userData.role === 'admin' ? '/admin' : '/dashboard';
     setTimeout(() => { window.location.href = redirectPath; }, 50);
+  };
+
+  // ── Connexion via Passkey ──
+  const handlePasskeyLogin = async () => {
+    setIsPasskeyLoading(true);
+    setMessage('');
+    try {
+      const optRes = await axiosAdmin.post('/api/auth/passkey/authenticate-options', {});
+      const { challengeId, ...options } = optRes.data;
+
+      let authResponse;
+      try {
+        authResponse = await startAuthentication({ optionsJSON: options });
+      } catch (err) {
+        if (err.name === 'NotAllowedError') {
+          setMessage('Authentification annulée.');
+        } else {
+          setMessage('Passkey non disponible ou annulée.');
+        }
+        return;
+      }
+
+      const verifyRes = await axiosAdmin.post('/api/auth/passkey/authenticate-verify', {
+        response: authResponse,
+        challengeId,
+      }, { validateStatus: s => s < 500 });
+
+      if (verifyRes.data.user) {
+        handleLoginSuccess(verifyRes.data);
+      } else {
+        const msg = verifyRes.data?.error || 'Authentification échouée.';
+        setMessage(msg);
+        toast.error(msg);
+      }
+    } catch {
+      const msg = 'Impossible de se connecter avec la passkey.';
+      setMessage(msg);
+      toast.error(msg);
+    } finally {
+      setIsPasskeyLoading(false);
+    }
   };
 
   // ── Étape 1 : Connexion classique ──
@@ -273,6 +316,37 @@ function Login() {
         </div>
         <button className={styles.button} type="submit">Se connecter</button>
       </form>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.85rem 0' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>ou</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+      </div>
+
+      <button
+        type="button"
+        onClick={handlePasskeyLogin}
+        disabled={isPasskeyLoading}
+        style={{
+          width: '100%',
+          padding: '0.65rem 1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem',
+          background: 'var(--color-bg3)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius)',
+          color: 'var(--color-text)',
+          fontSize: '0.9rem',
+          cursor: isPasskeyLoading ? 'not-allowed' : 'pointer',
+          opacity: isPasskeyLoading ? 0.7 : 1,
+          transition: 'background 0.15s',
+        }}
+      >
+        {isPasskeyLoading ? 'Authentification...' : 'Se connecter avec une Passkey'}
+      </button>
+
       {message && <div className={styles.message}>{message}</div>}
       <div style={{ marginTop: '1rem', textAlign: 'center' }}>
         <Link to="/register" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none' }}>

@@ -122,6 +122,15 @@ const userSchema = new mongoose.Schema({
     default: 10,
     min: 1,
   },
+  passkeys: [{
+    credentialID: { type: String, required: true },
+    credentialPublicKey: { type: String, required: true },
+    counter: { type: Number, required: true, default: 0 },
+    transports: [String],
+    aaguid: { type: String, default: '' },
+    name: { type: String, default: 'Passkey' },
+    createdAt: { type: Date, default: Date.now },
+  }],
 }, {
   timestamps: true
 });
