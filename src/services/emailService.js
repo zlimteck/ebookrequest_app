@@ -472,3 +472,38 @@ export const sendBroadcastEmail = async (to, subject, htmlContent) => {
   const html = htmlContent.replace(/\{\{FRONTEND_URL\}\}/g, process.env.FRONTEND_URL || '');
   return sendEmail({ to, subject, html, type: 'broadcast' });
 };
+
+export const sendNewLoginAlertEmail = async (user, { ip, location, browser, os, loginMethod }) => {
+  const methodLabel = loginMethod === 'passkey' ? 'Passkey' : loginMethod === '2fa' ? '2FA' : loginMethod === 'invitation' ? 'Invitation' : 'Mot de passe';
+  const dateLabel = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#ea580c 0%,#dc2626 100%)',
+    title: 'Nouvelle connexion détectée',
+    subtitle: 'Une connexion depuis un nouvel endroit a été enregistrée',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(user.username)}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">
+        Une connexion à votre compte a été détectée depuis un nouvel endroit.
+      </p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="color:#64748b;font-size:0.82rem;padding:0.35rem 0;width:40%;">Date</td><td style="color:#e2e8f0;font-size:0.85rem;padding:0.35rem 0;">${dateLabel}</td></tr>
+          <tr><td style="color:#64748b;font-size:0.82rem;padding:0.35rem 0;">Adresse IP</td><td style="color:#e2e8f0;font-size:0.85rem;padding:0.35rem 0;font-family:monospace;">${escapeHtml(ip || '—')}</td></tr>
+          ${location ? `<tr><td style="color:#64748b;font-size:0.82rem;padding:0.35rem 0;">Localisation</td><td style="color:#e2e8f0;font-size:0.85rem;padding:0.35rem 0;">${escapeHtml(location)}</td></tr>` : ''}
+          <tr><td style="color:#64748b;font-size:0.82rem;padding:0.35rem 0;">Navigateur</td><td style="color:#e2e8f0;font-size:0.85rem;padding:0.35rem 0;">${escapeHtml(browser)} · ${escapeHtml(os)}</td></tr>
+          <tr><td style="color:#64748b;font-size:0.82rem;padding:0.35rem 0;">Méthode</td><td style="color:#e2e8f0;font-size:0.85rem;padding:0.35rem 0;">${escapeHtml(methodLabel)}</td></tr>
+        </table>
+      </div>
+      <div style="background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;border-radius:6px;padding:1rem 1.25rem;margin:1.5rem 0;">
+        <p style="color:#ef4444;font-size:0.82rem;font-weight:600;margin:0 0 0.35rem;">Vous n'êtes pas à l'origine de cette connexion ?</p>
+        <p style="color:#94a3b8;font-size:0.82rem;margin:0;line-height:1.6;">Changez votre mot de passe immédiatement et révoquez les sessions suspectes depuis vos paramètres.</p>
+      </div>
+      <div style="text-align:center;margin:2rem 0;">
+        <a href="${FRONTEND()}/settings" style="display:inline-block;padding:0.9rem 2.25rem;background:linear-gradient(135deg,#ea580c,#dc2626);color:white;text-decoration:none;border-radius:10px;font-weight:700;font-size:1rem;">
+          Gérer mes sessions
+        </a>
+      </div>`,
+  });
+  return sendEmail({ to: user.email, subject: 'Nouvelle connexion détectée — EbookRequest', html, type: 'login_alert' });
+};

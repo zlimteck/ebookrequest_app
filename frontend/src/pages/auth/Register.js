@@ -54,7 +54,7 @@ function RegisterWithToken({ token }) {
     return (
       <>
         <p className={styles.message} style={{ textAlign: 'center' }}>{tokenError}</p>
-        <Link to="/login" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none', textAlign: 'center', display: 'block', marginTop: '0.5rem' }}>
+        <Link to="/login" style={{ fontSize: '0.82rem', color: 'var(--color-accent)', textDecoration: 'none', textAlign: 'center', display: 'block', marginTop: '0.5rem' }}>
           ← Retour à la connexion
         </Link>
       </>
@@ -90,7 +90,7 @@ function RegisterWithToken({ token }) {
         {loading ? 'Création en cours…' : 'Créer mon compte'}
       </button>
       <div style={{ textAlign: 'center' }}>
-        <Link to="/login" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none' }}>
+        <Link to="/login" style={{ fontSize: '0.82rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
           Déjà un compte ? Se connecter
         </Link>
       </div>
@@ -150,7 +150,7 @@ function RegisterWithCode() {
           Un email de vérification a été envoyé à <strong style={{ color: 'var(--color-text)' }}>{form.email}</strong>.<br />
           Vérifiez votre boîte mail avant de vous connecter.
         </p>
-        <Link to="/login" style={{ fontSize: '0.88rem', color: '#6366f1', textDecoration: 'none' }}>
+        <Link to="/login" style={{ fontSize: '0.88rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
           Aller à la connexion →
         </Link>
       </div>
@@ -176,7 +176,7 @@ function RegisterWithCode() {
         {loading ? 'Création en cours…' : 'Créer mon compte'}
       </button>
       <div style={{ textAlign: 'center' }}>
-        <Link to="/login" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none' }}>
+        <Link to="/login" style={{ fontSize: '0.82rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
           Déjà un compte ? Se connecter
         </Link>
       </div>

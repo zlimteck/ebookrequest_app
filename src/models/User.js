@@ -30,17 +30,20 @@ const userSchema = new mongoose.Schema({
     type: Date,
     select: false
   },
-  role: { 
-    type: String, 
-    enum: ['admin', 'user'], 
-    default: 'user' 
+  role: {
+    type: String,
+    enum: ['admin', 'user'],
+    default: 'user'
   },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockedUntil: { type: Date, default: null },
   notificationPreferences: {
     email: {
       enabled:      { type: Boolean, default: false },
       bookCompleted:{ type: Boolean, default: true },
       bookCanceled: { type: Boolean, default: true },
       adminComment: { type: Boolean, default: true },
+      loginAlert:   { type: Boolean, default: true },
     },
     push: {
       enabled: { type: Boolean, default: true }

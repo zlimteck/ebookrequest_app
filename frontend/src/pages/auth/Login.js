@@ -114,6 +114,8 @@ function Login() {
         const serverMsg = res.data?.message || res.data?.error;
         if (res.status === 401) {
           errorMessage = serverMsg || 'Identifiants incorrects. Veuillez réessayer.';
+        } else if (res.status === 423) {
+          errorMessage = serverMsg || 'Compte temporairement verrouillé. Réessayez dans 15 minutes.';
         } else if (res.status === 403) {
           errorMessage = serverMsg || 'Accès refusé. Votre compte peut être désactivé.';
         } else if (res.status === 429) {
@@ -202,7 +204,7 @@ function Login() {
             background: 'rgba(99,102,241,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </div>
@@ -279,7 +281,7 @@ function Login() {
           <button
             type="button"
             onClick={() => { setUseRecovery(v => !v); setMessage(''); setTotpCode(''); setRecoveryCode(''); }}
-            style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '0.82rem', cursor: 'pointer', textDecoration: 'underline' }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-accent)', fontSize: '0.82rem', cursor: 'pointer', textDecoration: 'underline' }}
           >
             {useRecovery ? 'Utiliser mon application' : 'Code perdu ? Utiliser un code de récupération'}
           </button>
@@ -310,7 +312,7 @@ function Login() {
         <input className={styles.input} name="username" placeholder="Nom d'utilisateur" value={form.username} onChange={handleChange} required />
         <input className={styles.input} name="password" type="password" placeholder="Mot de passe" value={form.password} onChange={handleChange} required />
         <div style={{ textAlign: 'right', marginTop: '-0.25rem' }}>
-          <Link to="/forgot-password" style={{ fontSize: '0.8rem', color: '#6366f1', textDecoration: 'none' }}>
+          <Link to="/forgot-password" style={{ fontSize: '0.8rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
             Mot de passe oublié ?
           </Link>
         </div>
@@ -349,7 +351,7 @@ function Login() {
 
       {message && <div className={styles.message}>{message}</div>}
       <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-        <Link to="/register" style={{ fontSize: '0.82rem', color: '#6366f1', textDecoration: 'none' }}>
+        <Link to="/register" style={{ fontSize: '0.82rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
           Vous avez un code d'invitation ? S'inscrire
         </Link>
       </div>

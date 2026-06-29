@@ -50,8 +50,8 @@
   display: inline-block;
   padding: 0.15rem 0.55rem;
   background: rgba(79, 140, 255, 0.12);
-  border: 1px solid var(--color-accent, #4f8cff);
-  color: var(--color-accent, #4f8cff);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
   border-radius: 4px;
   font-size: 0.72rem;
   font-weight: 700;
@@ -608,13 +608,13 @@
 }
 
 .iconBtnPrimary {
-  border-color: rgba(79,140,255,0.35);
-  color: #4f8cff;
+  border-color: rgba(99,102,241,0.35);
+  color: var(--color-accent);
 }
 
 .iconBtnPrimary:hover {
-  background: rgba(79,140,255,0.08);
-  border-color: #4f8cff;
+  background: rgba(99,102,241,0.08);
+  border-color: var(--color-accent);
 }
 
 .iconBtnDanger {
@@ -1136,8 +1136,8 @@ select.editInput {
 }
 
 .pageButton:hover:not(:disabled) {
-  background: var(--color-accent, #4f8cff);
-  border-color: var(--color-accent, #4f8cff);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .pageButton:disabled {
@@ -1175,15 +1175,15 @@ select.editInput {
 /* Note admin */
 .adminComment {
   padding: 0.45rem 0.7rem;
-  background: rgba(79,140,255,0.07);
-  border-left: 3px solid #4f8cff;
+  background: rgba(99,102,241,0.07);
+  border-left: 3px solid var(--color-accent);
   border-radius: 0 6px 6px 0;
   font-size: 0.82rem;
 }
 
 .adminCommentLabel {
   font-weight: 700;
-  color: #4f8cff;
+  color: var(--color-accent);
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;

@@ -186,19 +186,39 @@ router.post('/login', async (req, res) => {
 
     // Récupérer l'utilisateur avec le mot de passe
     const user = await User.findOne({ username }).select('+password');
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Identifiants invalides.' });
     }
-    
-    const valid = await bcrypt.compare(password, user.password);
 
-    if (!valid) {
-      return res.status(401).json({ error: 'Identifiants invalides.' });
+    // Vérifier le verrouillage avant toute autre chose
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil((user.lockedUntil - Date.now()) / 60000);
+      return res.status(423).json({
+        error: `Compte temporairement verrouillé. Réessayez dans ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`,
+      });
     }
 
     if (user.isActive === false) {
       return res.status(403).json({ error: 'Votre compte a été désactivé. Contactez un administrateur.' });
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
+      const attempts = (user.failedLoginAttempts || 0) + 1;
+      const update = { failedLoginAttempts: attempts };
+      if (attempts >= 5) {
+        update.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        update.failedLoginAttempts = 0;
+      }
+      await User.updateOne({ _id: user._id }, { $set: update });
+      return res.status(401).json({ error: 'Identifiants invalides.' });
+    }
+
+    // Mot de passe correct — reset des compteurs
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0, lockedUntil: null } });
     }
 
     // Vérifier si le 2FA est activé
@@ -211,7 +231,7 @@ router.post('/login', async (req, res) => {
       return res.json({ twoFactorRequired: true, tempToken });
     }
 
-    // Mise à jour de la dernière connexion (updateOne évite le hook pre-save)
+    // Connexion réussie — mise à jour lastLogin
     await User.updateOne(
       { _id: user._id },
       { $set: { lastLogin: new Date(), lastActivity: new Date() } }

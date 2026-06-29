@@ -485,43 +485,6 @@ function UserForm() {
     <div className={`${styles.formContainer} ${styles.requestForm}`}>
       <div className={styles.formCard}>
 
-      {/* ── Sélecteur user (admin uniquement) ── */}
-      {isAdmin && users.length > 0 && (
-        <div className={styles.adminUserSelect}>
-          <label className={styles.adminUserSelectLabel}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            Soumettre pour
-          </label>
-          <select
-            value={targetUserId}
-            onChange={handleTargetUserChange}
-            className={styles.adminUserSelectInput}
-          >
-            <option value="">{localStorage.getItem('username') || 'Mon compte'}</option>
-            {users.filter(u => u.role !== 'admin').map(u => (
-              <option key={u._id} value={u._id}>{u.username}{u.email ? ` — ${u.email}` : ''}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* ── Toggle ── */}
-      <div className={styles.toggleSearch}>
-        <button type="button"
-          className={`${styles.toggleButton} ${searchMode === 'google' ? styles.toggleActive : ''}`}
-          onClick={() => setSearchMode('google')} disabled={!!selectedBook} aria-pressed={searchMode === 'google'}>
-          <SearchIcon /> Rechercher
-        </button>
-        <button type="button"
-          className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
-          onClick={() => setSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
-          <EditIcon /> Manuel
-        </button>
-      </div>
-
       {/* ── Quota compact ── */}
       {valentineQuota && !valentineQuota.error && (
         <div className={styles.quotaBar}>
@@ -547,7 +510,7 @@ function UserForm() {
             {quota.used} demande{quota.used > 1 ? 's' : ''} utilisée{quota.used > 1 ? 's' : ''}
             {' '}sur {quota.days ?? 30} jours
             {isAdmin && targetUserId && users.find(u => u._id === targetUserId) && (
-              <span style={{ color: '#6366f1', marginLeft: '0.4rem' }}>
+              <span style={{ color: 'var(--color-accent)', marginLeft: '0.4rem' }}>
                 · {users.find(u => u._id === targetUserId).username}
               </span>
             )}
@@ -561,6 +524,44 @@ function UserForm() {
           </span>
         </div>
       )}
+
+      {/* ── Ligne du haut : sélecteur user + toggle mode ── */}
+      <div className={styles.formTopRow}>
+        <div className={styles.toggleSearch}>
+          <button type="button"
+            className={`${styles.toggleButton} ${searchMode === 'google' ? styles.toggleActive : ''}`}
+            onClick={() => setSearchMode('google')} disabled={!!selectedBook} aria-pressed={searchMode === 'google'}>
+            <SearchIcon /> Rechercher
+          </button>
+          <button type="button"
+            className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
+            onClick={() => setSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
+            <EditIcon /> Manuel
+          </button>
+        </div>
+
+        {isAdmin && users.length > 0 && (
+          <div className={styles.adminUserSelect}>
+            <label className={styles.adminUserSelectLabel}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              Soumettre pour
+            </label>
+            <select
+              value={targetUserId}
+              onChange={handleTargetUserChange}
+              className={styles.adminUserSelectInput}
+            >
+              <option value="">{localStorage.getItem('username') || 'Mon compte'}</option>
+              {users.filter(u => u.role !== 'admin').map(u => (
+                <option key={u._id} value={u._id}>{u.username}{u.email ? ` — ${u.email}` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       {message.text && (
         <div className={`${styles.message} ${message.type === 'error' ? styles.error : styles.success}`}>
@@ -610,7 +611,7 @@ function UserForm() {
                 onChange={handleChange} className={styles.input} placeholder="Titre du livre" required />
             </div>
             <div className={`${styles.formGroup} ${styles.halfWidth}`}>
-              <label htmlFor="author" className={styles.label}>Auteur(s) <span className="styles.required">*</span></label>
+              <label htmlFor="author" className={styles.label}>Auteur(s) <span className={styles.required}>*</span></label>
               <input type="text" id="author" name="author" value={form.author}
                 onChange={handleChange} className={styles.input} placeholder="Nom de l'auteur" required />
             </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import { toast } from 'react-toastify';
@@ -47,6 +48,11 @@ const UserDashboard = () => {
   const [editModal, setEditModal]   = useState(null); // request object
   const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '' });
   const [editSaving, setEditSaving] = useState(false);
+
+  const deleteModalRef  = useFocusTrap(!!deleteModal);
+  const editModalRef    = useFocusTrap(!!editModal);
+  const commentModalRef = useFocusTrap(!!commentModal);
+  const reportModalRef  = useFocusTrap(reportModal.isOpen);
 
   const setView = (mode) => {
     setViewMode(mode);
@@ -414,7 +420,7 @@ const UserDashboard = () => {
           <div className={styles.noteModalOverlay} onClick={(e) => {
             if (e.target === e.currentTarget) { setCommentModal(null); setCommentValue(''); }
           }}>
-            <div className={styles.noteModal}>
+            <div className={styles.noteModal} ref={commentModalRef} role="dialog" aria-modal="true" aria-label="Note personnelle">
               <div className={styles.noteModalHeader}>
                 <div>
                   <h3 className={styles.noteModalTitle}>{req?.userComment ? 'Modifier ma note' : 'Ajouter une note'}</h3>
@@ -458,6 +464,7 @@ const UserDashboard = () => {
         </svg>
         <input
           type="text"
+          aria-label="Rechercher par titre ou auteur"
           placeholder="Rechercher par titre ou auteur…"
           value={search}
           onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
@@ -984,7 +991,7 @@ const UserDashboard = () => {
       {/* Modal suppression */}
       {deleteModal && (
         <div className={styles.modalOverlay} onClick={() => setDeleteModal(null)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalContent} ref={deleteModalRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Supprimer la demande">
             <h2>Supprimer la demande</h2>
             <p className={styles.modalBookTitle}>« {deleteModal.title} »</p>
             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
@@ -1001,7 +1008,7 @@ const UserDashboard = () => {
       {/* Modal édition */}
       {editModal && (
         <div className={styles.modalOverlay} onClick={() => !editSaving && setEditModal(null)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalContent} ref={editModalRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Modifier la demande">
             <h2>Modifier la demande</h2>
             <p className={styles.modalBookTitle}>Demande en attente</p>
             <div className={styles.modalForm}>
@@ -1062,7 +1069,7 @@ const UserDashboard = () => {
           setReportModal({ isOpen: false, requestId: null, requestTitle: '' });
           setReportReason('');
         }}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.modalContent} ref={reportModalRef} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Signaler un problème">
             <h2>Signaler un problème</h2>
             <p className={styles.modalBookTitle}>Livre: {reportModal.requestTitle}</p>
             <div className={styles.modalForm}>

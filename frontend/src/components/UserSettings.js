@@ -31,7 +31,7 @@ const UserSettings = () => {
     email: '',
     username: '',
     notificationPreferences: {
-      email: { enabled: false, bookCompleted: true, bookCanceled: true, adminComment: true },
+      email: { enabled: false, bookCompleted: true, bookCanceled: true, adminComment: true, loginAlert: true },
       push: { enabled: true }
     }
   });
@@ -120,6 +120,7 @@ const UserSettings = () => {
                 bookCompleted: u.notificationPreferences?.email?.bookCompleted !== false,
                 bookCanceled:  u.notificationPreferences?.email?.bookCanceled  !== false,
                 adminComment:  u.notificationPreferences?.email?.adminComment  !== false,
+                loginAlert:    u.notificationPreferences?.email?.loginAlert    !== false,
               },
               push: { enabled: u.notificationPreferences?.push?.enabled !== false }
             }
@@ -760,6 +761,7 @@ const UserSettings = () => {
                     { name: 'notificationPreferences.email.bookCompleted', label: 'Livre disponible au téléchargement' },
                     { name: 'notificationPreferences.email.bookCanceled',  label: 'Demande annulée' },
                     { name: 'notificationPreferences.email.adminComment',  label: 'Commentaire d\'un administrateur' },
+                    { name: 'notificationPreferences.email.loginAlert',    label: 'Connexion depuis un nouvel endroit' },
                   ].map(ev => (
                     <label key={ev.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                       <input

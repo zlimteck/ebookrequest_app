@@ -1,13 +1,35 @@
 :root {
-    --color-bg: #181a1b;
-    --color-bg2: #23272b;
-    --color-text: #e6e6e6;
-    --color-accent: #4f8cff;
-    --color-accent2: #6bbcff;
-    --color-danger: #ff4f4f;
-    --color-success: #4fcf7f;
-    --color-border: #333;
-  }
+  /* Fonds */
+  --color-bg:  #181a1b;
+  --color-bg2: #23272b;
+  --color-bg3: #1e2124;
+  --color-bg4: #161819;
+
+  /* Texte */
+  --color-text:       #e6e6e6;
+  --color-text-muted: #94a3b8;
+
+  /* Accent — même violet que le thème clair */
+  --color-accent:       #6366f1;
+  --color-accent2:      #818cf8;
+  --color-accent-hover: #4f46e5;
+
+  /* États */
+  --color-danger:       #ff4f4f;
+  --color-danger-hover: #dc2626;
+  --color-success:      #4fcf7f;
+  --color-warning:      #f59e0b;
+  --color-error:        #ff4f4f;
+
+  /* Bordures */
+  --color-border: #333;
+
+  /* Effets */
+  --glass:        rgba(35, 39, 43, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --shadow:       0 4px 30px rgba(0, 0, 0, 0.3);
+  --shadow-md:    0 8px 30px rgba(0, 0, 0, 0.4);
+}
 
 .appContainer {
     min-height: 100vh;
