@@ -7,6 +7,22 @@ import { compressImage, isImage } from '../../utils/imageCompressor';
 import styles from './UserForm.module.css';
 
 
+// Conversion format français ↔ ISO pour la date de sortie
+function frToIso(str) {
+  const s = (str || '').trim();
+  if (/^\d{4}$/.test(s)) return s;
+  if (/^\d{2}\/\d{4}$/.test(s)) { const [m, y] = s.split('/'); return `${y}-${m}`; }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}`; }
+  return s;
+}
+function isoToFr(str) {
+  if (!str) return '';
+  const parts = str.split('-');
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 const SearchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -86,6 +102,7 @@ function UserForm() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [searchMode, setSearchMode] = useState('google');
   const [selectedBook, setSelectedBook] = useState(null);
+  const [rawPublishedDate, setRawPublishedDate] = useState('');
   const [existingRequests, setExistingRequests] = useState([]);
   const [availability, setAvailability] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -315,6 +332,7 @@ function UserForm() {
       const title = book.volumeInfo.title || '';
       const author = book.volumeInfo.authors?.[0] || '';
 
+      setRawPublishedDate(book.volumeInfo.publishedDate || '');
       setForm(prev => ({
         ...prev,
         title: title,
@@ -346,6 +364,7 @@ function UserForm() {
 
   const handleRemoveBook = () => {
     setSelectedBook(null);
+    setRawPublishedDate('');
     setAvailability(null);
     setSearchMode('google'); // Retour à la recherche avec les résultats précédents
     setForm(prev => ({
@@ -388,12 +407,33 @@ function UserForm() {
       link: form.link || '',
       thumbnail: form.coverImagePreview || '',
       pageCount: 0,
+      publishedDate: rawPublishedDate || (form.year ? frToIso(String(form.year)) : ''),
       format: form.format || '',
       category: form.category || 'ebook',
       ...(selectedBook?.id && { googleBooksId: selectedBook.id }),
       ...(isAdmin && targetUserId && { targetUserId })
     };
     
+    // Validation date de sortie (obligatoire en mode manuel)
+    if (!selectedBook && !form.year?.toString().trim()) {
+      setMessage({
+        text: 'Veuillez renseigner la date de sortie du livre.',
+        type: 'error'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validation du format de la date (format français : AAAA, MM/AAAA ou JJ/MM/AAAA)
+    if (form.year && !/^(\d{2}\/\d{2}\/\d{4}|\d{2}\/\d{4}|\d{4})$/.test(String(form.year).trim())) {
+      setMessage({
+        text: 'Format de date invalide. Utilisez : 2024, 06/2024 ou 15/06/2024.',
+        type: 'error'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     // Validation du lien
     if (!form.link) {
       setMessage({ 
@@ -441,7 +481,8 @@ function UserForm() {
       });
       
       setSelectedBook(null);
-      
+      setRawPublishedDate('');
+
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -470,6 +511,18 @@ function UserForm() {
       </div>
     );
   }
+
+  const isPublishedInFuture = (dateStr) => {
+    if (!dateStr) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const parts = dateStr.split('-');
+    let d;
+    if (parts.length === 1) d = new Date(parseInt(parts[0]), 0, 1);
+    else if (parts.length === 2) d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+    else d = new Date(dateStr);
+    return !isNaN(d.getTime()) && d > today;
+  };
 
   const availabilityConf = availability?.confidence;
   const availabilityMeta = {
@@ -602,6 +655,17 @@ function UserForm() {
               </div>
             </div>
           )}
+          {rawPublishedDate && isPublishedInFuture(rawPublishedDate) && (
+            <div className={`${styles.availabilityBadge} ${styles.availabilityLow}`}>
+              <span className={styles.availabilityBadgeIcon}>📅</span>
+              <div>
+                <div className={styles.availabilityTitle}>Livre pas encore sorti</div>
+                <div className={styles.availabilityMessage}>
+                  Date de sortie : <strong>{isoToFr(rawPublishedDate)}</strong>. Le téléchargement automatique démarrera à partir de cette date.
+                </div>
+              </div>
+            </div>
+          )}
 
 
           <div className={styles.formRow}>
@@ -619,10 +683,10 @@ function UserForm() {
 
           <div className={styles.formRow}>
             <div className={`${styles.formGroup} ${styles.halfWidth}`}>
-              <label htmlFor="year" className={styles.label}>Année</label>
-              <input type="number" id="year" name="year" value={form.year || ''}
-                onChange={handleChange} className={styles.input} placeholder="2024"
-                min="1000" max={new Date().getFullYear() + 1} />
+              <label htmlFor="year" className={styles.label}>Date de sortie {!selectedBook && <span className={styles.required}>*</span>}</label>
+              <input type="text" id="year" name="year" value={form.year || ''}
+                onChange={handleChange} className={styles.input} placeholder="2024, 06/2024 ou 15/06/2024"
+                required={!selectedBook} />
             </div>
             <div className={`${styles.formGroup} ${styles.halfWidth}`}>
               <label htmlFor="genre" className={styles.label}>Genre</label>
@@ -706,6 +770,7 @@ function UserForm() {
                   </>
                 )}
               </label>
+              <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.3rem', display: 'block' }}>Recommandé : 200 × 300 px</span>
             </div>
           </div>
 

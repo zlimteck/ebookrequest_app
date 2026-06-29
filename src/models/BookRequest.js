@@ -39,6 +39,10 @@ const bookRequestSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  publishedDate: {
+    type: String,
+    default: ''
+  },
   downloadLink: { 
     type: String,
     default: ''

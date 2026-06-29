@@ -443,17 +443,19 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0 0.85rem;
+  height: 2.6rem;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background: none;
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   overflow: hidden;
-  height: 36px;
+  width: fit-content;
+  box-sizing: border-box;
 }
 
 .coverImageBtn:hover {

@@ -152,9 +152,27 @@ async function notifyAdminsDownloadFailed(bookRequest, annaUrl) {
  *
  * Non bloquant — toutes les erreurs sont capturées.
  */
+function isPublishedInFuture(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const parts = dateStr.split('-');
+  let d;
+  if (parts.length === 1) d = new Date(parseInt(parts[0]), 0, 1);
+  else if (parts.length === 2) d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+  else d = new Date(dateStr);
+  return !isNaN(d.getTime()) && d > today;
+}
+
 export async function downloadWithFallback(title, author, requestId, category = 'ebook', userId = null) {
   const connectorsTried = [];
   const bookRequest = await BookRequest.findById(requestId).lean();
+
+  if (isPublishedInFuture(bookRequest?.publishedDate)) {
+    console.log(`[Orchestrateur] "${title}" ignoré — date de sortie future : ${bookRequest.publishedDate}`);
+    return;
+  }
+
   // URL de fallback pour la notification — on utilise le domaine configuré (pas .org, bloqué dans certains pays)
   const annaConfig = await getAnnasArchiveConfig().catch(() => null);
   const annaBaseUrl = (annaConfig?.url || 'https://annas-archive.pk').replace(/\/$/, '');

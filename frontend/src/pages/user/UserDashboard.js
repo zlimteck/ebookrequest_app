@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
@@ -9,6 +9,22 @@ import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
 import DownloadModal from '../../components/DownloadModal';
 import CommentThread from '../../components/CommentThread';
+import { compressImage, isImage } from '../../utils/imageCompressor';
+
+function frToIso(str) {
+  const s = (str || '').trim();
+  if (/^\d{4}$/.test(s)) return s;
+  if (/^\d{2}\/\d{4}$/.test(s)) { const [m, y] = s.split('/'); return `${y}-${m}`; }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}`; }
+  return s;
+}
+function isoToFr(str) {
+  if (!str) return '';
+  const parts = str.split('-');
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -46,7 +62,7 @@ const UserDashboard = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, dir: 'asc' });
   const [deleteModal, setDeleteModal] = useState(null); // request object
   const [editModal, setEditModal]   = useState(null); // request object
-  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '' });
+  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '' });
   const [editSaving, setEditSaving] = useState(false);
 
   const deleteModalRef  = useFocusTrap(!!deleteModal);
@@ -189,13 +205,35 @@ const UserDashboard = () => {
   // Ouvrir le modal d'édition
   const openEditModal = (request) => {
     setEditForm({
-      title:  request.title  || '',
-      author: request.author || '',
-      format: request.format || '',
-      link:   request.link   || '',
+      title:         request.title         || '',
+      author:        request.author        || '',
+      format:        request.format        || '',
+      link:          request.link          || '',
+      publishedDate: isoToFr(request.publishedDate || ''),
+      thumbnail:     request.thumbnail     || '',
     });
     setEditModal(request);
   };
+
+  const handleEditCoverChange = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const process = (f) => {
+      const reader = new FileReader();
+      reader.onloadend = () => setEditForm(prev => ({ ...prev, thumbnail: reader.result }));
+      reader.readAsDataURL(f);
+    };
+    if (isImage(file) && file.size > 1 * 1024 * 1024) {
+      try {
+        const compressed = await compressImage(file, { maxSizeMB: 1, maxWidthOrHeight: 1200 });
+        process(compressed);
+      } catch {
+        process(file);
+      }
+    } else {
+      process(file);
+    }
+  }, []);
 
   // Sauvegarder les modifications d'une demande
   const handleEditRequest = async () => {
@@ -204,9 +242,14 @@ const UserDashboard = () => {
       toast.error('Le titre et l\'auteur sont obligatoires.');
       return;
     }
+    if (editForm.publishedDate && !/^(\d{2}\/\d{2}\/\d{4}|\d{2}\/\d{4}|\d{4})$/.test(editForm.publishedDate.trim())) {
+      toast.error('Format de date invalide. Utilisez : 2024, 06/2024 ou 15/06/2024.');
+      return;
+    }
     setEditSaving(true);
     try {
-      const { data } = await axiosAdmin.patch(`/api/requests/${editModal._id}/user-edit`, editForm);
+      const payload = { ...editForm, publishedDate: frToIso(editForm.publishedDate) };
+      const { data } = await axiosAdmin.patch(`/api/requests/${editModal._id}/user-edit`, payload);
       setRequests(prev => prev.map(r => r._id === editModal._id ? { ...r, ...data.request } : r));
       toast.success('Demande mise à jour.');
       setEditModal(null);
@@ -789,14 +832,17 @@ const UserDashboard = () => {
                   {request.author}
                 </p>
 
-                {/* Meta: format + pages */}
-                {(request.format || request.pageCount > 0) && (
+                {/* Meta: format + pages + année */}
+                {(request.format || request.pageCount > 0 || request.publishedDate) && (
                   <div className={styles.metaRow}>
                     {request.format && (
                       <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>
                     )}
                     {request.pageCount > 0 && (
                       <span className={styles.pagesBadge}>{request.pageCount} pages</span>
+                    )}
+                    {request.publishedDate && (
+                      <span className={styles.pagesBadge}>{isoToFr(request.publishedDate)}</span>
                     )}
                   </div>
                 )}
@@ -1051,6 +1097,40 @@ const UserDashboard = () => {
                   onChange={e => setEditForm(f => ({ ...f, link: e.target.value }))}
                   placeholder="https://..."
                 />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Date de sortie</label>
+                <input
+                  className={styles.editInput}
+                  value={editForm.publishedDate}
+                  onChange={e => setEditForm(f => ({ ...f, publishedDate: e.target.value }))}
+                  placeholder="2024, 06/2024 ou 15/06/2024"
+                />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Couverture</label>
+                <div className={styles.coverEditRow}>
+                  {editForm.thumbnail ? (
+                    <div className={styles.coverEditImgWrap} onClick={() => setEditForm(f => ({ ...f, thumbnail: '' }))}>
+                      <img src={editForm.thumbnail} alt="Couverture" className={styles.coverEditPreview} />
+                      <div className={styles.coverEditOverlay}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.coverEditPlaceholder}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </div>
+                  )}
+                  <div className={styles.coverEditActions}>
+                    <label className={styles.coverEditBtn}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginRight: '6px' }}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                      Choisir une image
+                      <input type="file" accept="image/*" onChange={handleEditCoverChange} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                </div>
+                <span className={styles.coverEditHint}>Recommandé : 200 × 300 px</span>
               </div>
             </div>
             <div className={styles.modalButtons}>

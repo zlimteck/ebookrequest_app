@@ -57,7 +57,7 @@ const __dirname = path.dirname(__filename);
 // Création d'une nouvelle demande de livre
 export const createBookRequest = async (req, res) => {
   try {
-    const { author, title, link, thumbnail, description, pageCount, format, category, targetUserId } = req.body;
+    const { author, title, link, thumbnail, description, pageCount, publishedDate, format, category, targetUserId } = req.body;
     
     // Validation des champs obligatoires
     if (!author || !title) {
@@ -134,6 +134,7 @@ export const createBookRequest = async (req, res) => {
       thumbnail: thumbnail || '',
       description: description || '',
       pageCount: pageCount || 0,
+      publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
       format: format || '',
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       status: isAutoCompleted ? 'completed' : 'pending',
@@ -839,7 +840,7 @@ export const updateUserComment = async (req, res) => {
 export const editUserRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, author, format, link, description, thumbnail, pageCount } = req.body;
+    const { title, author, format, link, description, thumbnail, pageCount, publishedDate } = req.body;
 
     if (!title?.trim() || !author?.trim()) {
       return res.status(400).json({ error: 'Le titre et l\'auteur sont obligatoires.' });
@@ -859,6 +860,12 @@ export const editUserRequest = async (req, res) => {
     if (description !== undefined) updates.description = description;
     if (thumbnail !== undefined) updates.thumbnail = thumbnail;
     if (pageCount !== undefined) updates.pageCount = pageCount;
+    if (publishedDate !== undefined) {
+      if (publishedDate && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) {
+        return res.status(400).json({ error: 'Format de date invalide. Utilisez : 2024, 2024-06 ou 2024-06-15.' });
+      }
+      updates.publishedDate = publishedDate;
+    }
 
     const updated = await BookRequest.findByIdAndUpdate(
       id,

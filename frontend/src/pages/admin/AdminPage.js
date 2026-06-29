@@ -1,4 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+
+function isoToFr(str) {
+  if (!str) return '';
+  const parts = str.split('-');
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
 import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './AdminPage.module.css';
@@ -1279,8 +1287,13 @@ function AdminPage() {
 
                   <div className={styles.bookAuthor}>
                     {request.author}
-                    {request.format && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
                   </div>
+                  {(request.format || request.publishedDate) && (
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                      {request.format && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
+                      {request.publishedDate && <span className={styles.formatBadge} style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg3)' }}>{isoToFr(request.publishedDate)}</span>}
+                    </div>
+                  )}
 
                   {/* Meta compact */}
                   <div className={styles.adminMeta}>

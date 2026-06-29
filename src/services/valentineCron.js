@@ -2,6 +2,18 @@ import BookRequest from '../models/BookRequest.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { downloadWithFallback } from './connectorOrchestrator.js';
 
+function isPublishedInFuture(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const parts = dateStr.split('-');
+  let d;
+  if (parts.length === 1) d = new Date(parseInt(parts[0]), 0, 1);
+  else if (parts.length === 2) d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+  else d = new Date(dateStr);
+  return !isNaN(d.getTime()) && d > today;
+}
+
 const DELAY_BETWEEN_MS = 15000; // 15s entre chaque livre — évite le rate-limit Anna's Archive
 
 let nextScanAt = null;
@@ -39,6 +51,10 @@ async function runValentineCron() {
     console.log(`[Connecteurs Cron] ${pending.length} demande(s) en attente à vérifier…`);
 
     for (const req of pending) {
+      if (isPublishedInFuture(req.publishedDate)) {
+        console.log(`[Connecteurs Cron] "${req.title}" ignoré — date de sortie future : ${req.publishedDate}`);
+        continue;
+      }
       await downloadWithFallback(req.title, req.author, req._id.toString(), req.category || 'ebook');
       await sleep(DELAY_BETWEEN_MS);
     }

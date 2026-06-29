@@ -56,7 +56,6 @@
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  margin-top: 0.2rem;
 }
 
 /* Historique des statuts */
@@ -1049,6 +1048,107 @@
 .editFieldRow:last-of-type {
   margin-bottom: 0;
 }
+
+.coverEditRow {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.coverEditImgWrap {
+  position: relative;
+  width: 52px;
+  height: 72px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.coverEditPreview {
+  width: 52px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.coverEditOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.coverEditImgWrap:hover .coverEditOverlay {
+  opacity: 1;
+}
+
+.coverEditPlaceholder {
+  width: 52px;
+  height: 72px;
+  border-radius: 5px;
+  border: 1px dashed var(--color-border);
+  background: var(--color-bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.coverEditActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.coverEditHint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+  display: block;
+}
+
+.coverEditBtn,
+.coverEditRemove {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  line-height: 1.2;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.coverEditBtn {
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.coverEditBtn:hover {
+  border-color: var(--color-accent);
+  background: rgba(99,102,241,0.07);
+}
+
 
 .editLabel {
   display: block;
