@@ -1,15 +1,40 @@
 import express from 'express';
 import fetch from 'node-fetch';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import BookRequest from '../models/BookRequest.js';
 import DownloadLog from '../models/DownloadLog.js';
+import User from '../models/User.js';
+import { sendKindleDelivery } from '../services/emailService.js';
 import { testConnectionValentine, searchOnValentine, downloadFromValentineById, getValentineQuota } from '../services/valentineService.js';
 import { invalidateAdminEmailPrefsCache } from '../controllers/bookRequestController.js';
 import { getNextScanTime, restartCronInterval } from '../services/valentineCron.js';
 import { searchOnAnnasArchive, getAnnasArchiveConfig, saveAnnasArchiveConfig, downloadFromAnnas, pingAnnasArchive } from '../services/annasArchiveService.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 import { pingPredbApi } from '../services/predbApiService.js';
+
+async function triggerKindleIfEnabled(bookRequestLean) {
+  try {
+    if (!bookRequestLean?.filePath || !bookRequestLean?.user) return;
+    const user = await User.findById(bookRequestLean.user)
+      .select('kindleEmail emailVerified notificationPreferences');
+    if (!user?.emailVerified || !user?.kindleEmail || !user?.notificationPreferences?.kindle?.enabled) return;
+    const uploadsRoot = path.resolve(__dirname, '../../uploads');
+    const absolutePath = path.resolve(uploadsRoot, bookRequestLean.filePath);
+    if (!absolutePath.startsWith(uploadsRoot + path.sep) || !fs.existsSync(absolutePath)) return;
+    const filename = path.basename(absolutePath);
+    sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+      .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
+      .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
+  } catch (e) {
+    console.error('[Kindle] Erreur déclenchement:', e.message);
+  }
+}
 
 const router = express.Router();
 
@@ -133,6 +158,7 @@ router.post('/valentine/download-request', requireAuth, requireAdmin, async (req
     const result = await downloadFromValentineById(requestId, ebookId);
     const br = await BookRequest.findById(requestId).lean();
     await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: true, triggeredBy: 'admin' });
+    if (br?.status === 'completed') triggerKindleIfEnabled(br);
     res.json({ success: true, ...result });
   } catch (err) {
     const br = await BookRequest.findById(requestId).lean().catch(() => null);
@@ -191,6 +217,7 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
     const result = await downloadFromAnnas(md5, requestId, format || null);
     const br = await BookRequest.findById(requestId).lean();
     await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: true, triggeredBy: 'admin' });
+    if (result && br?.status === 'completed') triggerKindleIfEnabled(br);
     res.json({ success: true, ...result });
   } catch (err) {
     const br = await BookRequest.findById(requestId).lean().catch(() => null);

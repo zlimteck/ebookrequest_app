@@ -80,6 +80,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Recherche manuelle sur les connecteurs depuis le panel admin
 - Envoi automatique du fichier vers Calibre-Web à la complétion d'une demande
 - Synchronisation automatique de l'étagère Kobo dans Calibre-Web (le livre apparaît directement sur la liseuse)
+- Envoi automatique du fichier sur l'adresse `@kindle.com` de l'utilisateur à chaque complétion (activable par l'utilisateur dans ses paramètres, requiert un email vérifié)
 
 **Utilisateurs & accès**
 - Inscription par invitation email ou code d'invitation (usage limité, expiration configurable)

@@ -5,7 +5,12 @@ import DownloadLog from '../models/DownloadLog.js';
 import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas, getAnnasArchiveConfig } from './annasArchiveService.js';
 import appriseService from './appriseService.js';
-import { sendDownloadFailedToAdminsEmail } from './emailService.js';
+import { sendDownloadFailedToAdminsEmail, sendKindleDelivery } from './emailService.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { sendPushToUser } from './webPushService.js';
 import { decrypt } from './cryptoService.js';
 
@@ -75,10 +80,32 @@ async function notifyCompletion(bookRequest) {
   try {
     appriseService.notifyBookCompleted(bookRequest).catch(() => {});
     const User = mongoose.model('User');
-    const user = await User.findById(bookRequest.user).select('username notificationPreferences');
-    if (user) appriseService.notifyUserBookCompleted(user, bookRequest).catch(() => {});
+    const user = await User.findById(bookRequest.user)
+      .select('username notificationPreferences kindleEmail emailVerified');
+    if (user) {
+      appriseService.notifyUserBookCompleted(user, bookRequest).catch(() => {});
+
+      // Livraison Kindle
+      if (
+        bookRequest.filePath &&
+        user.emailVerified &&
+        user.kindleEmail &&
+        user.notificationPreferences?.kindle?.enabled
+      ) {
+        const uploadsRoot = path.resolve(__dirname, '../../uploads');
+        const absolutePath = path.resolve(uploadsRoot, bookRequest.filePath);
+        if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
+          const filename = path.basename(absolutePath);
+          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
+            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
+        } else {
+          console.error('[Kindle] Fichier introuvable ou chemin invalide:', bookRequest.filePath);
+        }
+      }
+    }
   } catch (e) {
-    console.error('[Orchestrateur] Erreur notification Apprise:', e.message);
+    console.error('[Orchestrateur] Erreur notification:', e.message);
   }
 }
 

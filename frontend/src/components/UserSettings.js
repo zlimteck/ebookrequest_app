@@ -102,6 +102,11 @@ const UserSettings = () => {
   const [valentineQuota, setValentineQuota] = useState(null);
   const [valentineQuotaFetchedAt, setValentineQuotaFetchedAt] = useState(null);
 
+  const [kindle, setKindle] = useState({ enabled: false, email: '' });
+  const [kindleSaving, setKindleSaving] = useState(false);
+  const [kindleError, setKindleError] = useState('');
+  const [appFromEmail, setAppFromEmail] = useState('');
+
   const [mcpInfo, setMcpInfo] = useState(null);
   const [tokenVisible, setTokenVisible] = useState(false);
 
@@ -130,6 +135,10 @@ const UserSettings = () => {
           if (u.notificationPreferences?.apprise) {
             setApprisePrefs(prev => ({ ...prev, ...u.notificationPreferences.apprise }));
           }
+          setKindle({
+            enabled: u.notificationPreferences?.kindle?.enabled || false,
+            email: u.kindleEmail || '',
+          });
         }
       } catch (error) {
         toast.error('Erreur lors du chargement de votre profil');
@@ -188,6 +197,12 @@ const UserSettings = () => {
         setPasskeys(res.data || []);
       } catch { /* silencieux */ }
     };
+    const fetchAppConfig = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/auth/setup-status');
+        if (res.data.fromEmail) setAppFromEmail(res.data.fromEmail);
+      } catch { /* silencieux */ }
+    };
     fetchUserData();
     fetchOpdsToken();
     fetchCalibreConfig();
@@ -196,6 +211,7 @@ const UserSettings = () => {
     fetchMcpInfo();
     fetchPasskeys();
     fetchSessions();
+    fetchAppConfig();
   }, []);
 
   useEffect(() => {
@@ -480,6 +496,28 @@ const UserSettings = () => {
     }
   };
 
+
+  const handleSaveKindle = async () => {
+    setKindleSaving(true);
+    setKindleError('');
+    const emailEmpty = !kindle.email.trim();
+    const effectiveEnabled = emailEmpty ? false : kindle.enabled;
+    try {
+      await axiosAdmin.put('/api/users/profile', {
+        kindleEmail: kindle.email,
+        notificationPreferences: { kindle: { enabled: effectiveEnabled } },
+      });
+      if (emailEmpty && kindle.enabled) {
+        setKindle(prev => ({ ...prev, enabled: false }));
+      }
+      toast.success('Paramètres Kindle enregistrés');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erreur lors de la sauvegarde';
+      setKindleError(msg);
+    } finally {
+      setKindleSaving(false);
+    }
+  };
 
   const handleSaveApprise = async () => {
     setAppriseSaving(true);
@@ -1366,6 +1404,75 @@ const UserSettings = () => {
             </div>
           )}
         </div>
+
+        {/* ── Livraison Kindle ── */}
+        {user.emailVerified && (
+          <div className={styles.settingsCard}>
+            <h2 className={styles.sectionTitle}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              Amazon Kindle
+            </h2>
+
+            <div className={styles.toggleRow}>
+              <div>
+                <p className={styles.toggleLabel}>Envoyer automatiquement sur ma Kindle</p>
+                <p className={styles.toggleDesc}>À chaque livre complété, le fichier est envoyé à ton adresse Kindle.</p>
+              </div>
+              <label className={styles.switch}>
+                <input
+                  type="checkbox"
+                  checked={kindle.enabled}
+                  onChange={e => setKindle(prev => ({ ...prev, enabled: e.target.checked }))}
+                />
+                <span className={styles.slider} />
+              </label>
+            </div>
+
+            {kindle.enabled && (
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Adresse email Kindle</label>
+                <input
+                  type="email"
+                  className={styles.fieldInput}
+                  placeholder="monnom@kindle.com"
+                  value={kindle.email}
+                  onChange={e => setKindle(prev => ({ ...prev, email: e.target.value }))}
+                />
+                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '0.4rem', lineHeight: 1.5 }}>
+                  Utilisez votre adresse <code style={{ fontSize: '0.78rem' }}>@kindle.com</code> et ajoutez{' '}
+                  {appFromEmail
+                    ? <strong style={{ color: 'var(--color-text)' }}>{appFromEmail}</strong>
+                    : 'l\'adresse email de l\'application'
+                  }{' '}dans vos{' '}
+                  <a href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>
+                    expéditeurs approuvés Amazon
+                  </a>.
+                </p>
+              </div>
+            )}
+
+            <div style={{ marginTop: '1.25rem' }}>
+              <button
+                type="button"
+                className={styles.btnPrimary}
+                onClick={handleSaveKindle}
+                disabled={kindleSaving}
+              >
+                {kindleSaving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+              {kindleError && (
+                <div className={`${styles.alert} ${styles.alertError}`} style={{ marginTop: '0.75rem' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  {kindleError}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Sécurité ── */}
         <div className={styles.settingsCard}>

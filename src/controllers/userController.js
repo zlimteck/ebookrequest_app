@@ -9,7 +9,7 @@ const User = mongoose.model('User');
 // Met à jour le profil utilisateur (email et préférences de notification)
 export const updateUserProfile = async (req, res) => {
   try {
-    const { email, notificationPreferences } = req.body;
+    const { email, notificationPreferences, kindleEmail } = req.body;
     const updates = {};
     
     // Récupérer l'utilisateur complet pour avoir accès au nom d'utilisateur
@@ -58,13 +58,33 @@ export const updateUserProfile = async (req, res) => {
       }
     }
     
+    // Kindle email
+    if (kindleEmail !== undefined) {
+      if (typeof kindleEmail !== 'string') {
+        return res.status(400).json({ error: 'Adresse email invalide.' });
+      }
+      const trimmed = kindleEmail.trim().toLowerCase();
+      if (trimmed && !/^[^\s@]+@kindle\.com$/.test(trimmed)) {
+        return res.status(400).json({ error: 'L\'adresse Kindle doit être de la forme nom@kindle.com.' });
+      }
+      updates.kindleEmail = trimmed;
+    }
+
     // Mettre à jour les préférences de notification si fournies (deep merge par sous-objet)
     if (notificationPreferences) {
-      const existing = req.user.notificationPreferences || {};
+      const existing = currentUser.notificationPreferences || {};
+
+      // Kindle ne peut être activé que si l'email est vérifié
+      const kindleUpdate = notificationPreferences.kindle || {};
+      if (kindleUpdate.enabled && !currentUser.emailVerified) {
+        return res.status(400).json({ error: 'Un email vérifié est requis pour activer la livraison Kindle.' });
+      }
+
       updates.notificationPreferences = {
         email:   { ...existing.email,   ...(notificationPreferences.email   || {}) },
         push:    { ...existing.push,    ...(notificationPreferences.push    || {}) },
         apprise: { ...existing.apprise, ...(notificationPreferences.apprise || {}) },
+        kindle:  { ...existing.kindle,  ...kindleUpdate },
       };
     }
     
@@ -160,6 +180,7 @@ export const getCurrentUser = async (req, res) => {
         role: user.role,
         emailVerified: user.emailVerified,
         notificationPreferences: user.notificationPreferences,
+        kindleEmail: user.kindleEmail || '',
         avatar: user.avatar || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,

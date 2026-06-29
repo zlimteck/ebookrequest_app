@@ -21,7 +21,7 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
     console.error('Erreur log admin:', e.message);
   }
 };
-import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail } from '../services/emailService.js';
+import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail, sendKindleDelivery } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
@@ -202,6 +202,24 @@ export const createBookRequest = async (req, res) => {
       // Apprise admin global + Apprise personnel user
       appriseService.notifyBookCompleted(newRequest).catch(() => {});
       appriseService.notifyUserBookCompleted(user, newRequest).catch(() => {});
+
+      // Livraison Kindle
+      if (
+        newRequest.filePath &&
+        user.emailVerified &&
+        user.kindleEmail &&
+        user.notificationPreferences?.kindle?.enabled
+      ) {
+        const uploadsRoot = path.resolve(__dirname, '../../uploads');
+        const absolutePath = path.resolve(uploadsRoot, newRequest.filePath);
+        if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
+          const filename = path.basename(absolutePath);
+          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
+            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
+        }
+      }
+
       return res.status(201).json(newRequest);
     }
 
@@ -388,10 +406,24 @@ export const updateRequestStatus = async (req, res) => {
           url: '/dashboard'
         }).catch(() => {});
         appriseService.notifyBookCompleted(currentRequest).catch(() => {});
-        // Notif Apprise personnelle de l'user
-        User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
-          if (u) appriseService.notifyUserBookCompleted(u, currentRequest).catch(() => {});
-        }).catch(() => {});
+        // Notif Apprise personnelle + livraison Kindle
+        User.findById(currentRequest.user)
+          .select('username notificationPreferences kindleEmail emailVerified')
+          .then(u => {
+            if (!u) return;
+            appriseService.notifyUserBookCompleted(u, currentRequest).catch(() => {});
+            // Kindle
+            if (currentRequest.filePath && u.emailVerified && u.kindleEmail && u.notificationPreferences?.kindle?.enabled) {
+              const uploadsRoot = path.resolve(__dirname, '../../uploads');
+              const absolutePath = path.resolve(uploadsRoot, currentRequest.filePath);
+              if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
+                const filename = path.basename(absolutePath);
+                sendKindleDelivery(u.kindleEmail, absolutePath, filename)
+                  .then(() => console.log(`[Kindle] Envoyé à ${u.kindleEmail} : ${filename}`))
+                  .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
+              }
+            }
+          }).catch(() => {});
         // Email aux admins — complétion
         getAdminEmailPrefs().then(async prefs => {
           if (!prefs.enabled || !prefs.notifyOnComplete) return;
@@ -582,6 +614,29 @@ export const addDownloadLink = async (req, res) => {
 
       // Apprise personnel de l'user
       appriseService.notifyUserBookCompleted(user, request).catch(() => {});
+
+      // Livraison Kindle — uniquement si fichier présent et option activée
+      if (
+        request.filePath &&
+        user.emailVerified &&
+        user.kindleEmail &&
+        user.notificationPreferences?.kindle?.enabled
+      ) {
+        const uploadsRoot = path.resolve(__dirname, '../../uploads');
+        const absolutePath = path.resolve(uploadsRoot, request.filePath);
+
+        // Protection path traversal : le fichier doit rester dans uploads/
+        if (!absolutePath.startsWith(uploadsRoot + path.sep)) {
+          console.error('[Kindle] Chemin invalide bloqué:', request.filePath);
+        } else if (!fs.existsSync(absolutePath)) {
+          console.error('[Kindle] Fichier introuvable:', absolutePath);
+        } else {
+          const filename = path.basename(absolutePath);
+          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
+            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
+        }
+      }
     }
 
     // Apprise admin global (indépendant de l'existence de l'user)

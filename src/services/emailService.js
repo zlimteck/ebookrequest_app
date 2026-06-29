@@ -507,3 +507,40 @@ export const sendNewLoginAlertEmail = async (user, { ip, location, browser, os, 
   });
   return sendEmail({ to: user.email, subject: 'Nouvelle connexion détectée — EbookRequest', html, type: 'login_alert' });
 };
+
+// ─── Kindle delivery ──────────────────────────────────────────────────────────
+
+/**
+ * Envoie un ebook directement sur une adresse Kindle via email avec pièce jointe.
+ * L'expéditeur (EMAIL_FROM_ADDRESS) doit être dans les expéditeurs approuvés Amazon.
+ */
+export const sendKindleDelivery = async (kindleEmail, filePath, filename) => {
+  const bookTitle = path.basename(filename, path.extname(filename));
+  const subject = bookTitle;
+
+  if (USE_RESEND && resendClient) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const { data, error } = await resendClient.emails.send({
+      from: FROM,
+      to: kindleEmail,
+      subject,
+      text: `Votre livre "${bookTitle}" est joint à cet email.`,
+      attachments: [{ filename, content: fileBuffer }],
+    });
+    if (error) throw new Error(error.message || 'Resend error');
+    return data;
+  }
+
+  if (smtpTransporter) {
+    await smtpTransporter.sendMail({
+      from: FROM,
+      to: kindleEmail,
+      subject,
+      text: `Votre livre "${bookTitle}" est joint à cet email.`,
+      attachments: [{ filename, path: filePath }],
+    });
+    return;
+  }
+
+  throw new Error('Aucun provider email configuré.');
+};

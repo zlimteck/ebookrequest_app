@@ -54,8 +54,12 @@ const userSchema = new mongoose.Schema({
       notifyOnComplete:    { type: Boolean, default: true },
       notifyOnCancel:      { type: Boolean, default: true },
       notifyOnAdminComment:{ type: Boolean, default: true },
+    },
+    kindle: {
+      enabled: { type: Boolean, default: false },
     }
   },
+  kindleEmail: { type: String, default: '' },
   emailVerified: {
     type: Boolean,
     default: false

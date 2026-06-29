@@ -18,7 +18,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 router.get('/setup-status', async (req, res) => {
   try {
     const adminExists = await User.findOne({ role: 'admin' });
-    res.json({ setupRequired: !adminExists });
+    res.json({
+      setupRequired: !adminExists,
+      fromEmail: process.env.EMAIL_FROM_ADDRESS || null,
+    });
   } catch {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
