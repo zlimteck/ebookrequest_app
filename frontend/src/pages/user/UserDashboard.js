@@ -832,8 +832,8 @@ const UserDashboard = () => {
                   {request.author}
                 </p>
 
-                {/* Meta: format + pages + année */}
-                {(request.format || request.pageCount > 0 || request.publishedDate) && (
+                {/* Meta: format + pages + année + série */}
+                {(request.format || request.pageCount > 0 || request.publishedDate || request.seriesName) && (
                   <div className={styles.metaRow}>
                     {request.format && (
                       <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>
@@ -843,6 +843,11 @@ const UserDashboard = () => {
                     )}
                     {request.publishedDate && (
                       <span className={styles.pagesBadge}>{isoToFr(request.publishedDate)}</span>
+                    )}
+                    {request.seriesName && (
+                      <span className={styles.seriesBadge}>
+                        {request.seriesName}{request.seriesIndex ? ` — Tome ${request.seriesIndex}` : ''}
+                      </span>
                     )}
                   </div>
                 )}

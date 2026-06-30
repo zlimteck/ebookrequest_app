@@ -82,6 +82,73 @@ async function fetchFromGoogle(queryStr, limit, startIndex = 0, options = {}) {
 
 const toHttps = (url) => url ? url.replace(/^http:\/\//, 'https://') : url;
 
+// ─── Open Library fallback ────────────────────────────────────────────────────
+
+function normalizeOpenLibraryISBN(data, isbn) {
+  const cover = data.cover?.large || data.cover?.medium || data.cover?.small || null;
+  const year = (data.publish_date || '').match(/\d{4}/)?.[0] || '';
+  return {
+    id: `ol-isbn-${isbn}`,
+    volumeInfo: {
+      title:         data.title || '',
+      authors:       (data.authors || []).map(a => a.name).filter(Boolean),
+      publishedDate: year,
+      description:   'Aucune description disponible',
+      pageCount:     data.number_of_pages || 0,
+      categories:    [],
+      imageLinks:    { thumbnail: cover, smallThumbnail: cover },
+      language:      'fr',
+      previewLink:   `https://openlibrary.org/isbn/${isbn}`,
+      infoLink:      `https://openlibrary.org/isbn/${isbn}`,
+      seriesInfo:    null,
+    },
+  };
+}
+
+function normalizeOpenLibrarySearch(doc) {
+  const coverUrl = doc.cover_i
+    ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+    : null;
+  const key = (doc.key || '').replace('/works/', '');
+  return {
+    id: `ol-${key || Math.random().toString(36).slice(2)}`,
+    volumeInfo: {
+      title:         doc.title || '',
+      authors:       doc.author_name || ['Auteur inconnu'],
+      publishedDate: doc.first_publish_year ? String(doc.first_publish_year) : '',
+      description:   'Aucune description disponible',
+      pageCount:     doc.number_of_pages_median || 0,
+      categories:    [],
+      imageLinks:    { thumbnail: coverUrl, smallThumbnail: coverUrl },
+      language:      'fr',
+      previewLink:   `https://openlibrary.org${doc.key || ''}`,
+      infoLink:      `https://openlibrary.org${doc.key || ''}`,
+      seriesInfo:    null,
+    },
+  };
+}
+
+async function fetchFromOpenLibraryISBN(isbn) {
+  const res = await axios.get('https://openlibrary.org/api/books', {
+    params: { bibkeys: `ISBN:${isbn}`, format: 'json', jscmd: 'data' },
+    timeout: 8000,
+  });
+  const data = res.data[`ISBN:${isbn}`];
+  return data ? normalizeOpenLibraryISBN(data, isbn) : null;
+}
+
+async function fetchFromOpenLibrarySearch(q, limit) {
+  const res = await axios.get('https://openlibrary.org/search.json', {
+    params: {
+      q,
+      limit,
+      fields: 'key,title,author_name,cover_i,first_publish_year,number_of_pages_median',
+    },
+    timeout: 8000,
+  });
+  return (res.data.docs || []).map(normalizeOpenLibrarySearch);
+}
+
 function formatPool(items) {
   return items.map(book => {
     const imageLinks = book.volumeInfo.imageLinks || {};
@@ -100,10 +167,89 @@ function formatPool(items) {
         },
         language:    book.volumeInfo.language    || 'fr',
         previewLink: book.volumeInfo.previewLink || '',
+        infoLink:    book.volumeInfo.infoLink    || '',
+        seriesInfo:  book.volumeInfo.seriesInfo  || null,
       }
     };
   });
 }
+
+function extractTomeNumber(volumeInfo) {
+  const si = volumeInfo?.seriesInfo;
+  if (si?.bookDisplayNumber) {
+    const n = parseFloat(si.bookDisplayNumber);
+    if (!isNaN(n)) return n;
+  }
+  if (si?.volumeSeries?.[0]?.orderNumber) return si.volumeSeries[0].orderNumber;
+  const title = volumeInfo?.title || '';
+  const patterns = [/tome\s*(\d+(?:\.\d+)?)/i, /vol(?:ume)?\.?\s*(\d+(?:\.\d+)?)/i, /#\s*(\d+(?:\.\d+)?)/i, /,\s*t\.?\s*(\d+(?:\.\d+)?)/i, /\bno?\.?\s*(\d+(?:\.\d+)?)/i];
+  for (const p of patterns) {
+    const m = title.match(p);
+    if (m) return parseFloat(m[1]);
+  }
+  return Infinity;
+}
+
+// Mots-clés qui signalent que ce n'est PAS un tome individuel
+const SERIES_EXCLUDE_PATTERNS = [
+  /coffret/i, /intégrale/i, /integrale/i, /box\s*set/i,
+  /analyse\s+de\s+l['']oeuvre/i, /fiche\s+de\s+lecture/i,
+  /décrypt/i, /decrypt/i, /guide\s+(de|du|des)/i, /companion/i,
+  /encyclop/i, /making\s+of/i, /\bcomics?\b/i,
+];
+
+// Recherche des autres tomes d'une série
+router.get('/series-tomes', async (req, res) => {
+  try {
+    const { name, excludeId } = req.query;
+    if (!name) return res.status(400).json({ error: 'Nom de série requis' });
+
+    // Tenter plusieurs stratégies de requête, fusionner et dédupliquer
+    const queries = [
+      `intitle:"${name}" tome`,
+      `intitle:"${name}"`,
+      name,
+    ];
+
+    const seen = new Set();
+    let rawItems = [];
+
+    for (const q of queries) {
+      const result = await fetchFromGoogle(q, 40, 0);
+      for (const item of result.items) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          rawItems.push(item);
+        }
+      }
+      if (rawItems.length >= 20) break;
+    }
+
+    // Filtrer : exclure le livre actuel, coffrets, analyses, hors-série
+    const nameLC = name.toLowerCase();
+    const filtered = rawItems.filter(b => {
+      if (b.id === excludeId) return false;
+      const title = (b.volumeInfo?.title || '').toLowerCase();
+      if (!title.includes(nameLC)) return false;
+      if (SERIES_EXCLUDE_PATTERNS.some(p => p.test(b.volumeInfo?.title || ''))) return false;
+      // Exclure les titres avec ";" (plusieurs volumes dans un coffret)
+      if ((b.volumeInfo?.title || '').includes(';')) return false;
+      return true;
+    });
+
+    // Trier par numéro de tome
+    filtered.sort((a, b) => {
+      const numA = extractTomeNumber(a.volumeInfo);
+      const numB = extractTomeNumber(b.volumeInfo);
+      return numA - numB;
+    });
+
+    res.json({ results: formatPool(filtered) });
+  } catch (err) {
+    console.error('[Google Books] Erreur series-tomes:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la recherche de la série' });
+  }
+});
 
 // Recherche de livres via Google Books API
 router.get('/search', async (req, res) => {
@@ -192,6 +338,30 @@ router.get('/search', async (req, res) => {
         const result = await fetchFromGoogle(q.trim(), limit, 0);
         rawItems   = result.items;
         totalItems = result.totalItems;
+      }
+    }
+
+    // ── Fallback Open Library si Google Books n'a rien trouvé (page 1 seulement) ─
+    if (rawItems.length === 0 && offset === 0 && !authorOnly) {
+      try {
+        const isbnClean = (q || '').trim().replace(/[-\s]/g, '');
+        const isISBN = /^\d{10}$/.test(isbnClean) || /^\d{13}$/.test(isbnClean);
+
+        if (isISBN) {
+          const olResult = await fetchFromOpenLibraryISBN(isbnClean);
+          if (olResult) {
+            console.log(`[Books] Open Library fallback ISBN → "${olResult.volumeInfo.title}"`);
+            return res.json({ results: [olResult], totalItems: 1 });
+          }
+        } else if (q?.trim()) {
+          const olResults = await fetchFromOpenLibrarySearch(q.trim(), limit);
+          if (olResults.length > 0) {
+            console.log(`[Books] Open Library fallback → ${olResults.length} résultat(s)`);
+            return res.json({ results: olResults, totalItems: olResults.length });
+          }
+        }
+      } catch (olErr) {
+        console.warn('[Books] Open Library fallback échoué:', olErr.message);
       }
     }
 

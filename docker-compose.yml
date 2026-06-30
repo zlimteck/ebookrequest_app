@@ -69,6 +69,7 @@ services:
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
+    platform: linux/amd64
     container_name: flaresolverr
     restart: unless-stopped
     environment:

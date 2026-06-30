@@ -14,7 +14,7 @@ function isPublishedInFuture(dateStr) {
   return !isNaN(d.getTime()) && d > today;
 }
 
-const DELAY_BETWEEN_MS = 15000; // 15s entre chaque livre — évite le rate-limit Anna's Archive
+const DELAY_BETWEEN_MS = 60000; // 60s entre chaque livre — évite le rate-limit Valentine / Anna's Archive
 
 let nextScanAt = null;
 let cronIntervalId = null;

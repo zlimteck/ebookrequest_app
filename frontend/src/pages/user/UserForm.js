@@ -3,9 +3,30 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import GoogleBooksSearch from '../../components/GoogleBooksSearch';
 import BookRecommendations from '../../components/BookRecommendations';
+import SeriesModal from '../../components/SeriesModal';
 import { compressImage, isImage } from '../../utils/imageCompressor';
 import styles from './UserForm.module.css';
 
+
+function detectSeriesIndex(title) {
+  const patterns = [/tome\s*(\d+)/i, /vol(?:ume)?\.?\s*(\d+)/i, /#\s*(\d+)/i, /,\s*t\s*(\d+)/i];
+  for (const p of patterns) {
+    const m = (title || '').match(p);
+    if (m) return parseInt(m[1]);
+  }
+  return null;
+}
+
+function extractSeriesName(title) {
+  return (title || '')
+    .replace(/tome\s*\d+/i, '')
+    .replace(/vol(?:ume)?\.?\s*\d+/i, '')
+    .replace(/,\s*t\s*\d+/i, '')
+    .replace(/#\s*\d+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[,\s—–-]+$/, '');
+}
 
 // Conversion format français ↔ ISO pour la date de sortie
 function frToIso(str) {
@@ -103,6 +124,9 @@ function UserForm() {
   const [searchMode, setSearchMode] = useState('google');
   const [selectedBook, setSelectedBook] = useState(null);
   const [rawPublishedDate, setRawPublishedDate] = useState('');
+  const [seriesInfo, setSeriesInfo]   = useState(null); // { name, index }
+  const [seriesModal, setSeriesModal] = useState(false);
+  const [submittedBook, setSubmittedBook] = useState(null);
   const [existingRequests, setExistingRequests] = useState([]);
   const [availability, setAvailability] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -301,7 +325,7 @@ function UserForm() {
     }
   };
 
-  const handleBookSelect = useCallback((book) => {
+  const handleBookSelect = useCallback((book, searchContext = {}) => {
     if (!book) return false;
 
     // Vérifie si ce livre a déjà été demandé (ignoré si admin soumet pour un autre user)
@@ -333,6 +357,29 @@ function UserForm() {
       const author = book.volumeInfo.authors?.[0] || '';
 
       setRawPublishedDate(book.volumeInfo.publishedDate || '');
+
+      // Détection de la série
+      const si = book.volumeInfo.seriesInfo;
+      if (si?.shortSeriesBookTitle) {
+        setSeriesInfo({
+          name:  si.shortSeriesBookTitle,
+          index: parseInt(si.bookDisplayNumber) || si.volumeSeries?.[0]?.orderNumber || null,
+        });
+      } else if (searchContext.searchMode === 'series' && searchContext.searchedValue) {
+        // L'utilisateur a cherché explicitement par nom de série → on sait que ce livre en fait partie
+        setSeriesInfo({
+          name:  searchContext.searchedValue,
+          index: detectSeriesIndex(title),
+        });
+      } else {
+        const detectedIndex = detectSeriesIndex(title);
+        if (detectedIndex) {
+          setSeriesInfo({ name: extractSeriesName(title), index: detectedIndex });
+        } else {
+          setSeriesInfo(null);
+        }
+      }
+
       setForm(prev => ({
         ...prev,
         title: title,
@@ -365,6 +412,7 @@ function UserForm() {
   const handleRemoveBook = () => {
     setSelectedBook(null);
     setRawPublishedDate('');
+    setSeriesInfo(null);
     setAvailability(null);
     setSearchMode('google'); // Retour à la recherche avec les résultats précédents
     setForm(prev => ({
@@ -411,7 +459,8 @@ function UserForm() {
       format: form.format || '',
       category: form.category || 'ebook',
       ...(selectedBook?.id && { googleBooksId: selectedBook.id }),
-      ...(isAdmin && targetUserId && { targetUserId })
+      ...(isAdmin && targetUserId && { targetUserId }),
+      ...(seriesInfo && { seriesName: seriesInfo.name, seriesIndex: seriesInfo.index })
     };
     
     // Validation date de sortie (obligatoire en mode manuel)
@@ -467,7 +516,13 @@ function UserForm() {
         text: 'Votre demande a été soumise avec succès !',
         type: 'success'
       });
-      
+
+      // Si série détectée, ouvrir la modal avant de rediriger
+      if (seriesInfo) {
+        setSubmittedBook({ ...requestData, googleBooksId: selectedBook?.id });
+        setSeriesModal(true);
+      }
+
       // Réinitialiser le formulaire
       setForm({
         title: '',
@@ -479,18 +534,21 @@ function UserForm() {
         coverImagePreview: '',
         file: null
       });
-      
+
       setSelectedBook(null);
       setRawPublishedDate('');
+      setSeriesInfo(null);
 
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      
-      // Rediriger vers le tableau de bord après 2 secondes
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+
+      // Rediriger vers le tableau de bord après 2 secondes (sauf si modal série ouverte)
+      if (!seriesInfo) {
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      }
       
     } catch (err) {
       console.error('Erreur lors de la soumission de la demande:', err);
@@ -533,6 +591,7 @@ function UserForm() {
   };
 
   return (
+    <>
     <div className={styles.pageWrapper}>
     <h1 className={styles.pageTitle}>Demander un livre</h1>
     <div className={`${styles.formContainer} ${styles.requestForm}`}>
@@ -666,6 +725,17 @@ function UserForm() {
               </div>
             </div>
           )}
+          {seriesInfo && (
+            <div className={`${styles.availabilityBadge} ${styles.availabilityFast}`}>
+              <span className={styles.availabilityBadgeIcon}>📚</span>
+              <div>
+                <div className={styles.availabilityTitle}>Série détectée</div>
+                <div className={styles.availabilityMessage}>
+                  <strong>{seriesInfo.name}</strong>{seriesInfo.index ? ` — Tome ${seriesInfo.index}` : ''}. Après soumission, vous pourrez demander les autres tomes.
+                </div>
+              </div>
+            </div>
+          )}
 
 
           <div className={styles.formRow}>
@@ -794,6 +864,19 @@ function UserForm() {
       <BookRecommendations onSelectBook={handleBookSelect} />
     </div>
     </div>
+
+    {seriesModal && submittedBook && (
+      <SeriesModal
+        seriesName={submittedBook.seriesName}
+        currentBookId={submittedBook.googleBooksId}
+        currentBook={submittedBook}
+        existingRequests={existingRequests}
+        quotaRemaining={quota?.unlimited ? Infinity : (quota?.remaining ?? Infinity)}
+        onClose={() => { setSeriesModal(false); navigate('/dashboard'); }}
+        onSubmitted={() => fetchQuota(isAdmin && targetUserId ? targetUserId : '')}
+      />
+    )}
+    </>
   );
 }
 

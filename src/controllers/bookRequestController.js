@@ -57,7 +57,7 @@ const __dirname = path.dirname(__filename);
 // Création d'une nouvelle demande de livre
 export const createBookRequest = async (req, res) => {
   try {
-    const { author, title, link, thumbnail, description, pageCount, publishedDate, format, category, targetUserId } = req.body;
+    const { author, title, link, thumbnail, description, pageCount, publishedDate, format, category, targetUserId, seriesName, seriesIndex } = req.body;
     
     // Validation des champs obligatoires
     if (!author || !title) {
@@ -135,6 +135,8 @@ export const createBookRequest = async (req, res) => {
       description: description || '',
       pageCount: pageCount || 0,
       publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
+      seriesName: seriesName || '',
+      seriesIndex: (seriesIndex != null && !isNaN(Number(seriesIndex))) ? Number(seriesIndex) : null,
       format: format || '',
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       status: isAutoCompleted ? 'completed' : 'pending',

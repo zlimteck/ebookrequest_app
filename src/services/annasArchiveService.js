@@ -122,50 +122,48 @@ function parseResults(html, baseUrl) {
 // ─── FlareSolverr ─────────────────────────────────────────────────────────────
 
 /**
- * Fetch a URL through FlareSolverr (bypasses DDoS-Guard / Cloudflare).
- * Returns { html, cookies, userAgent, finalUrl }.
- * @param {string} url
- * @param {object} [opts]
- * @param {string} [opts.session]     - FlareSolverr session ID (cookies shared across calls)
- * @param {number} [opts.maxTimeout]  - ms to wait (default 60000)
+ * Fetch une URL via FlareSolverr (bypass DDoS-Guard/Cloudflare).
+ * Retourne { html, finalUrl }.
  */
-async function flareSolverrGet(url, { session = null, maxTimeout = 60000 } = {}) {
+async function cfFetch(url, maxTimeout = 60000) {
   console.log(`[Annas] FlareSolverr → ${url}`);
-  const body = { cmd: 'request.get', url, maxTimeout };
-  if (session) body.session = session;
-
-  const res = await axios.post(`${FLARESOLVERR_URL}/v1`, body, { timeout: maxTimeout + 10000 });
-
-  if (res.data.status !== 'ok') {
-    throw new Error(`FlareSolverr erreur: ${res.data.message || res.data.status}`);
+  const res = await axios.post(
+    `${FLARESOLVERR_URL}/v1`,
+    { cmd: 'request.get', url, maxTimeout },
+    { timeout: maxTimeout + 15000 }
+  );
+  if (res.data?.status !== 'ok') {
+    throw new Error(`FlareSolverr erreur: ${res.data?.message || 'unknown'}`);
   }
-
-  const sol = res.data.solution;
   return {
-    html:      sol.response,
-    cookies:   sol.cookies,
-    userAgent: sol.userAgent,
-    finalUrl:  sol.url,
+    html:     res.data.solution?.response || '',
+    finalUrl: res.data.solution?.url || url,
   };
 }
 
-async function createFlareSolverrSession() {
-  const res = await axios.post(`${FLARESOLVERR_URL}/v1`, { cmd: 'sessions.create' }, { timeout: 15000 });
-  if (res.data.status !== 'ok') throw new Error(`FlareSolverr session: ${res.data.message}`);
-  return res.data.session;
-}
-
-async function destroyFlareSolverrSession(sessionId) {
-  try {
-    await axios.post(`${FLARESOLVERR_URL}/v1`, { cmd: 'sessions.destroy', session: sessionId }, { timeout: 10000 });
-  } catch {}
-}
-
 /**
- * Build a cookie header string from FlareSolverr cookies array.
+ * Télécharge depuis une page libgen ads.php (libgen.li / libgen.rs).
+ * Ces sites n'ont pas de DDoS-Guard — on peut les fetcher directement.
+ * Parse le HTML pour trouver le lien get.php?md5=...&key=... puis télécharge.
  */
-function buildCookieHeader(cookies) {
-  return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+async function downloadFromAdsPage(adsUrl) {
+  const res = await axios.get(adsUrl, {
+    headers: HEADERS,
+    timeout: 20000,
+    maxRedirects: 5,
+    validateStatus: s => s < 400,
+  });
+  const html = typeof res.data === 'string' ? res.data : '';
+  // href="get.php?md5=HASH&key=KEY" ou href="/get.php?..."
+  const match = html.match(/href="((?:[^"]*\/)?get\.php\?[^"]+)"/i);
+  if (!match) throw new Error('Lien get.php introuvable dans la page ads');
+  let getUrl = match[1];
+  if (!getUrl.startsWith('http')) {
+    const base = new URL(adsUrl);
+    getUrl = getUrl.startsWith('/') ? `${base.origin}${getUrl}` : `${base.origin}/${getUrl}`;
+  }
+  console.log(`[Annas] ads.php → ${getUrl}`);
+  return directDownload(getUrl, HEADERS['User-Agent']);
 }
 
 /**
@@ -181,11 +179,18 @@ function parseDownloadLinks(html, baseUrl) {
     links.push({ type: 'slow', url: `${baseUrl}${m[1]}` });
   }
 
-  // Partner / fast links — libgen.li, library.lol, archive.org, etc.
-  const extPattern = /href="(https?:\/\/(?:libgen\.li|libgen\.rs|library\.lol|z-lib\.[a-z]+|archive\.org)[^"]*(?:get\.php|download|ads\.php)[^"]*)"/g;
-  const extMatches = html.matchAll(extPattern);
-  for (const m of extMatches) {
-    links.push({ type: 'partner', url: m[1] });
+  // Libgen ads pages (libgen.li/ads.php, libgen.rs/ads.php) — pas de DDoS-Guard, parsing nécessaire
+  const adsPattern = /href="(https?:\/\/(?:libgen\.li|libgen\.rs)[^"]*ads\.php[^"]*)"/g;
+  for (const m of html.matchAll(adsPattern)) {
+    links.push({ type: 'ads', url: m[1] });
+  }
+
+  // Autres liens partenaires directs (library.lol, get.php direct, etc.)
+  const extPattern = /href="(https?:\/\/(?:libgen\.li|libgen\.rs|library\.lol|z-lib\.[a-z]+|archive\.org)[^"]*(?:get\.php|\/main\/|download)[^"]*)"/g;
+  for (const m of html.matchAll(extPattern)) {
+    if (!links.some(l => l.url === m[1])) {
+      links.push({ type: 'partner', url: m[1] });
+    }
   }
 
   return links;
@@ -412,21 +417,12 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
 
     console.log(`[Annas] Téléchargement MD5=${md5} pour demande ${requestId}`);
 
-    // ── Créer une session FlareSolverr (cookies partagés entre les requêtes) ──
-    let sessionId = null;
-    try {
-      sessionId = await createFlareSolverrSession();
-      console.log(`[Annas] Session FlareSolverr créée: ${sessionId}`);
-    } catch (e) {
-      console.warn('[Annas] Impossible de créer une session FlareSolverr, mode sans session');
-    }
-
     let fileBuffer = null;
     let filename = null;
 
-    try {
-      // ── Fetch MD5 page via FlareSolverr ──────────────────────────────────────
-      const { html, userAgent } = await flareSolverrGet(md5PageUrl, { session: sessionId });
+    {
+      // ── Fetch MD5 page via FlareSolverr (bypass DDoS-Guard) ──────────────────
+      const { html } = await cfFetch(md5PageUrl);
       const downloadLinks = parseDownloadLinks(html, baseUrl);
 
       console.log(`[Annas] ${downloadLinks.length} lien(s) trouvé(s):`, downloadLinks.map(l => l.type));
@@ -435,10 +431,11 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
         throw new Error('Aucun lien de téléchargement trouvé sur la page MD5');
       }
 
-      // Garder 3 liens slow max (CDN différents) + tous les liens partner
-      const slowLinks = downloadLinks.filter(l => l.type === 'slow').slice(0, 3);
+      // Garder 3 liens slow max + liens ads (libgen ads.php) + liens partner directs
+      const slowLinks    = downloadLinks.filter(l => l.type === 'slow').slice(0, 3);
+      const adsLinks     = downloadLinks.filter(l => l.type === 'ads');
       const partnerLinks = downloadLinks.filter(l => l.type === 'partner');
-      const linksToTry = [...slowLinks, ...partnerLinks];
+      const linksToTry = [...slowLinks, ...adsLinks, ...partnerLinks];
 
       console.log(`[Annas] Liens à essayer: ${linksToTry.map(l => l.type).join(', ')}`);
 
@@ -449,12 +446,8 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
 
         try {
           if (link.type === 'slow') {
-            // ── slow_download : passer par FlareSolverr (même session) ─────────
-            // maxTimeout 120s pour laisser le countdown JS se terminer
-            const { html: dlHtml, finalUrl, userAgent: dlUA } = await flareSolverrGet(
-              link.url,
-              { session: sessionId, maxTimeout: 30000 }
-            );
+            // ── slow_download : FlareSolverr pour bypass DDoS-Guard ───────────
+            const { html: dlHtml, finalUrl } = await cfFetch(link.url, 30000);
 
             console.log(`[Annas] slow_download finalUrl: ${finalUrl}`);
 
@@ -471,7 +464,7 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
             if (redirectedAway) {
               console.log(`[Annas] Redirect → ${finalUrl}`);
               try {
-                const { buffer, filename: fn } = await directDownload(finalUrl, dlUA);
+                const { buffer, filename: fn } = await directDownload(finalUrl, HEADERS['User-Agent']);
                 fileBuffer = buffer;
                 if (fn) filename = fn;
                 console.log(`[Annas] ✓ Téléchargé via slow+redirect (${fileBuffer.length} octets)`);
@@ -486,7 +479,7 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
               if (fileUrl) {
                 console.log(`[Annas] URL extraite du HTML: ${fileUrl}`);
                 try {
-                  const { buffer, filename: fn } = await directDownload(fileUrl, dlUA);
+                  const { buffer, filename: fn } = await directDownload(fileUrl, HEADERS['User-Agent']);
                   fileBuffer = buffer;
                   if (fn) filename = fn;
                   console.log(`[Annas] ✓ Téléchargé via slow+parse (${fileBuffer.length} octets)`);
@@ -503,9 +496,15 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
               }
             }
 
+          } else if (link.type === 'ads') {
+            // ── libgen ads.php : parse HTML → get.php → fichier ──────────────
+            const { buffer, filename: fn } = await downloadFromAdsPage(link.url);
+            fileBuffer = buffer;
+            if (fn) filename = fn;
+            console.log(`[Annas] ✓ Téléchargé via ads page (${fileBuffer.length} octets)`);
           } else {
-            // ── partner link : téléchargement direct ─────────────────────────
-            const { buffer, filename: fn } = await directDownload(link.url, userAgent);
+            // ── partner link direct (library.lol, etc.) ───────────────────────
+            const { buffer, filename: fn } = await directDownload(link.url, HEADERS['User-Agent']);
             fileBuffer = buffer;
             if (fn) filename = fn;
             console.log(`[Annas] ✓ Téléchargé via partner (${fileBuffer.length} octets)`);
@@ -514,8 +513,6 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
           console.warn(`[Annas] Lien ${link.type} échoué: ${err.message}`);
         }
       }
-    } finally {
-      if (sessionId) await destroyFlareSolverrSession(sessionId);
     }
 
     if (!fileBuffer) throw new Error('Tous les liens de téléchargement ont échoué');

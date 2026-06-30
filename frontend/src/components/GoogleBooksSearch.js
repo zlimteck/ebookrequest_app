@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import axiosAdmin from '../axiosAdmin';
 import styles from './GoogleBooksSearch.module.css';
 import BarcodeScanner from './BarcodeScanner';
@@ -39,13 +39,46 @@ const IconAuthor = ({ size = 16 }) => (
   </svg>
 );
 
+const IconSeries = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    <line x1="8" y1="7" x2="16" y2="7"/>
+    <line x1="8" y1="11" x2="12" y2="11"/>
+  </svg>
+);
+
+const IconTitle = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+);
+
+const MODE_ICONS = {
+  title:  <IconTitle  size={14} />,
+  author: <IconAuthor size={14} />,
+  series: <IconSeries size={14} />,
+};
+
+const SEARCH_MODES = [
+  { value: 'title',  label: 'Titre'  },
+  { value: 'author', label: 'Auteur' },
+  { value: 'series', label: 'Série'  },
+];
+
+const PLACEHOLDERS = {
+  title:  'Titre, auteur + titre ou ISBN…',
+  author: 'Rechercher par auteur…',
+  series: 'Nom de la série…',
+};
+
 const GoogleBooksSearch = ({ onSelectBook }) => {
-  const [authorMode, setAuthorMode]   = useState(false);
+  const [searchMode, setSearchMode]   = useState('title');
   const [value, setValue]             = useState('');
   const [scanning, setScanning]       = useState(false);
 
   const [searchedValue, setSearchedValue] = useState('');
-  const [searchedAuthor, setSearchedAuthor] = useState(false);
+  const [searchedMode, setSearchedMode]   = useState('title');
 
   const [results, setResults]       = useState([]);
   const [totalItems, setTotalItems] = useState(0);
@@ -55,35 +88,73 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
   const [error, setError]             = useState('');
   const [hasSearched, setHasSearched] = useState(false);
 
-  const searchTimeoutRef = useRef(null);
-  const inputRef         = useRef(null);
-  const totalPages       = Math.ceil(totalItems / PER_PAGE);
+  const [focused, setFocused]                 = useState(false);
+  const [placeholderScrolls, setPlaceholderScrolls] = useState(false);
+
+  const searchTimeoutRef    = useRef(null);
+  const inputRef            = useRef(null);
+  const inputWrapRef        = useRef(null);
+  const fakePlaceholderRef  = useRef(null);
+  const totalPages          = Math.ceil(totalItems / PER_PAGE);
+  const placeholder         = PLACEHOLDERS[searchMode];
+
+  // ─── Détection du débordement du placeholder ─────────────────────────────
+  useLayoutEffect(() => {
+    const check = () => {
+      const text = fakePlaceholderRef.current;
+      if (!text) return;
+      const textW = text.offsetWidth;
+      const boxW  = text.parentElement?.clientWidth ?? 0;
+      const overflow = textW - boxW;
+      if (overflow > 2) {
+        setPlaceholderScrolls(true);
+        text.style.setProperty('--scroll-amount', `-${overflow + 6}px`);
+      } else {
+        setPlaceholderScrolls(false);
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (inputWrapRef.current) ro.observe(inputWrapRef.current);
+    return () => ro.disconnect();
+  }, [placeholder]);
 
   // ─── Recherche ────────────────────────────────────────────────────────────
-  const searchBooks = async (val, isAuthor, pageNum = 1) => {
+  const searchBooks = async (val, mode, pageNum = 1) => {
     const trimmed = val.trim();
     if (trimmed.length < MIN_LEN) { setResults([]); return; }
 
     setSearchedValue(trimmed);
-    setSearchedAuthor(isAuthor);
+    setSearchedMode(mode);
     setHasSearched(true);
     setPage(pageNum);
     setIsLoading(true);
     setError('');
 
     try {
-      const params = { maxResults: PER_PAGE, startIndex: (pageNum - 1) * PER_PAGE };
-      if (isAuthor) {
-        params.author = trimmed;
+      let items = [];
+      let total = 0;
+
+      if (mode === 'series') {
+        const response = await axiosAdmin.get('/api/books/series-tomes', { params: { name: trimmed } });
+        items = response.data.results || [];
+        total = items.length;
       } else {
-        params.q        = trimmed;
-        params.combined = 'true';
+        const params = { maxResults: PER_PAGE, startIndex: (pageNum - 1) * PER_PAGE };
+        if (mode === 'author') {
+          params.author = trimmed;
+        } else {
+          params.q        = trimmed;
+          params.combined = 'true';
+        }
+        const response = await axiosAdmin.get('/api/books/search', { params });
+        const data = response.data;
+        items = Array.isArray(data) ? data : (data.results || []);
+        total = Array.isArray(data) ? 0 : (data.totalItems || 0);
       }
 
-      const response = await axiosAdmin.get('/api/books/search', { params });
-      const data = response.data;
-      setResults(Array.isArray(data) ? data : (data.results || []));
-      setTotalItems(Array.isArray(data) ? 0 : (data.totalItems || 0));
+      setResults(items);
+      setTotalItems(total);
     } catch (err) {
       console.error('Erreur lors de la recherche:', err);
       setError(err.response?.data?.message || 'Erreur lors de la recherche. Veuillez réessayer.');
@@ -94,10 +165,9 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
     }
   };
 
-  // ─── Toggle mode auteur ───────────────────────────────────────────────────
-  const handleToggleAuthor = () => {
-    const next = !authorMode;
-    setAuthorMode(next);
+  // ─── Changement de mode ───────────────────────────────────────────────────
+  const handleModeChange = (e) => {
+    setSearchMode(e.target.value);
     setValue('');
     setResults([]);
     setHasSearched(false);
@@ -111,11 +181,11 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchBooks(value, authorMode, 1);
+    searchBooks(value, searchMode, 1);
   };
 
   const handlePageChange = (newPage) => {
-    searchBooks(searchedValue, searchedAuthor, newPage);
+    searchBooks(searchedValue, searchedMode, newPage);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -125,7 +195,7 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
     setValue(v);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (v.trim().length >= MIN_LEN) {
-      searchTimeoutRef.current = setTimeout(() => searchBooks(v, authorMode, 1), 500);
+      searchTimeoutRef.current = setTimeout(() => searchBooks(v, searchMode, 1), 500);
     } else if (v.trim().length === 0) {
       setResults([]);
       setTotalItems(0);
@@ -136,64 +206,80 @@ const GoogleBooksSearch = ({ onSelectBook }) => {
 
   // ─── Sélection d'un livre ─────────────────────────────────────────────────
   const handleSelectBook = (book) => {
-    onSelectBook({
-      volumeInfo: {
-        title:         book.volumeInfo.title,
-        authors:       book.volumeInfo.authors || [],
-        publishedDate: book.volumeInfo.publishedDate || '',
-        pageCount:     book.volumeInfo.pageCount,
-        imageLinks:    book.volumeInfo.imageLinks || {},
-        description:   book.volumeInfo.description || '',
-        infoLink:      book.volumeInfo.infoLink || `https://books.google.fr/books?id=${book.id}`,
-        categories:    book.volumeInfo.categories || [],
+    onSelectBook(
+      {
+        volumeInfo: {
+          title:         book.volumeInfo.title,
+          authors:       book.volumeInfo.authors || [],
+          publishedDate: book.volumeInfo.publishedDate || '',
+          pageCount:     book.volumeInfo.pageCount,
+          imageLinks:    book.volumeInfo.imageLinks || {},
+          description:   book.volumeInfo.description || '',
+          infoLink:      book.volumeInfo.infoLink || `https://books.google.fr/books?id=${book.id}`,
+          categories:    book.volumeInfo.categories || [],
+          seriesInfo:    book.volumeInfo.seriesInfo  || null,
+        },
+        id: book.id,
       },
-      id: book.id,
-    });
+      { searchMode, searchedValue }
+    );
   };
 
   // ─── Scan code-barres ─────────────────────────────────────────────────────
   const handleBarcodeScan = (isbn) => {
     setScanning(false);
-    setAuthorMode(false);
+    setSearchMode('title');
     setValue(isbn);
-    searchBooks(isbn, false, 1);
+    searchBooks(isbn, 'title', 1);
   };
 
   const canSubmit     = !isLoading && value.trim().length >= MIN_LEN;
   const showNoResults = hasSearched && results.length === 0 && !isLoading;
-  const isMobile      = window.innerWidth <= 520;
-  const placeholder   = authorMode
-    ? 'Rechercher par auteur…'
-    : isMobile
-      ? 'Titre, auteur + titre ou ISBN…'
-      : 'Rechercher par titre, auteur + titre ou ISBN…';
 
   return (
     <div className={styles.googleBooksSearch}>
       <form onSubmit={handleSubmit} className={styles.searchForm}>
         <div className={styles.searchBar}>
 
-          {/* Toggle auteur */}
-          <button
-            type="button"
-            className={`${styles.authorToggle} ${authorMode ? styles.authorToggleActive : ''}`}
-            onClick={handleToggleAuthor}
-            title={authorMode ? 'Mode auteur actif — cliquer pour désactiver' : 'Activer la recherche par auteur'}
-            aria-pressed={authorMode}
-          >
-            <IconAuthor size={15} />
-          </button>
+          {/* Sélecteur de mode */}
+          <div className={styles.modeSelectWrap}>
+            <span className={styles.modeSelectIcon}>{MODE_ICONS[searchMode]}</span>
+            <select
+              className={styles.modeSelect}
+              value={searchMode}
+              onChange={handleModeChange}
+              aria-label="Mode de recherche"
+            >
+              {SEARCH_MODES.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Champ unique */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            onChange={handleChange}
-            placeholder={placeholder}
-            className={styles.searchInputInline}
-            autoComplete="off"
-          />
+          <div className={styles.inputWrap} ref={inputWrapRef}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={handleChange}
+              className={styles.searchInputInline}
+              autoComplete="off"
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+            />
+            <span
+              className={`${styles.fakePlaceholder} ${(value || focused) ? styles.fakePlaceholderHidden : ''}`}
+              aria-hidden="true"
+            >
+              <span
+                ref={fakePlaceholderRef}
+                className={`${styles.fakePlaceholderText} ${placeholderScrolls ? styles.fakePlaceholderScrolling : ''}`}
+              >
+                {placeholder}
+              </span>
+            </span>
+          </div>
 
           {/* Bouton scanner */}
           <button

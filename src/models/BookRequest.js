@@ -43,6 +43,14 @@ const bookRequestSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  seriesName: {
+    type: String,
+    default: ''
+  },
+  seriesIndex: {
+    type: Number,
+    default: null
+  },
   downloadLink: { 
     type: String,
     default: ''

@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
-const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
+const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
 async function checkMcpServer() {
   const mcpUrl = (process.env.MCP_URL || '').replace(/\/$/, '');
@@ -33,9 +33,10 @@ async function checkMcpServer() {
 
 async function checkFlareSolverr() {
   try {
-    const res = await axios.get(FLARESOLVERR_URL, { timeout: 4000 });
+    const res = await axios.get(`${CF_SCRAPER_URL}/`, { timeout: 4000, validateStatus: () => true });
+    const connected = res.status < 500;
     const version = res.data?.version || null;
-    return { connected: true, version, error: null };
+    return { connected, version, error: null };
   } catch (err) {
     return { connected: false, version: null, error: err.message };
   }
