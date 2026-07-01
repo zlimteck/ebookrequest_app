@@ -7,6 +7,12 @@ function isoToFr(str) {
   if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+
+const KNOWN_FORMATS = new Set(['epub', 'mobi', 'pdf', 'cbz', 'cbr', 'azw3', 'fb2', 'djvu']);
+function isKnownFormat(fmt) {
+  return fmt && KNOWN_FORMATS.has(fmt.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
 import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './AdminPage.module.css';
@@ -174,6 +180,7 @@ function AdminPage() {
     setValentineResults(null);
     setAnnasResults(null);
     setValentineDownloading(null);
+    setAnnasDownloading(null);
     setValentineModalQuota(null);
     axiosAdmin.get('/api/connectors/valentine/quota')
       .then(res => setValentineModalQuota(res.data))
@@ -194,7 +201,6 @@ function AdminPage() {
   const runConnectorsSearch = async (query) => {
     setValentineResults(null);
     setAnnasResults(null);
-    // Search both in parallel
     setValentineLoading(true);
     setAnnasLoading(true);
     axiosAdmin.get(`/api/connectors/valentine/search?q=${encodeURIComponent(query)}`)
@@ -913,7 +919,7 @@ function AdminPage() {
                         </td>
                         <td className={styles.adminTd} style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{request.username}</td>
                         <td className={styles.adminTd}>
-                          {request.format ? <span className={styles.formatBadge}>{request.format.toUpperCase()}</span> : '—'}
+                          {isKnownFormat(request.format) ? <span className={styles.formatBadge}>{request.format.toUpperCase()}</span> : '—'}
                         </td>
                         <td className={styles.adminTd}>
                           <span className={`${styles.status} ${
@@ -1290,7 +1296,7 @@ function AdminPage() {
                   </div>
                   {(request.format || request.publishedDate) && (
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                      {request.format && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
+                      {isKnownFormat(request.format) && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
                       {request.publishedDate && <span className={styles.formatBadge} style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg3)' }}>{isoToFr(request.publishedDate)}</span>}
                     </div>
                   )}

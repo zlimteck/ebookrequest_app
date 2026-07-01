@@ -45,10 +45,17 @@ async function runValentineCron() {
 
     if (!valentineActive && !annasActive) return;
 
-    const pending = await BookRequest.find({ status: 'pending' }).lean();
+    const cooldown = new Date(Date.now() - currentIntervalHours * 2 * 60 * 60 * 1000);
+    const pending = await BookRequest.find({
+      status: 'pending',
+      $or: [
+        { 'lastAutoAttempt.date': null },
+        { 'lastAutoAttempt.date': { $lt: cooldown } },
+      ],
+    }).lean();
     if (!pending.length) return;
 
-    console.log(`[Connecteurs Cron] ${pending.length} demande(s) en attente à vérifier…`);
+    console.log(`[Connecteurs Cron] ${pending.length} demande(s) éligible(s) au retry (cooldown: ${currentIntervalHours * 2}h)…`);
 
     for (const req of pending) {
       if (isPublishedInFuture(req.publishedDate)) {

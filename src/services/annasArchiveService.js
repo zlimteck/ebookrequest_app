@@ -41,17 +41,20 @@ async function getWorkingUrl(primaryUrl) {
     primaryUrl,
     ...FALLBACK_URLS.filter(u => u !== primaryUrl),
   ];
-  for (const url of candidates) {
-    try {
-      const res = await axios.get(`${url}/`, {
+  return Promise.any(
+    candidates.map(url =>
+      axios.get(`${url}/`, {
         headers: HEADERS,
         timeout: 8000,
         validateStatus: s => s < 500,
-      });
-      if (res.status === 200) return url;
-    } catch {}
-  }
-  throw new Error('Aucun serveur Anna\'s Archive joignable (pk, gl, gd)');
+      }).then(res => {
+        if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+        return url;
+      })
+    )
+  ).catch(() => {
+    throw new Error('Aucun serveur Anna\'s Archive joignable (pk, gl, gd)');
+  });
 }
 
 /**
@@ -98,9 +101,11 @@ function parseResults(html, baseUrl) {
       const raw = fileInfoMatch[1].replace(/[^\x20-\x7E\s·]/g, '').trim();
       const parts = raw.split('·').map(p => p.trim()).filter(Boolean);
       lang   = parts[0] || null;
-      format = parts[1] || null;
+      format = parts[1]?.toLowerCase() || null;
       size   = parts[2] || null;
       year   = parts.find(p => /^\d{4}$/.test(p)) || null;
+      // Ignorer les valeurs non-ebook (ex: "English [en]" mal parsé)
+      if (format && !KNOWN_EBOOK_EXTS.has(format.replace(/[^a-z0-9]/g, ''))) format = null;
     }
 
     results.push({
@@ -154,21 +159,32 @@ async function downloadFromAdsPage(adsUrl) {
     validateStatus: s => s < 400,
   });
   const html = typeof res.data === 'string' ? res.data : '';
-  // href="get.php?md5=HASH&key=KEY" ou href="/get.php?..."
-  const match = html.match(/href="((?:[^"]*\/)?get\.php\?[^"]+)"/i);
-  if (!match) throw new Error('Lien get.php introuvable dans la page ads');
-  let getUrl = match[1];
-  if (!getUrl.startsWith('http')) {
-    const base = new URL(adsUrl);
-    getUrl = getUrl.startsWith('/') ? `${base.origin}${getUrl}` : `${base.origin}/${getUrl}`;
+
+  // 1. Lien get.php (libgen.li / libgen.rs)
+  const getMatch = html.match(/href="((?:[^"]*\/)?get\.php\?[^"]+)"/i);
+  if (getMatch) {
+    let getUrl = getMatch[1];
+    if (!getUrl.startsWith('http')) {
+      const base = new URL(adsUrl);
+      getUrl = getUrl.startsWith('/') ? `${base.origin}${getUrl}` : `${base.origin}/${getUrl}`;
+    }
+    console.log(`[Annas] ads → get.php: ${getUrl}`);
+    return directDownload(getUrl, HEADERS['User-Agent']);
   }
-  console.log(`[Annas] ads.php → ${getUrl}`);
-  return directDownload(getUrl, HEADERS['User-Agent']);
+
+  // 2. Lien CDN direct dans le HTML
+  const fileUrl = extractFileUrlFromHtml(html);
+  if (fileUrl) {
+    console.log(`[Annas] ads → CDN: ${fileUrl}`);
+    return directDownload(fileUrl, HEADERS['User-Agent']);
+  }
+
+  throw new Error('Aucun lien de téléchargement trouvé dans la page partenaire');
 }
 
 /**
  * Parse the MD5 detail page and extract candidate download links.
- * Priority: slow_download (Anna's own CDN) > libgen.li > other partners.
+ * Priority: libgen.li/rs (ads.php) > slow_download > other partners.
  */
 function parseDownloadLinks(html, baseUrl) {
   const links = [];
@@ -185,8 +201,8 @@ function parseDownloadLinks(html, baseUrl) {
     links.push({ type: 'ads', url: m[1] });
   }
 
-  // Autres liens partenaires directs (library.lol, get.php direct, etc.)
-  const extPattern = /href="(https?:\/\/(?:libgen\.li|libgen\.rs|library\.lol|z-lib\.[a-z]+|archive\.org)[^"]*(?:get\.php|\/main\/|download)[^"]*)"/g;
+  // Autres liens partenaires directs (get.php direct, etc.)
+  const extPattern = /href="(https?:\/\/(?:libgen\.li|libgen\.rs|z-lib\.[a-z]+|archive\.org)[^"]*(?:get\.php|download)[^"]*)"/g;
   for (const m of html.matchAll(extPattern)) {
     if (!links.some(l => l.url === m[1])) {
       links.push({ type: 'partner', url: m[1] });
@@ -229,6 +245,11 @@ async function directDownload(url, userAgent) {
   if (contentType.includes('text/html')) {
     res.data.destroy();
     throw new Error('Réponse HTML reçue, pas un fichier');
+  }
+  const badMimes = ['text/css', 'text/javascript', 'application/javascript', 'image/svg', 'font/'];
+  if (badMimes.some(t => contentType.includes(t))) {
+    res.data.destroy();
+    throw new Error(`Type MIME non-ebook reçu: ${contentType.split(';')[0].trim()}`);
   }
 
   const totalSize = parseInt(res.headers['content-length'] || '0', 10);
@@ -357,6 +378,8 @@ function detectZipFormat(buffer) {
   }
 }
 
+const KNOWN_EBOOK_EXTS = new Set(['epub', 'mobi', 'pdf', 'cbz', 'cbr', 'azw3', 'fb2', 'djvu']);
+
 /**
  * Try to extract a direct file URL embedded in an HTML page.
  * Returns the first URL pointing to a downloadable file, or null.
@@ -369,8 +392,8 @@ function extractFileUrlFromHtml(html) {
     /window\.location(?:\.href)?\s*=\s*["'](https?:\/\/[^"']+)["']/,
     // meta refresh
     /content="\d+;\s*url=(https?:\/\/[^"']+)["']/i,
-    // CDN-like hostnames
-    /"(https?:\/\/(?:cdn\d*\.|storage\d*\.|dl\.|download\.)[^"']{10,})"/,
+    // CDN-like hostnames — require a known ebook extension to avoid CSS/JS CDNs
+    /"(https?:\/\/(?:cdn\d*\.|storage\d*\.|dl\.|download\.)[^"']+\.(?:epub|mobi|pdf|cbz|cbr|azw3|fb2|djvu))(?:[?#][^"']*)?"/i,
   ];
   for (const p of patterns) {
     const m = html.match(p);
@@ -421,8 +444,27 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
     let filename = null;
 
     {
-      // ── Fetch MD5 page via FlareSolverr (bypass DDoS-Guard) ──────────────────
-      const { html } = await cfFetch(md5PageUrl);
+      // ── Fetch MD5 page : direct d'abord, FlareSolverr en fallback ────────────
+      let html = '';
+      try {
+        const direct = await axios.get(md5PageUrl, {
+          headers: HEADERS,
+          timeout: 15000,
+          validateStatus: s => s < 500,
+        });
+        const body = typeof direct.data === 'string' ? direct.data : '';
+        if (body && !body.includes('DDoS-Guard') && !body.includes('ddos-guard')) {
+          html = body;
+          console.log(`[Annas] Page MD5 récupérée directement`);
+        } else {
+          throw new Error('DDoS-Guard détecté sur accès direct');
+        }
+      } catch (directErr) {
+        console.log(`[Annas] Accès direct échoué (${directErr.message}), essai FlareSolverr…`);
+        const result = await cfFetch(md5PageUrl);
+        html = result.html;
+      }
+
       const downloadLinks = parseDownloadLinks(html, baseUrl);
 
       console.log(`[Annas] ${downloadLinks.length} lien(s) trouvé(s):`, downloadLinks.map(l => l.type));
@@ -433,9 +475,21 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
 
       // Garder 3 liens slow max + liens ads (libgen ads.php) + liens partner directs
       const slowLinks    = downloadLinks.filter(l => l.type === 'slow').slice(0, 3);
-      const adsLinks     = downloadLinks.filter(l => l.type === 'ads');
+      let adsLinks       = downloadLinks.filter(l => l.type === 'ads');
       const partnerLinks = downloadLinks.filter(l => l.type === 'partner');
-      const linksToTry = [...slowLinks, ...adsLinks, ...partnerLinks];
+
+      // Si aucun lien ads trouvé (liens partenaires chargés en JS, invisibles en accès direct),
+      // construire directement les URLs partenaires à partir du MD5
+      if (adsLinks.length === 0) {
+        adsLinks = [
+          { type: 'ads', url: `https://libgen.li/ads.php?md5=${md5}` },
+          { type: 'ads', url: `https://libgen.rs/ads.php?md5=${md5}` },
+        ];
+        console.log(`[Annas] Aucun lien ads dans le HTML — construction URLs libgen/libgen.rs directes`);
+      }
+
+
+      const linksToTry = [...adsLinks, ...slowLinks, ...partnerLinks];
 
       console.log(`[Annas] Liens à essayer: ${linksToTry.map(l => l.type).join(', ')}`);
 
@@ -503,7 +557,7 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
             if (fn) filename = fn;
             console.log(`[Annas] ✓ Téléchargé via ads page (${fileBuffer.length} octets)`);
           } else {
-            // ── partner link direct (library.lol, etc.) ───────────────────────
+            // ── partner link direct ───────────────────────────────────────────
             const { buffer, filename: fn } = await directDownload(link.url, HEADERS['User-Agent']);
             fileBuffer = buffer;
             if (fn) filename = fn;
@@ -551,9 +605,17 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
           ext = detectZipFormat(fileBuffer);
         }
       } else if (hintFormat) {
-        ext = hintFormat.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if ((ext === 'epub' || ext === 'cbz') && magic.startsWith('504b')) {
-          ext = detectZipFormat(fileBuffer);
+        const normalizedHint = hintFormat.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (KNOWN_EBOOK_EXTS.has(normalizedHint)) {
+          ext = normalizedHint;
+          if ((ext === 'epub' || ext === 'cbz') && magic.startsWith('504b')) {
+            ext = detectZipFormat(fileBuffer);
+          }
+        } else {
+          // hintFormat n'est pas un format ebook connu (ex: "English [en]") → magic bytes
+          if (magic.startsWith('25504446')) ext = 'pdf';
+          else if (magic.startsWith('504b')) ext = detectZipFormat(fileBuffer);
+          else ext = 'epub';
         }
       } else if (magic.startsWith('25504446')) {
         ext = 'pdf';

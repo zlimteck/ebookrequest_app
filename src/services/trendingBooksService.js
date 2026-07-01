@@ -59,18 +59,17 @@ async function fetchTrendingBooks(category = BOOK_CATEGORIES.ALL) {
 
     console.log(`📚 ${bestsellers.length} livres à chercher...`);
 
-    // Enrichir tous les bestsellers en parallèle via Google Books
-    const results = await Promise.allSettled(
-      bestsellers.map(async (bestseller) => {
-        const { title, author } = bestseller;
-        console.log(`🔎 Recherche: ${title} ${author ? `par ${author}` : ''}`);
-        const googleData = await searchGoogleBooks(title, author);
-        if (!googleData) {
-          console.log(`⚠️  Non trouvé: ${title}`);
-          return null;
-        }
+    // Enrichir les bestsellers séquentiellement pour éviter le rate-limit Google Books
+    const frenchBooks = [];
+    for (const bestseller of bestsellers) {
+      const { title, author } = bestseller;
+      console.log(`🔎 Recherche: ${title} ${author ? `par ${author}` : ''}`);
+      const googleData = await searchGoogleBooks(title, author);
+      if (!googleData) {
+        console.log(`⚠️  Non trouvé: ${title}`);
+      } else {
         console.log(`✅ Trouvé: ${googleData.title}`);
-        return {
+        frenchBooks.push({
           id: googleData.id,
           title: googleData.title,
           author: googleData.author || author || 'Auteur inconnu',
@@ -78,13 +77,12 @@ async function fetchTrendingBooks(category = BOOK_CATEGORIES.ALL) {
           description: googleData.description || 'Aucune description disponible.',
           pageCount: googleData.pageCount || 0,
           link: googleData.link || `https://www.google.com/search?q=${encodeURIComponent(title)}`,
-        };
-      })
-    );
-
-    const frenchBooks = results
-      .filter(r => r.status === 'fulfilled' && r.value !== null)
-      .map((r, i) => ({ ...r.value, trending_rank: i + 1 }));
+          trending_rank: frenchBooks.length + 1,
+        });
+      }
+      // Délai entre chaque appel pour respecter le quota Google Books
+      await sleep(300);
+    }
 
     console.log(`✅ ${frenchBooks.length} livres récupérés pour "${category}"`);
     return frenchBooks;
@@ -99,9 +97,12 @@ async function fetchTrendingBooks(category = BOOK_CATEGORIES.ALL) {
 export async function initializeTrendingBooksCache() {
   try {
     console.log('🚀 Initialisation du cache des livres tendance...');
-    // Pré-charger toutes les catégories en parallèle pour éviter le délai au premier clic
+    // Pré-charger les catégories séquentiellement pour éviter le rate-limit Google Books
     const allCategories = Object.values(BOOK_CATEGORIES);
-    await Promise.allSettled(allCategories.map(cat => getTrendingBooks(cat)));
+    for (const cat of allCategories) {
+      await getTrendingBooks(cat).catch(() => {});
+      await sleep(500);
+    }
     console.log('✅ Cache des livres tendance initialisé pour toutes les catégories');
   } catch (error) {
     console.error('❌ Erreur lors de l\'initialisation du cache:', error);
@@ -115,25 +116,20 @@ export function clearTrendingBooksCache() {
   console.log('🗑️  Cache des livres tendance vidé');
 }
 
-// Recherche un livre sur Google Books pour enrichir les données
-// Utilisée pour récupérer les métadonnées (couverture, description, etc.) des bestsellers
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function searchGoogleBooks(title, author) {
   if (!GOOGLE_BOOKS_API_KEY) {
     return null;
   }
 
-  try {
-    const query = author && author !== 'Auteur inconnu'
-      ? `intitle:${title}+inauthor:${author}`
-      : `intitle:${title}`;
+  const query = author && author !== 'Auteur inconnu'
+    ? `intitle:${title}+inauthor:${author}`
+    : `intitle:${title}`;
 
+  try {
     const response = await axios.get('https://www.googleapis.com/books/v1/volumes', {
-      params: {
-        q: query,
-        key: GOOGLE_BOOKS_API_KEY,
-        maxResults: 1,
-        langRestrict: 'fr' // Restreindre aux livres en français
-      }
+      params: { q: query, key: GOOGLE_BOOKS_API_KEY, maxResults: 1, langRestrict: 'fr' }
     });
 
     if (response.data.items && response.data.items.length > 0) {
@@ -148,13 +144,14 @@ async function searchGoogleBooks(title, author) {
         description: book.description || null,
         pageCount: book.pageCount || 0,
         link: book.infoLink || book.previewLink || null,
-        language: book.language || 'unknown' // Ajouter la langue pour vérification
+        language: book.language || 'unknown',
       };
     }
-
     return null;
   } catch (error) {
-    console.error('Erreur lors de la recherche Google Books:', error);
+    if (error.response?.status !== 429) {
+      console.error('Erreur lors de la recherche Google Books:', error.message);
+    }
     return null;
   }
 }
