@@ -49,7 +49,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - [Mise à jour](#mise-à-jour)
   - [Accès OPDS](#accès-opds)
 - [Structure du projet](#structure-du-projet)
-- [Remerciements](#remerciements)
+- [Contributeurs](#contributeurs)
 
 ## Stack
 
@@ -414,6 +414,9 @@ ebookrequest/
 
 ---
 
-## Remerciements
+## Contributeurs
 
-Un grand merci à [@Gusdezup](https://github.com/Gusdezup) pour ses idées et suggestions qui ont contribué à enrichir le projet, notamment la synchronisation Calibre, l'étagère Calibre et la synchronisation Kobo.
+<a href="https://github.com/zlimteck"><img src="https://github.com/zlimteck.png?size=48" width="40" height="40" alt="zlimteck" style="border-radius:50%"></a>
+<a href="https://github.com/Gusdezup"><img src="https://github.com/Gusdezup.png?size=80" width="40" height="40" alt="Gusdezup" style="border-radius:50%"></a>
+
+Merci à [@Gusdezup](https://github.com/Gusdezup) pour ses idées et suggestions (synchronisation Calibre, étagère Calibre, synchronisation Kobo) ainsi que pour ses contributions directes en pull request : fiabilisation de l'assignation à l'étagère Calibre-Web, recherche par auteur/série sur Valentine, et diverses corrections de performance et de fiabilité (recherche Google Books, notifications Apprise, cache des livres tendance).
