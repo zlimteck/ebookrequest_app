@@ -112,6 +112,122 @@ router.patch('/:id/category', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/requests/calibre/shelf-targets — liste des utilisateurs ciblables
+// pour le multishelf multi-utilisateurs (Calibre-Web activé) + leurs étagères
+// configurées. Sert à peupler le sélecteur admin, aussi bien pour l'envoi a
+// posteriori que pour la création de demande.
+router.get('/calibre/shelf-targets', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const User = (await import('../models/User.js')).default;
+    const users = await User.find(
+      { 'calibreWeb.enabled': true, 'calibreWeb.url': { $ne: '' } },
+      'username calibreWeb.shelves'
+    ).sort({ username: 1 });
+    res.json(users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      shelves: (u.calibreWeb?.shelves || []).map(s => ({ name: s.name, isDefault: s.isDefault })),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/requests/:id/extra-shelves — pousse (a posteriori) un livre déjà
+// complété vers les étagères de comptes Calibre-Web d'autres utilisateurs,
+// en plus du push normal vers les étagères du propriétaire de la demande.
+// Ne fait PAS de ré-upload : réutilise le calibreBookId déjà connu, ou le
+// retrouve via le premier compte cible valide.
+router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { targets } = req.body;
+    if (!Array.isArray(targets) || !targets.length) {
+      return res.status(400).json({ error: 'Liste de cibles manquante' });
+    }
+
+    const request = await BookRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+    if (request.status !== 'completed' || !request.filePath) {
+      return res.status(400).json({ error: 'Cette demande n\'est pas encore disponible dans Calibre' });
+    }
+
+    const User = (await import('../models/User.js')).default;
+    const { decrypt } = await import('../services/cryptoService.js');
+    const { pushBookToUserShelves, resolveCalibreBookId } = await import('../services/calibreService.js');
+
+    const cleanedTargets = targets
+      .filter(t => t?.userId)
+      .map(t => ({
+        userId: String(t.userId),
+        shelves: Array.isArray(t.shelves)
+          ? t.shelves.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim())
+          : [],
+      }));
+    if (!cleanedTargets.length) {
+      return res.status(400).json({ error: 'Aucune cible valide fournie' });
+    }
+
+    const targetUsers = await User.find({ _id: { $in: cleanedTargets.map(t => t.userId) } });
+    const usersById = new Map(targetUsers.map(u => [u._id.toString(), u]));
+
+    // calibreBookId : déjà connu (push du propriétaire) sinon retrouvé via le
+    // premier compte Calibre-Web valide parmi les cibles.
+    let calibreBookId = request.calibrePush?.calibreBookId || null;
+    if (!calibreBookId) {
+      for (const t of cleanedTargets) {
+        const u = usersById.get(t.userId);
+        const cfg = u?.calibreWeb;
+        if (!cfg?.enabled || !cfg?.url) continue;
+        try {
+          const password = decrypt(cfg.password || '') ?? cfg.password;
+          calibreBookId = await resolveCalibreBookId(request, cfg.url.replace(/\/$/, ''), cfg.username, password);
+          if (calibreBookId) break;
+        } catch {}
+      }
+    }
+    if (!calibreBookId) {
+      return res.status(404).json({ error: 'Livre introuvable côté Calibre-Web — vérifiez qu\'au moins un des comptes ciblés a accès à la bibliothèque.' });
+    }
+
+    const existingByUser = new Map((request.extraShelfTargets || []).map(e => [e.user.toString(), e]));
+    const results = [];
+
+    for (const t of cleanedTargets) {
+      const targetUser = usersById.get(t.userId);
+      if (!targetUser) {
+        results.push({ userId: t.userId, status: 'failed', error: 'Utilisateur introuvable' });
+        continue;
+      }
+      if (!targetUser.calibreWeb?.enabled || !targetUser.calibreWeb?.url) {
+        const entry = { user: targetUser._id, username: targetUser.username, shelves: t.shelves, status: 'failed', error: 'Calibre-Web non configuré pour cet utilisateur', pushedAt: new Date() };
+        existingByUser.set(t.userId, entry);
+        results.push({ userId: t.userId, username: targetUser.username, status: 'failed', error: entry.error });
+        continue;
+      }
+      const previousEntry = existingByUser.get(t.userId);
+      const previousShelves = previousEntry?.shelves || [];
+      try {
+        const shelfResult = await pushBookToUserShelves(targetUser, calibreBookId, t.shelves, previousShelves);
+        const status = shelfResult.failed.length ? 'partial' : 'success';
+        const error = shelfResult.failed.length ? `Échec sur : ${shelfResult.failed.map(f => f.name).join(', ')}` : null;
+        existingByUser.set(t.userId, { user: targetUser._id, username: targetUser.username, shelves: t.shelves, status, error, pushedAt: new Date() });
+        results.push({ userId: t.userId, username: targetUser.username, status, ...shelfResult });
+      } catch (err) {
+        existingByUser.set(t.userId, { user: targetUser._id, username: targetUser.username, shelves: t.shelves, status: 'failed', error: err.message, pushedAt: new Date() });
+        results.push({ userId: t.userId, username: targetUser.username, status: 'failed', error: err.message });
+      }
+    }
+
+    request.extraShelfTargets = [...existingByUser.values()];
+    request.markModified('extraShelfTargets');
+    await request.save();
+
+    res.json({ success: true, calibreBookId, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de l\'envoi vers les étagères additionnelles' });
+  }
+});
+
 // Commentaire utilisateur sur sa propre demande
 router.patch('/:id/user-comment', requireAuth, updateUserComment);
 

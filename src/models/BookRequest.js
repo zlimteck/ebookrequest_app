@@ -128,10 +128,39 @@ const bookRequestSchema = new mongoose.Schema({
     at:     { type: Date, default: null },
     reason: { type: String, default: '' },
   },
+  // Étagères choisies par l'utilisateur au moment de la demande (case à cocher
+  // dans le formulaire de recherche, pré-cochées avec les étagères par défaut
+  // de son profil). Si absent/vide (anciennes demandes), on retombe sur les
+  // étagères par défaut actuelles de l'utilisateur au moment du push.
+  selectedShelves: { type: [String], default: undefined },
   calibrePush: {
-    status:   { type: String, enum: [null, 'success', 'failed'], default: null },
-    error:    { type: String, default: null },
-    pushedAt: { type: Date, default: null },
+    // 'success' : upload ET ajout aux étagères réussis.
+    // 'partial' : upload réussi mais au moins une étagère n'a pas pu être
+    //             assignée (permet de retenter juste l'étagère, sans réupload).
+    // 'failed'  : upload lui-même échoué.
+    status:        { type: String, enum: [null, 'success', 'partial', 'failed'], default: null },
+    error:         { type: String, default: null },
+    pushedAt:      { type: Date, default: null },
+    // ID du livre côté Calibre, capturé dès qu'on l'obtient (upload direct ou
+    // matching OPDS). Permet au bouton "envoyer vers étagères" a posteriori
+    // d'agir directement sans repasser par un upload.
+    calibreBookId: { type: Number, default: null },
+  },
+  // Étagères additionnelles choisies par un admin pour pousser ce même livre
+  // vers le compte Calibre-Web d'autres utilisateurs (multishelf multi-users,
+  // en plus du push normal vers les étagères de `user`). Chaque cible a son
+  // propre statut : ce sont des comptes Calibre-Web distincts, un échec sur
+  // l'un ne doit pas affecter les autres.
+  extraShelfTargets: {
+    type: [{
+      user:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      username: { type: String, default: '' }, // snapshot pour affichage, même si le compte est supprimé ensuite
+      shelves:  { type: [String], default: [] },
+      status:   { type: String, enum: [null, 'success', 'partial', 'failed'], default: null },
+      error:    { type: String, default: null },
+      pushedAt: { type: Date, default: null },
+    }],
+    default: undefined,
   },
   reportSeenByAdmin: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },

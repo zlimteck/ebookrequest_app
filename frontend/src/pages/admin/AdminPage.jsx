@@ -34,6 +34,7 @@ import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
 import DownloadModal from '../../components/DownloadModal';
 import CommentThread from '../../components/CommentThread';
+import ExtraShelvesModal from '../../components/admin/ExtraShelvesModal';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -121,6 +122,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [uploadsSearch, setUploadsSearch] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [connectorsModal, setConnectorsModal] = useState(null); // { _id, title, author }
+  const [extraShelvesModal, setExtraShelvesModal] = useState(null); // request en cours d'édition (étagères additionnelles)
   const [connectorsQuery, setConnectorsQuery] = useState('');
   const [valentineResults, setValentineResults] = useState(null);
   const [valentineLoading, setValentineLoading] = useState(false);
@@ -1199,6 +1201,12 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                     </button>
                                   )}
+                                  {request.status === 'completed' && request.filePath && (
+                                    <button className={styles.aIconBtn} title="Étagères additionnelles (autres utilisateurs)"
+                                      onClick={() => setExtraShelvesModal(request)}>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                    </button>
+                                  )}
                                   {request.status === 'canceled' && (
                                     <button className={`${styles.aIconBtn} ${styles.aIconBtnPrimary}`} title="Réactiver"
                                       onClick={() => handleUpdateStatus(request._id, 'pending')} disabled={updatingStatus === request._id}>
@@ -1544,6 +1552,12 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                             <button className={`${styles.aIconBtn} ${styles.aIconBtnDanger}`} title="Annuler la demande"
                               onClick={() => { setCancelingRequest(request._id); setCancelReason(''); }} disabled={updatingStatus === request._id}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                          {request.status === 'completed' && request.filePath && (
+                            <button className={styles.aIconBtn} title="Étagères additionnelles (autres utilisateurs)"
+                              onClick={() => setExtraShelvesModal(request)}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                             </button>
                           )}
                           {request.status === 'canceled' && (
@@ -2301,6 +2315,13 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         <DownloadModal
           request={downloadModalRequest}
           onClose={() => setDownloadModalRequest(null)}
+        />
+      )}
+      {extraShelvesModal && (
+        <ExtraShelvesModal
+          request={extraShelvesModal}
+          onClose={() => setExtraShelvesModal(null)}
+          onUpdated={() => fetchRequests()}
         />
       )}
     </div>

@@ -1,0 +1,192 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal {
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--color-border, #2d3748);
+  background: var(--color-bg, #0f172a);
+  flex-shrink: 0;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 6px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.closeBtn:hover {
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
+}
+
+.body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overflow-y: auto;
+}
+
+.bookTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  margin: 0;
+}
+
+.bookAuthor {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-style: italic;
+  margin: 0.1rem 0 0;
+}
+
+.errorMsg {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.emptyMsg {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.userSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--color-border, #2d3748);
+}
+.userSection:last-child { border-bottom: none; padding-bottom: 0; }
+
+.userHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.userName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+}
+
+.statusBadge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 1rem;
+  white-space: nowrap;
+}
+.statusSuccess { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.statusPartial { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+.statusFailed  { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+.shelfLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0 0.2rem 0.25rem;
+  font-size: 0.82rem;
+  color: var(--color-text, #f8fafc);
+  cursor: pointer;
+}
+
+.noShelves {
+  font-size: 0.76rem;
+  color: var(--color-text-muted, #94a3b8);
+  font-style: italic;
+  padding-left: 0.25rem;
+}
+
+.footer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--color-border, #2d3748);
+  background: var(--color-bg, #0f172a);
+  flex-shrink: 0;
+}
+
+.cancelBtn {
+  flex-shrink: 0;
+  padding: 0.6rem 1rem;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submitBtn {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 8px;
+  color: #818cf8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.submitBtn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+}
+.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }

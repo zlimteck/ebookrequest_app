@@ -114,7 +114,23 @@ const userSchema = new mongoose.Schema({
     url:       { type: String, default: '' },
     username:  { type: String, default: '' },
     password:  { type: String, default: '' },
-    shelfName: { type: String, default: '' }, // Étagère Kobo-sync (optionnelle)
+    // Étagères configurées par l'utilisateur. isDefault détermine la pré-sélection
+    // dans le formulaire de recherche et dans la modale "envoyer vers étagères"
+    // du dashboard. Plusieurs étagères peuvent être par défaut (ou aucune).
+    shelves: {
+      type: [{
+        name:      { type: String, required: true, trim: true },
+        isDefault: { type: Boolean, default: false },
+      }],
+      default: [],
+    },
+    // Type de serveur Calibre-Web, pour savoir si l'API JSON /api/v1/shelves
+    // (Calibre-Web-NextGen) est disponible, ou s'il faut scraper le HTML
+    // (Calibre-Web / Calibre-Web-Automated classique).
+    apiFlavor:       { type: String, enum: ['', 'nextgen', 'classic'], default: '' },
+    // 'auto' : mis à jour automatiquement lors du test de connexion.
+    // 'manual' : figé par l'admin, jamais réécrit par la détection auto.
+    apiFlavorSource: { type: String, enum: ['auto', 'manual'], default: 'auto' },
   },
   valentine: {
     username: { type: String, default: '' },

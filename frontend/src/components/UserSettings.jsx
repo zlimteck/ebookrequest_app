@@ -75,9 +75,14 @@ const UserSettings = () => {
     username: '',
     password: '',
     hasPassword: false,
-    shelfName: '',
+    shelves: [], // [{ name, isDefault }]
+    apiFlavor: '',
+    apiFlavorSource: 'auto',
     lastSync: null,
   });
+  const [newShelfName, setNewShelfName] = useState('');
+  const [calibreShelvesDiscovering, setCalibreShelvesDiscovering] = useState(false);
+  const [calibreShelvesDiscoverError, setCalibreShelvesDiscoverError] = useState('');
 
   const [appriseGlobalEnabled, setAppriseGlobalEnabled] = useState(false);
   const [apprisePrefs, setApprisePrefs] = useState({
@@ -398,12 +403,57 @@ const UserSettings = () => {
 
   // Les name attrs des champs Calibre utilisent des préfixes non-standards
   // pour éviter l'autofill Safari (qui détecte "username"/"password" même hors <form>)
-  const CALIBRE_FIELD_MAP = { 'cweb-url': 'url', 'cweb-user': 'username', 'cweb-pass': 'password', 'cweb-shelf': 'shelfName' };
+  const CALIBRE_FIELD_MAP = { 'cweb-url': 'url', 'cweb-user': 'username', 'cweb-pass': 'password' };
   const handleCalibreChange = (e) => {
     const { name, value, type, checked } = e.target;
     const key = CALIBRE_FIELD_MAP[name] ?? name;
     setCalibre(prev => ({ ...prev, [key]: type === 'checkbox' ? checked : value }));
     setCalibreTestResult(null);
+  };
+
+  const handleAddShelf = () => {
+    const name = newShelfName.trim();
+    if (!name) return;
+    if (calibre.shelves.some(s => s.name === name)) { setNewShelfName(''); return; }
+    setCalibre(prev => ({ ...prev, shelves: [...prev.shelves, { name, isDefault: prev.shelves.length === 0 }] }));
+    setNewShelfName('');
+  };
+
+  const handleRemoveShelf = (name) => {
+    setCalibre(prev => ({ ...prev, shelves: prev.shelves.filter(s => s.name !== name) }));
+  };
+
+  const handleToggleShelfDefault = (name) => {
+    setCalibre(prev => ({
+      ...prev,
+      shelves: prev.shelves.map(s => s.name === name ? { ...s, isDefault: !s.isDefault } : s),
+    }));
+  };
+
+  // Récupération auto des étagères existantes côté serveur Calibre-Web
+  // (bonus discuté : évite de retaper les noms à la main). N'ajoute que les
+  // étagères pas déjà dans la liste — ne touche pas à isDefault des existantes.
+  const handleDiscoverShelves = async () => {
+    setCalibreShelvesDiscovering(true);
+    setCalibreShelvesDiscoverError('');
+    try {
+      const res = await axiosAdmin.get('/api/users/calibre/shelves');
+      const discovered = res.data?.shelves || [];
+      setCalibre(prev => {
+        const existingNames = new Set(prev.shelves.map(s => s.name));
+        const toAdd = discovered.filter(s => !existingNames.has(s.name)).map(s => ({ name: s.name, isDefault: false }));
+        return {
+          ...prev,
+          shelves: [...prev.shelves, ...toAdd],
+          ...(prev.apiFlavorSource === 'auto' && res.data?.detectedFlavor ? { apiFlavor: res.data.detectedFlavor } : {}),
+        };
+      });
+      if (!discovered.length) setCalibreShelvesDiscoverError('Aucune étagère trouvée sur ce serveur.');
+    } catch (err) {
+      setCalibreShelvesDiscoverError(err.response?.data?.error || 'Impossible de récupérer les étagères du serveur.');
+    } finally {
+      setCalibreShelvesDiscovering(false);
+    }
   };
 
   const handleCalibreTest = async () => {
@@ -416,11 +466,21 @@ const UserSettings = () => {
         password: calibre.password,
       });
       setCalibreTestResult(res.data);
+      // Le backend mémorise déjà le flavor détecté côté BDD si apiFlavorSource
+      // est 'auto' ; on répercute juste côté UI pour ne pas devoir recharger.
+      if (res.data?.connected && res.data?.detectedFlavor && calibre.apiFlavorSource === 'auto') {
+        setCalibre(prev => ({ ...prev, apiFlavor: res.data.detectedFlavor }));
+      }
     } catch (err) {
       setCalibreTestResult({ connected: false, error: err.response?.data?.error || err.message });
     } finally {
       setCalibreTesting(false);
     }
+  };
+
+  const handleCalibreFlavorChange = (e) => {
+    // '' = repasser en détection automatique ; sinon forçage manuel.
+    setCalibre(prev => ({ ...prev, apiFlavor: e.target.value, apiFlavorSource: e.target.value ? 'manual' : 'auto' }));
   };
 
   const handleCalibreSave = async () => {
@@ -431,7 +491,8 @@ const UserSettings = () => {
         url: calibre.url,
         username: calibre.username,
         password: calibre.password || undefined,
-        shelfName: calibre.shelfName,
+        shelves: calibre.shelves,
+        apiFlavor: calibre.apiFlavor,
       });
       // Update hasApiKey/hasPassword hints without clearing fields
       setCalibre(prev => ({
@@ -1507,19 +1568,83 @@ const UserSettings = () => {
 
           <div className={styles.fieldRow}>
             <label className={styles.fieldLabel}>
-              Étagère Kobo-sync
+              Type de serveur
               <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
-                Optionnel — nom exact de votre étagère Calibre-Web synchronisée avec votre Kobo
+                Détecté automatiquement lors du test de connexion — forçable si besoin
               </span>
             </label>
-            <input
-              type="text"
-              name="cweb-shelf"
-              value={calibre.shelfName}
-              onChange={handleCalibreChange}
+            <select
               className={styles.fieldInput}
-              placeholder="ex : kobo-sync"
-            />
+              value={calibre.apiFlavorSource === 'auto' ? '' : calibre.apiFlavor}
+              onChange={handleCalibreFlavorChange}
+            >
+              <option value="">
+                {calibre.apiFlavorSource === 'auto' && calibre.apiFlavor
+                  ? `Auto-détecté (${calibre.apiFlavor === 'nextgen' ? 'NextGen' : 'Classique'})`
+                  : 'Auto-détecté'}
+              </option>
+              <option value="nextgen">Forcer : Calibre-Web-NextGen</option>
+              <option value="classic">Forcer : Calibre-Web / Automated classique</option>
+            </select>
+          </div>
+
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>
+              Étagères
+              <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
+                Les étagères marquées « par défaut » sont pré-cochées à chaque nouvelle demande
+              </span>
+            </label>
+            <div style={{ flex: 1 }}>
+              {calibre.shelves.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                  {calibre.shelves.map(s => (
+                    <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.4rem 0.6rem', background: 'var(--color-bg3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.83rem', flex: 1, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={s.isDefault} onChange={() => handleToggleShelfDefault(s.name)} />
+                        {s.name}
+                      </label>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{s.isDefault ? 'par défaut' : ''}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveShelf(s.name)}
+                        title="Retirer cette étagère"
+                        style={{ background: 'none', border: 'none', color: 'var(--color-danger, #ef4444)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: '0 0.2rem' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <input
+                  type="text"
+                  value={newShelfName}
+                  onChange={e => setNewShelfName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddShelf(); } }}
+                  className={styles.fieldInput}
+                  placeholder="Nom exact de l'étagère…"
+                />
+                <button type="button" className={styles.btnOutline} onClick={handleAddShelf} disabled={!newShelfName.trim()}>
+                  Ajouter
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className={styles.btnOutline}
+                onClick={handleDiscoverShelves}
+                disabled={calibreShelvesDiscovering || !calibre.url || !calibre.username}
+                style={{ marginTop: '0.5rem' }}
+              >
+                {calibreShelvesDiscovering ? 'Recherche…' : 'Découvrir les étagères existantes sur le serveur'}
+              </button>
+              {calibreShelvesDiscoverError && (
+                <p style={{ margin: '0.4rem 0 0', fontSize: '0.78rem', color: 'var(--color-danger, #ef4444)' }}>{calibreShelvesDiscoverError}</p>
+              )}
+            </div>
           </div>
 
           {/* Test result */}
@@ -1560,7 +1685,7 @@ const UserSettings = () => {
               <p style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
                 {calibre.lastSync ? (
                   <>
-                    Synchroniser les livres complétés manquants vers Calibre-Web.
+                    Renvoyer les livres non complètement synchronisés (échecs d'upload ou d'étagère uniquement).
                     <span style={{ marginLeft: '0.3rem', opacity: 0.75 }}>
                       — Dernière sync : {new Date(calibre.lastSync).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} à {new Date(calibre.lastSync).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                     </span>

@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { updateUserProfile, verifyEmail, getCurrentUser, changePassword, updateAvatar, getUserStats } from '../controllers/userController.js';
 import User from '../models/User.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
-import { testCalibreConnection, pushToCalibre } from '../services/calibreService.js';
+import { testCalibreConnection, pushToCalibre, getSessionCookie, listShelves, addToShelves, reconcileShelves, getBookShelfMembership, resolveCalibreBookId } from '../services/calibreService.js';
 import BookRequest from '../models/BookRequest.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -83,12 +83,14 @@ router.get('/calibre', requireAuth, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
     const cfg = user.calibreWeb || {};
     res.json({
-      enabled:     cfg.enabled || false,
-      url:         cfg.url || '',
-      username:    cfg.username || '',
-      hasPassword: Boolean(cfg.password),
-      shelfName:   cfg.shelfName || '',
-      lastSync:    lastSyncDoc?.calibrePush?.pushedAt || null,
+      enabled:         cfg.enabled || false,
+      url:             cfg.url || '',
+      username:        cfg.username || '',
+      hasPassword:     Boolean(cfg.password),
+      shelves:         (cfg.shelves || []).map(s => ({ name: s.name, isDefault: s.isDefault })),
+      apiFlavor:       cfg.apiFlavor || '',
+      apiFlavorSource: cfg.apiFlavorSource || 'auto',
+      lastSync:        lastSyncDoc?.calibrePush?.pushedAt || null,
     });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -98,16 +100,25 @@ router.get('/calibre', requireAuth, async (req, res) => {
 // PUT /api/users/calibre
 router.put('/calibre', requireAuth, async (req, res) => {
   try {
-    const { enabled, url, username, password, shelfName } = req.body;
+    const { enabled, url, username, password, shelves, apiFlavor } = req.body;
     const user = await User.findById(req.user.id).select('calibreWeb');
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
     const existing = user.calibreWeb || {};
     const updates = {
-      'calibreWeb.enabled':    enabled !== undefined ? Boolean(enabled) : existing.enabled,
-      'calibreWeb.url':        url !== undefined ? url : existing.url,
-      'calibreWeb.username':   username !== undefined ? username : existing.username,
-      'calibreWeb.shelfName':  shelfName !== undefined ? shelfName.trim() : (existing.shelfName || ''),
+      'calibreWeb.enabled':  enabled !== undefined ? Boolean(enabled) : existing.enabled,
+      'calibreWeb.url':      url !== undefined ? url : existing.url,
+      'calibreWeb.username': username !== undefined ? username : existing.username,
     };
+    if (Array.isArray(shelves)) {
+      updates['calibreWeb.shelves'] = shelves
+        .filter(s => s && typeof s.name === 'string' && s.name.trim())
+        .map(s => ({ name: s.name.trim(), isDefault: Boolean(s.isDefault) }));
+    }
+    // apiFlavor === '' signifie "repasser en auto" ; toute autre valeur = forçage manuel
+    if (apiFlavor !== undefined) {
+      updates['calibreWeb.apiFlavor'] = apiFlavor || '';
+      updates['calibreWeb.apiFlavorSource'] = apiFlavor ? 'manual' : 'auto';
+    }
     if (password) updates['calibreWeb.password'] = encrypt(password);
     await User.findByIdAndUpdate(req.user.id, { $set: updates });
     res.json({ success: true });
@@ -130,13 +141,171 @@ router.post('/calibre/test', requireAuth, async (req, res) => {
     }
 
     const result = await testCalibreConnection({ url, username, password });
+
+    // Mémorise le flavor détecté, sauf si l'admin l'a forcé manuellement.
+    if (result.connected && result.detectedFlavor) {
+      const user = await User.findById(req.user.id).select('calibreWeb.apiFlavorSource');
+      if ((user?.calibreWeb?.apiFlavorSource || 'auto') === 'auto') {
+        await User.updateOne({ _id: req.user.id }, { $set: { 'calibreWeb.apiFlavor': result.detectedFlavor } });
+      }
+    }
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ connected: false, error: err.message });
   }
 });
 
-// POST /api/users/calibre/sync — push all completed requests not yet sent to Calibre
+// GET /api/users/calibre/shelves — liste les étagères existantes côté serveur
+// Calibre-Web de l'utilisateur (pour peupler les cases à cocher du formulaire
+// de recherche et de la modale a posteriori du dashboard).
+router.get('/calibre/shelves', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('calibreWeb');
+    const cfg = user?.calibreWeb;
+    if (!cfg?.enabled || !cfg?.url) {
+      return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
+    }
+    const url = cfg.url.replace(/\/$/, '');
+    const rawPassword = cfg.password || '';
+    const password = decrypt(rawPassword) ?? rawPassword;
+    if (!cfg.username || !password) {
+      return res.status(400).json({ error: 'Identifiants Calibre-Web manquants' });
+    }
+
+    const cookie = await getSessionCookie(url, cfg.username, password);
+    const { shelves, detectedFlavor } = await listShelves(url, cookie, cfg.apiFlavor || '');
+
+    // Même logique de mémorisation auto que /calibre/test.
+    if (detectedFlavor && detectedFlavor !== cfg.apiFlavor && (cfg.apiFlavorSource || 'auto') === 'auto') {
+      await User.updateOne({ _id: req.user.id }, { $set: { 'calibreWeb.apiFlavor': detectedFlavor } });
+    }
+
+    res.json({ shelves, detectedFlavor });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Impossible de récupérer les étagères' });
+  }
+});
+
+// GET /api/users/calibre/requests/:id/shelves — état réel d'appartenance du
+// livre à ses étagères, interrogé côté serveur Calibre-Web (pas notre propre
+// enregistrement, qui peut être périmé si le livre a été retiré d'une
+// étagère directement dans Calibre). Sert à pré-cocher la modale du
+// dashboard avec la vérité du moment plutôt qu'un état mis en cache.
+router.get('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
+  try {
+    const [user, request] = await Promise.all([
+      User.findById(req.user.id).select('calibreWeb'),
+      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
+    ]);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+    const cfg = user?.calibreWeb;
+    if (!cfg?.enabled || !cfg?.url) {
+      return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
+    }
+
+    const url = cfg.url.replace(/\/$/, '');
+    const rawPassword = cfg.password || '';
+    const password = decrypt(rawPassword) ?? rawPassword;
+    const cookie = await getSessionCookie(url, cfg.username, password);
+
+    const calibreBookId = await resolveCalibreBookId(request, url, cfg.username, password);
+    if (!calibreBookId) {
+      // Pas encore dans Calibre (ou introuvable) — pas d'erreur, juste rien à afficher ;
+      // le front retombe sur les étagères par défaut du profil dans ce cas.
+      return res.json({ shelves: null, calibreBookId: null });
+    }
+
+    const { shelves: knownShelves, detectedFlavor } = await listShelves(url, cookie, cfg.apiFlavor || '');
+    const membership = await getBookShelfMembership(url, cookie, calibreBookId, {
+      flavorHint: cfg.apiFlavor || detectedFlavor,
+      shelvesWithIds: knownShelves,
+    });
+
+    // membership === null : la vérification a échoué (serveur inaccessible,
+    // page introuvable…) — on le signale plutôt que d'affirmer "aucune étagère".
+    res.json({ shelves: membership, calibreBookId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Impossible de vérifier les étagères' });
+  }
+});
+
+// POST /api/users/calibre/requests/:id/shelves — envoie (ou ré-envoie) un livre
+// déjà complété vers les étagères choisies, a posteriori. N'effectue PAS de
+// ré-upload : utilise le calibreBookId déjà connu si disponible, sinon le
+// retrouve par recherche de titre (comme le fait pushToCalibre en interne).
+router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
+  try {
+    const { shelves } = req.body;
+    if (!Array.isArray(shelves)) {
+      return res.status(400).json({ error: 'Liste d\'étagères manquante' });
+    }
+
+    const [user, request] = await Promise.all([
+      User.findById(req.user.id).select('calibreWeb'),
+      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
+    ]);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable' });
+    const cfg = user?.calibreWeb;
+    if (!cfg?.enabled || !cfg?.url) {
+      return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
+    }
+    if (request.status !== 'completed' || !request.filePath) {
+      return res.status(400).json({ error: 'Cette demande n\'est pas encore disponible dans Calibre' });
+    }
+
+    const url = cfg.url.replace(/\/$/, '');
+    const rawPassword = cfg.password || '';
+    const password = decrypt(rawPassword) ?? rawPassword;
+    const cookie = await getSessionCookie(url, cfg.username, password);
+
+    let csrfToken = null;
+    try {
+      const { default: axios } = await import('axios');
+      const page = await axios.get(`${url}/me`, { headers: { Cookie: cookie }, validateStatus: s => s < 500 });
+      const m = (page.data || '').match(/name="csrf_token"[^>]*value="([^"]+)"/);
+      if (m) csrfToken = m[1];
+    } catch {}
+
+    const calibreBookId = await resolveCalibreBookId(request, url, cfg.username, password);
+    if (!calibreBookId) {
+      return res.status(404).json({ error: 'Livre introuvable côté Calibre-Web — relancez un envoi complet depuis les Réglages.' });
+    }
+
+    // État réel juste avant d'agir, pas notre enregistrement potentiellement périmé —
+    // sinon un retrait fait directement dans Calibre serait ignoré au prochain envoi
+    // (la case resterait cochée dans notre historique, donc "rien à changer" à tort).
+    const { shelves: knownShelves, detectedFlavor } = await listShelves(url, cookie, cfg.apiFlavor || '');
+    const liveMembership = await getBookShelfMembership(url, cookie, calibreBookId, {
+      flavorHint: cfg.apiFlavor || detectedFlavor,
+      shelvesWithIds: knownShelves,
+    });
+    // Si la vérification échoue, on retombe sur notre dernier enregistrement
+    // plutôt que de bloquer l'action.
+    const previousNames = liveMembership !== null ? liveMembership : (request.selectedShelves || []);
+
+    const shelfResult = await reconcileShelves(url, cookie, csrfToken, previousNames, shelves, calibreBookId);
+
+    request.selectedShelves = shelves;
+    request.calibrePush = {
+      status: shelfResult.failed.length ? 'partial' : 'success',
+      error: shelfResult.failed.length
+        ? `Échec sur : ${shelfResult.failed.map(f => `${f.name} (${f.action === 'remove' ? 'retrait' : 'ajout'})`).join(', ')}`
+        : null,
+      pushedAt: new Date(),
+      calibreBookId,
+    };
+    await request.save();
+
+    res.json({ success: true, ...shelfResult, calibreBookId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de l\'envoi vers les étagères' });
+  }
+});
+
+// POST /api/users/calibre/sync — traite les demandes complétées non totalement
+// synchronisées : upload complet pour celles jamais envoyées ou en échec total,
+// et juste un retry d'étagère (sans ré-upload) pour celles en statut 'partial'.
 router.post('/calibre/sync', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('calibreWeb');
@@ -144,12 +313,11 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
     }
 
-    // Demandes complétées avec un fichier, pas encore envoyées avec succès
     const requests = await BookRequest.find({
       user: req.user.id,
       status: 'completed',
       filePath: { $exists: true, $ne: '' },
-      'calibrePush.status': { $ne: 'success' },
+      'calibrePush.status': { $nin: ['success'] },
     });
 
     if (!requests.length) {
@@ -158,25 +326,51 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
 
     let pushed = 0, failed = 0, skipped = 0;
     const { existsSync } = await import('fs');
+    const url = user.calibreWeb.url.replace(/\/$/, '');
+    const rawPassword = user.calibreWeb.password || '';
+    const password = decrypt(rawPassword) ?? rawPassword;
 
     for (const request of requests) {
       try {
-        const filePath = path.join(__dirname, '../../uploads', request.filePath);
+        const defaultShelves = (user.calibreWeb.shelves || []).filter(s => s.isDefault).map(s => s.name);
+        const shelfNames = request.selectedShelves !== undefined ? request.selectedShelves : defaultShelves;
 
-        // Fichier introuvable → skip silencieux
+        if (request.calibrePush?.status === 'partial' && request.calibrePush?.calibreBookId) {
+          // Livre déjà dans Calibre — on ne retente que les étagères manquantes.
+          const cookie = await getSessionCookie(url, user.calibreWeb.username, password);
+          const shelfResult = await addToShelves(url, cookie, null, shelfNames, request.calibrePush.calibreBookId);
+          request.calibrePush = {
+            status: shelfResult.failed.length ? 'partial' : 'success',
+            error: shelfResult.failed.length ? `Étagère(s) en échec : ${shelfResult.failed.map(f => f.name).join(', ')}` : null,
+            pushedAt: new Date(),
+            calibreBookId: request.calibrePush.calibreBookId,
+          };
+          await request.save();
+          pushed++;
+          console.log(`[Calibre] Sync (étagère seule) ✓ "${request.title}"`);
+          continue;
+        }
+
+        const filePath = path.join(__dirname, '../../uploads', request.filePath);
         if (!existsSync(filePath)) {
           skipped++;
           console.warn(`[Calibre] Sync skip "${request.title}": fichier introuvable`);
           continue;
         }
 
-        await pushToCalibre(user, filePath, request.title);
-        request.calibrePush = { status: 'success', error: null, pushedAt: new Date() };
+        const result = await pushToCalibre(user, filePath, request.title, shelfNames);
+        const hasShelfFailures = result?.shelfResult?.failed?.length > 0;
+        request.calibrePush = {
+          status: hasShelfFailures ? 'partial' : 'success',
+          error: hasShelfFailures ? `Étagère(s) en échec : ${result.shelfResult.failed.map(f => f.name).join(', ')}` : null,
+          pushedAt: new Date(),
+          calibreBookId: result?.calibreBookId ?? null,
+        };
         await request.save();
         pushed++;
         console.log(`[Calibre] Sync ✓ "${request.title}"`);
       } catch (err) {
-        request.calibrePush = { status: 'failed', error: err.message, pushedAt: new Date() };
+        request.calibrePush = { status: 'failed', error: err.message, pushedAt: new Date(), calibreBookId: request.calibrePush?.calibreBookId || null };
         await request.save();
         failed++;
         console.error(`[Calibre] Sync ✗ "${request.title}": ${err.message}`);

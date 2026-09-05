@@ -52,10 +52,446 @@ export async function getSessionCookie(url, username, password) {
 }
 
 /**
- * Push a file to Calibre-Web for the given user.
- * Returns { success: true } or throws an Error.
+ * Normalise le nom d'une étagère tel qu'affiché dans la sidebar HTML :
+ * retire les balises, le compteur final " (N)" et le suffixe " (Public)"
+ * (dans n'importe quel ordre, chacun optionnel) — indépendamment du fait
+ * que l'étagère soit publique ou privée, ça n'a aucune incidence sur le
+ * choix de l'utilisateur de synchroniser dessus ou non.
  */
-export async function pushToCalibre(user, filePath, bookTitle) {
+function normalizeShelfDisplayName(raw) {
+  return raw
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+\(\d+\)\s*$/, '')      // compteur de livres " (N)"
+    .replace(/\s+\(Public\)\s*$/i, '')  // suffixe public
+    .replace(/\s+\(\d+\)\s*$/, '')      // au cas où le compteur suivait le suffixe public
+    .trim();
+}
+
+/**
+ * Scrape la homepage Calibre-Web pour lister les étagères visibles par
+ * l'utilisateur connecté (approche valable sur Calibre-Web classique ET
+ * Calibre-Web-Automated ET Calibre-Web-NextGen, qui sert toujours la même
+ * sidebar côté serveur).
+ */
+async function scrapeShelvesFromHomepage(url, cookie) {
+  const homeRes = await axios.get(`${url}/`, {
+    headers: { Cookie: cookie },
+    timeout: TIMEOUT,
+    validateStatus: s => s < 500,
+  });
+
+  const shelves = [];
+  if (homeRes.status === 200 && typeof homeRes.data === 'string') {
+    const re = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let match;
+    const seen = new Set();
+    while ((match = re.exec(homeRes.data)) !== null) {
+      const id = parseInt(match[1], 10);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      shelves.push({ id, name: normalizeShelfDisplayName(match[2]) });
+    }
+  }
+  return shelves;
+}
+
+/**
+ * Liste les étagères disponibles pour l'utilisateur.
+ * - Si flavorHint === 'nextgen' (ou inconnu/''), on tente d'abord l'API JSON
+ *   /api/v1/shelves (Calibre-Web-NextGen uniquement).
+ * - Sinon (flavorHint === 'classic', ou si l'API répond 404), on scrape la
+ *   homepage — valable sur les deux forks.
+ * Retourne { shelves: [{id, name}], detectedFlavor }.
+ */
+export async function listShelves(url, cookie, flavorHint = '') {
+  if (flavorHint !== 'classic') {
+    try {
+      const apiRes = await axios.get(`${url}/api/v1/shelves`, {
+        headers: { Cookie: cookie, Accept: 'application/json' },
+        timeout: TIMEOUT,
+        validateStatus: s => s < 500,
+      });
+      if (apiRes.status === 200 && apiRes.data && Array.isArray(apiRes.data.items)) {
+        return {
+          detectedFlavor: 'nextgen',
+          shelves: apiRes.data.items.map(s => ({ id: s.id, name: s.name })),
+        };
+      }
+      // Statut inattendu (ni 200 avec items, ni 404) : on retombe sur le scraping
+      // plutôt que de faire échouer l'appel — mais sans conclure "classic" pour
+      // autant, la détection reste incertaine.
+    } catch {
+      // Erreur réseau : on retombe aussi sur le scraping.
+    }
+  }
+
+  const shelves = await scrapeShelvesFromHomepage(url, cookie);
+  return { detectedFlavor: 'classic', shelves };
+}
+
+/**
+ * Trouve (ou crée) une étagère par nom et y ajoute le livre.
+ */
+async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
+  let existing = await scrapeShelvesFromHomepage(url, cookie);
+  let shelfId = existing.find(s => s.name === shelfName)?.id ?? null;
+
+  if (!shelfId) {
+    console.log(`[Calibre] Étagère "${shelfName}" introuvable — création...`);
+    const params = new URLSearchParams({ title: shelfName, is_public: '0' });
+    if (csrfToken) params.append('csrf_token', csrfToken);
+    await axios.post(`${url}/shelf/create`, params.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: cookie,
+        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+      },
+      timeout: TIMEOUT,
+      validateStatus: s => s < 500,
+    });
+
+    existing = await scrapeShelvesFromHomepage(url, cookie);
+    shelfId = existing.find(s => s.name === shelfName)?.id ?? null;
+    if (!shelfId) throw new Error(`Impossible de créer l'étagère "${shelfName}"`);
+  }
+
+  const addParams = csrfToken ? new URLSearchParams({ csrf_token: csrfToken }).toString() : '';
+  const addRes = await axios.post(`${url}/shelf/add/${shelfId}/${bookId}`, addParams, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: cookie,
+      ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+    },
+    timeout: TIMEOUT,
+    validateStatus: s => s < 500,
+  });
+
+  if (addRes.status >= 400) {
+    const body = typeof addRes.data === 'string'
+      ? addRes.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+      : JSON.stringify(addRes.data).slice(0, 200);
+    throw new Error(`Ajout à l'étagère échoué: HTTP ${addRes.status} — ${body}`);
+  }
+}
+
+/**
+ * Décode les entités XML/HTML de base (&amp; &#39; &#x27; etc.) — utilisé
+ * pour les noms d'étagères et titres extraits par scraping.
+ */
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+}
+
+/**
+ * État réel d'appartenance d'un livre à ses étagères, interrogé côté
+ * serveur Calibre-Web (pas notre propre enregistrement, qui peut être
+ * périmé si le livre a été retiré d'une étagère directement dans Calibre).
+ * - NextGen : GET /api/v1/books/{id}/shelves → { shelf_ids: [...] }, mappé
+ *   en noms via la liste d'étagères déjà connue (shelvesWithIds).
+ * - Classique : scrape de la page détail du livre, qui rend chaque étagère
+ *   d'appartenance avec un attribut data-shelf-name directement exploitable.
+ * Retourne un tableau de noms d'étagères, ou null si la vérification a
+ * échoué (livre introuvable, page inaccessible…) pour laisser l'appelant
+ * décider d'un repli plutôt que de faussement conclure "aucune étagère".
+ */
+export async function getBookShelfMembership(url, cookie, bookId, { flavorHint = '', shelvesWithIds = [] } = {}) {
+  if (flavorHint !== 'classic') {
+    try {
+      const apiRes = await axios.get(`${url}/api/v1/books/${bookId}/shelves`, {
+        headers: { Cookie: cookie, Accept: 'application/json' },
+        timeout: TIMEOUT,
+        validateStatus: s => s < 500,
+      });
+      if (apiRes.status === 200 && Array.isArray(apiRes.data?.shelf_ids)) {
+        const idToName = new Map(shelvesWithIds.map(s => [s.id, s.name]));
+        return apiRes.data.shelf_ids.map(id => idToName.get(id)).filter(Boolean);
+      }
+      if (apiRes.status !== 404) return null; // erreur inattendue, pas juste "pas NextGen"
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const pageRes = await axios.get(`${url}/book/${bookId}`, {
+      headers: { Cookie: cookie },
+      timeout: TIMEOUT,
+      validateStatus: s => s < 500,
+    });
+    if (pageRes.status !== 200 || typeof pageRes.data !== 'string') return null;
+
+    const names = [];
+    const re = /class="meta-pill meta-link shelf-pill"[\s\S]*?data-shelf-name="([^"]*)"/g;
+    let m;
+    while ((m = re.exec(pageRes.data)) !== null) {
+      names.push(decodeHtmlEntities(m[1]));
+    }
+    return names;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ajoute un livre à plusieurs étagères. N'échoue pas globalement si une
+ * étagère échoue individuellement — chaque échec est collecté séparément,
+ * pour permettre un statut 'partial' distinguable d'un échec total.
+ * Retourne { succeeded: [names], failed: [{ name, error }] }.
+ */
+export async function addToShelves(url, cookie, csrfToken, shelfNames, bookId) {
+  const succeeded = [];
+  const failed = [];
+  for (const name of shelfNames) {
+    const trimmed = name?.trim();
+    if (!trimmed) continue;
+    try {
+      await addBookToShelf(url, cookie, csrfToken, trimmed, bookId);
+      succeeded.push(trimmed);
+    } catch (err) {
+      failed.push({ name: trimmed, error: err.message });
+    }
+  }
+  return { succeeded, failed };
+}
+
+/**
+ * Retire un livre d'une étagère (par nom). Ne throw pas si le livre n'y
+ * était déjà plus (statut 410 côté Calibre-Web) — traité comme un succès,
+ * puisque l'état final souhaité (absent de cette étagère) est déjà atteint.
+ * Ne throw pas non plus si l'étagère elle-même est introuvable (rien à retirer).
+ */
+async function removeBookFromShelf(url, cookie, csrfToken, shelfName, bookId) {
+  const existing = await scrapeShelvesFromHomepage(url, cookie);
+  const shelfId = existing.find(s => s.name === shelfName)?.id ?? null;
+  if (!shelfId) return; // étagère absente côté serveur : rien à faire
+
+  const removeParams = csrfToken ? new URLSearchParams({ csrf_token: csrfToken }).toString() : '';
+  const removeRes = await axios.post(`${url}/shelf/remove/${shelfId}/${bookId}`, removeParams, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: cookie,
+      ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+    },
+    timeout: TIMEOUT,
+    validateStatus: s => s < 500,
+  });
+
+  // 410 = déjà absent de l'étagère — pas une erreur du point de vue de l'appelant.
+  if (removeRes.status >= 400 && removeRes.status !== 410) {
+    const body = typeof removeRes.data === 'string'
+      ? removeRes.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+      : JSON.stringify(removeRes.data).slice(0, 200);
+    throw new Error(`Retrait de l'étagère échoué: HTTP ${removeRes.status} — ${body}`);
+  }
+}
+
+/**
+ * Réconcilie l'appartenance d'un livre à un ensemble d'étagères : calcule
+ * le diff entre la sélection précédente et la nouvelle, ajoute les étagères
+ * nouvellement cochées, retire celles décochées. Utilisée par le bouton
+ * a posteriori du dashboard, où décocher une case doit avoir un effet réel
+ * — contrairement au push initial (addToShelves), qui n'a jamais de
+ * sélection précédente puisque le livre vient d'arriver.
+ * Retourne { succeeded: [names ajoutées], removed: [names retirées], failed: [{ name, action, error }] }.
+ */
+export async function reconcileShelves(url, cookie, csrfToken, previousNames, targetNames, bookId) {
+  const previous = new Set((previousNames || []).map(n => n?.trim()).filter(Boolean));
+  const target = new Set((targetNames || []).map(n => n?.trim()).filter(Boolean));
+
+  const toAdd = [...target].filter(n => !previous.has(n));
+  const toRemove = [...previous].filter(n => !target.has(n));
+
+  const succeeded = [];
+  const removed = [];
+  const failed = [];
+
+  for (const name of toAdd) {
+    try {
+      await addBookToShelf(url, cookie, csrfToken, name, bookId);
+      succeeded.push(name);
+    } catch (err) {
+      failed.push({ name, action: 'add', error: err.message });
+    }
+  }
+  for (const name of toRemove) {
+    try {
+      await removeBookFromShelf(url, cookie, csrfToken, name, bookId);
+      removed.push(name);
+    } catch (err) {
+      failed.push({ name, action: 'remove', error: err.message });
+    }
+  }
+
+  return { succeeded, removed, failed };
+}
+
+/**
+ * Pousse un livre déjà présent dans Calibre (calibreBookId connu) vers les
+ * étagères d'un compte Calibre-Web cible — sans ré-upload. Se connecte avec
+ * les identifiants propres à targetUser (chaque utilisateur a son propre
+ * compte Calibre-Web), vérifie l'appartenance réelle côté serveur pour ne
+ * pas se fier à un état potentiellement périmé, puis réconcilie vers la
+ * sélection demandée. Utilisée pour le multishelf multi-utilisateurs (un
+ * admin poussant un livre vers l'étagère de plusieurs comptes à la fois).
+ * previousShelfNames sert de repli seulement si la vérification en direct
+ * échoue (serveur inaccessible, etc.) — évite un retrait accidentel.
+ * Retourne { succeeded, removed, failed } comme reconcileShelves.
+ */
+export async function pushBookToUserShelves(targetUser, calibreBookId, desiredShelfNames, previousShelfNames = []) {
+  const cfg = targetUser?.calibreWeb;
+  if (!cfg?.enabled || !cfg?.url) {
+    throw new Error('Calibre-Web non configuré ou désactivé pour cet utilisateur');
+  }
+
+  const url = cfg.url.replace(/\/$/, '');
+  const rawPassword = cfg.password || '';
+  const password = decrypt(rawPassword) ?? rawPassword;
+  if (!cfg.username || !password) throw new Error('Identifiants Calibre-Web manquants ou illisibles');
+
+  const cookie = await getSessionCookie(url, cfg.username, password);
+
+  let csrfToken = null;
+  try {
+    const page = await axios.get(`${url}/me`, {
+      headers: { Cookie: cookie },
+      timeout: TIMEOUT,
+      validateStatus: s => s < 500,
+    });
+    const m = (page.data || '').match(/name="csrf_token"[^>]*value="([^"]+)"/);
+    if (m) csrfToken = m[1];
+  } catch {}
+
+  const { shelves: knownShelves, detectedFlavor } = await listShelves(url, cookie, cfg.apiFlavor || '');
+  const liveMembership = await getBookShelfMembership(url, cookie, calibreBookId, {
+    flavorHint: cfg.apiFlavor || detectedFlavor,
+    shelvesWithIds: knownShelves,
+  });
+  const basePrevious = liveMembership !== null ? liveMembership : previousShelfNames;
+
+  return reconcileShelves(url, cookie, csrfToken, basePrevious, desiredShelfNames, calibreBookId);
+}
+
+/**
+ * Résout le calibreBookId d'une demande (déjà connu, sinon retrouvé par
+ * titre) — partagé entre la vérification en direct et l'envoi a posteriori
+ * (self-service et multi-utilisateurs).
+ */
+export async function resolveCalibreBookId(request, url, username, password) {
+  let calibreBookId = request.calibrePush?.calibreBookId || null;
+  if (!calibreBookId) {
+    calibreBookId = await matchCalibreBookId(url, username, password, request.title, { maxAttempts: 1 });
+  }
+  return calibreBookId;
+}
+
+/**
+ * Recherche l'ID Calibre d'un livre déjà présent en bibliothèque par titre,
+ * via /opds/search (recherche serveur sur toute la base — pas de fenêtre
+ * temporelle à rater, contrairement à /opds/new). Utilisé aussi bien lors
+ * de l'upload initial (Calibre-Web-Automated/NextGen, traitement async) que
+ * pour retrouver a posteriori l'ID d'un livre dont on n'a pas encore la
+ * référence stockée.
+ */
+export async function matchCalibreBookId(url, username, password, bookTitle, { maxAttempts = 4, retryDelayMs = 8000 } = {}) {
+  if (!bookTitle) return null;
+
+  const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
+  const patterns = [
+    /\/download\/(\d+)\//,
+    /\/book\/(\d+)[/"]/,
+    /calibre:(\d+)/,
+    /\/opds\/book\/(\d+)/,
+  ];
+
+  // Decode les entites XML (&amp; &#39; &#x27; etc.) avant normalisation,
+  // sinon un titre avec apostrophe/esperluette peut laisser des residus
+  // numeriques parasites dans la comparaison (ex: "L'île" mal compare).
+  const decodeXmlEntities = (str) => str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+
+  const normalize = (str) => decodeXmlEntities(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const titleNorm = normalize(bookTitle);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const searchUrl = `${url}/opds/search/${encodeURIComponent(bookTitle)}`;
+      const opdsRes = await axios.get(searchUrl, {
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          Accept: 'application/atom+xml, application/xml, text/xml',
+        },
+        timeout: TIMEOUT,
+        validateStatus: s => s < 500,
+      });
+
+      if (opdsRes.status === 200 && typeof opdsRes.data === 'string') {
+        const xml = opdsRes.data;
+        const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+        let entry;
+        let bestMatch = null; // { id, exact }
+
+        while ((entry = entryRe.exec(xml)) !== null) {
+          const entryXml = entry[1];
+          const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+          if (!titleMatch) continue;
+          const entryTitleNorm = normalize(titleMatch[1]);
+
+          const isExact = entryTitleNorm === titleNorm;
+          const isFullInclusion = entryTitleNorm.includes(titleNorm) || titleNorm.includes(entryTitleNorm);
+
+          if (isExact || (isFullInclusion && !bestMatch)) {
+            let id = null;
+            for (const pattern of patterns) {
+              const m = entryXml.match(pattern);
+              if (m) { id = parseInt(m[1], 10); break; }
+            }
+            if (id) {
+              if (isExact) { bestMatch = { id, exact: true }; break; }
+              if (!bestMatch) bestMatch = { id, exact: false };
+            }
+          }
+        }
+
+        if (bestMatch) {
+          if (!bestMatch.exact) {
+            console.warn(`[Calibre] Correspondance partielle (pas exacte) pour "${bookTitle}" — id ${bestMatch.id} retenu par defaut.`);
+          }
+          return bestMatch.id;
+        }
+      }
+    } catch (err) {
+      console.warn(`[Calibre] OPDS search erreur: ${err.message}`);
+    }
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, retryDelayMs));
+  }
+
+  console.warn(`[Calibre] Livre "${bookTitle}" introuvable via /opds/search après ${maxAttempts} tentatives.`);
+  return null;
+}
+
+/**
+ * Push a file to Calibre-Web for the given user, puis ajoute le livre aux
+ * étagères demandées (shelfNames). Si shelfNames est omis, retombe sur les
+ * étagères par défaut du profil (utilisé par la resync manuelle).
+ * Retourne { success: true, calibreBookId, shelfResult } ou throws.
+ * shelfResult est null si aucune étagère n'était demandée, sinon
+ * { succeeded, failed } — failed non-vide implique un statut 'partial'
+ * côté appelant, pas un échec de la fonction.
+ */
+export async function pushToCalibre(user, filePath, bookTitle, shelfNames) {
   const cfg = user.calibreWeb;
   if (!cfg || !cfg.enabled || !cfg.url) return null;
 
@@ -64,6 +500,10 @@ export async function pushToCalibre(user, filePath, bookTitle) {
   const raw = cfg.password || '';
   const password = decrypt(raw) ?? raw; // fallback si ancien mot de passe en clair
   if (!username || !password) throw new Error('Identifiants Calibre-Web manquants ou illisibles');
+
+  const effectiveShelfNames = shelfNames !== undefined
+    ? shelfNames
+    : (cfg.shelves || []).filter(s => s.isDefault).map(s => s.name);
 
   // 1. Login → session cookie
   const cookie = await getSessionCookie(url, username, password);
@@ -118,7 +558,7 @@ export async function pushToCalibre(user, filePath, bookTitle) {
   let calibreBookId = null;
   const locationStr = String(uploadRes.data?.location || uploadRes.headers?.location || '');
 
-  // Calibre-Web Automated : traitement asynchrone → location = "/tasks"
+  // Calibre-Web Automated / NextGen : traitement asynchrone → location = "/tasks"
   const isCWAAsync = locationStr === '/tasks';
 
   if (!isCWAAsync) {
@@ -164,203 +604,34 @@ export async function pushToCalibre(user, filePath, bookTitle) {
       } catch {}
     }
   } else {
-    // Calibre-Web Automated / NextGen — v2 (patch) :
-    // Au lieu de scanner /opds/new (fenetre "nouveautes" limitee, qui peut
-    // se faire pousser dehors par d'autres imports arrives entre-temps —
-    // observe en prod), on interroge directement /opds/search/<titre>.
-    // Cette route fait une vraie recherche en base sur toute la bibliotheque
-    // (calibre_db.search_query cote CWNG), donc aucune fenetre temporelle a
-    // rater : le livre est trouvable des qu'il est indexe, quel que soit le
-    // nombre d'autres imports survenus depuis.
     console.log('[Calibre] CWA détecté — attente 8s puis recherche OPDS par titre...');
     await new Promise(r => setTimeout(r, 8000));
-    const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
-    const patterns = [
-      /\/download\/(\d+)\//,
-      /\/book\/(\d+)[/"]/,
-      /calibre:(\d+)/,
-      /\/opds\/book\/(\d+)/,
-    ];
+    calibreBookId = await matchCalibreBookId(url, username, password, bookTitle);
+  }
 
-    // Decode les entites XML (&amp; &#39; &#x27; etc.) avant normalisation,
-    // sinon un titre avec apostrophe/esperluette peut laisser des residus
-    // numeriques parasites dans la comparaison (ex: "L'île" mal compare).
-    const decodeXmlEntities = (str) => str
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-      .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
-
-    const normalize = (str) => decodeXmlEntities(str).toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    const MAX_ATTEMPTS = 4;
-    const RETRY_DELAY_MS = 8000;
-    const titleNorm = bookTitle ? normalize(bookTitle) : '';
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const searchUrl = `${url}/opds/search/${encodeURIComponent(bookTitle || '')}`;
-        const opdsRes = await axios.get(searchUrl, {
-          headers: {
-            Authorization: `Basic ${basicAuth}`,
-            Accept: 'application/atom+xml, application/xml, text/xml',
-          },
-          timeout: TIMEOUT,
-          validateStatus: s => s < 500,
-        });
-
-        if (opdsRes.status === 200 && typeof opdsRes.data === 'string' && titleNorm) {
-          const xml = opdsRes.data;
-          const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
-          let entry;
-          let bestMatch = null; // { id, exact }
-
-          while ((entry = entryRe.exec(xml)) !== null) {
-            const entryXml = entry[1];
-            const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
-            if (!titleMatch) continue;
-            const entryTitleNorm = normalize(titleMatch[1]);
-
-            // Le endpoint /opds/search ne renvoie deja que des resultats
-            // pertinents pour ce terme (recherche cote serveur) : on peut se
-            // permettre d'exiger une correspondance stricte (egalite ou
-            // inclusion complete), plutot que le prefixe de 6 caracteres de
-            // l'ancienne version, dangereux pour les series (nombreux tomes
-            // partageant le meme debut de titre).
-            const isExact = entryTitleNorm === titleNorm;
-            const isFullInclusion = entryTitleNorm.includes(titleNorm) || titleNorm.includes(entryTitleNorm);
-
-            if (isExact || (isFullInclusion && !bestMatch)) {
-              let id = null;
-              for (const pattern of patterns) {
-                const m = entryXml.match(pattern);
-                if (m) { id = parseInt(m[1], 10); break; }
-              }
-              if (id) {
-                if (isExact) { bestMatch = { id, exact: true }; break; }
-                if (!bestMatch) bestMatch = { id, exact: false };
-              }
-            }
-          }
-
-          if (bestMatch) {
-            calibreBookId = bestMatch.id;
-            if (!bestMatch.exact) {
-              console.warn(`[Calibre] Correspondance partielle (pas exacte) pour "${bookTitle}" — id ${bestMatch.id} retenu par defaut.`);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`[Calibre] OPDS search erreur: ${err.message}`);
+  // 5. Ajout aux étagères demandées
+  let shelfResult = null;
+  if (effectiveShelfNames.length) {
+    if (calibreBookId) {
+      shelfResult = await addToShelves(url, cookie, csrfToken, effectiveShelfNames, calibreBookId);
+      if (shelfResult.succeeded.length) {
+        console.log(`[Calibre] Livre ${calibreBookId} ajouté à : ${shelfResult.succeeded.join(', ')}`);
       }
-      if (calibreBookId) break;
-      if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-    }
-
-    if (!calibreBookId) {
-      console.warn(`[Calibre] Livre "${bookTitle}" introuvable via /opds/search après ${MAX_ATTEMPTS} tentatives — le fichier est bien uploade dans la bibliotheque, mais l'ajout a l'etagere est ignore (aucune correspondance de titre fiable trouvee). Ajout manuel a l'etagere necessaire.`);
-    }
-  }
-
-
-  // 5. Ajout à l'étagère Kobo si configurée
-  if (calibreBookId && cfg.shelfName?.trim()) {
-    try {
-      await addBookToShelf(url, cookie, csrfToken, cfg.shelfName.trim(), calibreBookId);
-      console.log(`[Calibre] Livre ${calibreBookId} ajouté à l'étagère "${cfg.shelfName}"`);
-    } catch (err) {
-      console.warn(`[Calibre] Ajout étagère échoué: ${err.message}`);
-    }
-  } else if (!calibreBookId && cfg.shelfName?.trim()) {
-    console.warn('[Calibre] Book ID introuvable — ajout étagère ignoré');
-  }
-
-  return { success: true, calibreBookId };
-}
-
-/**
- * Trouve (ou crée) une étagère par nom et y ajoute le livre.
- */
-async function addBookToShelf(url, cookie, csrfToken, shelfName, bookId) {
-  // Normalise le nom d'une étagère : retire les suffixes " (N)" ou " N" (compteur de livres)
-  const normalizeName = (raw) =>
-    raw.replace(/<[^>]+>/g, '').replace(/\s+\(\d+\)$/, '').replace(/\s+\d+$/, '').trim();
-
-  // 1. Chercher l'étagère dans la homepage
-  const homeRes = await axios.get(`${url}/`, {
-    headers: { Cookie: cookie },
-    timeout: TIMEOUT,
-    validateStatus: s => s < 500,
-  });
-
-  let shelfId = null;
-  if (homeRes.status === 200 && typeof homeRes.data === 'string') {
-    const re = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
-    let match;
-    while ((match = re.exec(homeRes.data)) !== null) {
-      if (normalizeName(match[2]) === shelfName) {
-        shelfId = parseInt(match[1], 10);
-        break;
+      if (shelfResult.failed.length) {
+        console.warn(`[Calibre] Échec d'ajout à : ${shelfResult.failed.map(f => `${f.name} (${f.error})`).join(', ')}`);
       }
+    } else {
+      shelfResult = { succeeded: [], failed: effectiveShelfNames.map(name => ({ name, error: 'Book ID introuvable' })) };
+      console.warn('[Calibre] Book ID introuvable — ajout étagères ignoré');
     }
   }
 
-  // 2. Créer l'étagère si introuvable
-  if (!shelfId) {
-    console.log(`[Calibre] Étagère "${shelfName}" introuvable — création...`);
-    const params = new URLSearchParams({ title: shelfName, is_public: '0' });
-    if (csrfToken) params.append('csrf_token', csrfToken);
-    await axios.post(`${url}/shelf/create`, params.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: cookie,
-        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
-      },
-      timeout: TIMEOUT,
-      validateStatus: s => s < 500,
-    });
-
-    const recheckRes = await axios.get(`${url}/`, {
-      headers: { Cookie: cookie },
-      timeout: TIMEOUT,
-      validateStatus: s => s < 500,
-    });
-    if (recheckRes.status === 200 && typeof recheckRes.data === 'string') {
-      const re2 = /href="\/shelf\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
-      let m2;
-      while ((m2 = re2.exec(recheckRes.data)) !== null) {
-        if (normalizeName(m2[2]) === shelfName) { shelfId = parseInt(m2[1], 10); break; }
-      }
-    }
-    if (!shelfId) throw new Error(`Impossible de créer l'étagère "${shelfName}"`);
-  }
-
-  // 3. Ajouter le livre
-  const addParams = csrfToken ? new URLSearchParams({ csrf_token: csrfToken }).toString() : '';
-  const addRes = await axios.post(`${url}/shelf/add/${shelfId}/${bookId}`, addParams, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: cookie,
-      ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
-    },
-    timeout: TIMEOUT,
-    validateStatus: s => s < 500,
-  });
-
-  if (addRes.status >= 400) {
-    const body = typeof addRes.data === 'string'
-      ? addRes.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
-      : JSON.stringify(addRes.data).slice(0, 200);
-    throw new Error(`Ajout à l'étagère échoué: HTTP ${addRes.status} — ${body}`);
-  }
+  return { success: true, calibreBookId, shelfResult };
 }
 
 /**
  * Test connectivity to a Calibre-Web instance.
- * Returns { connected: true } or { connected: false, error: string }.
+ * Returns { connected: true, detectedFlavor } or { connected: false, error: string }.
  */
 export async function testCalibreConnection({ url, username, password }) {
   if (!url) return { connected: false, error: 'URL manquante' };
@@ -378,11 +649,27 @@ export async function testCalibreConnection({ url, username, password }) {
       validateStatus: s => s < 500,
     });
 
-    if (uploadCheck.status === 403) {
-      return { connected: true, uploadAllowed: false, warning: 'Connexion réussie mais le compte n\'a pas la permission "Upload books" dans Calibre-Web.' };
+    // Détection du type de serveur (NextGen / classique), en profitant de la
+    // session déjà ouverte — sert à pré-remplir apiFlavor côté route.
+    let detectedFlavor = 'classic';
+    try {
+      const apiRes = await axios.get(`${cleanUrl}/api/v1/shelves`, {
+        headers: { Cookie: cookie, Accept: 'application/json' },
+        timeout: TIMEOUT,
+        validateStatus: s => s < 500,
+      });
+      if (apiRes.status === 200 && apiRes.data && Array.isArray(apiRes.data.items)) {
+        detectedFlavor = 'nextgen';
+      }
+    } catch {
+      // Le scraping HTML restera le fallback à l'usage ; pas bloquant ici.
     }
 
-    return { connected: true, uploadAllowed: true };
+    if (uploadCheck.status === 403) {
+      return { connected: true, uploadAllowed: false, detectedFlavor, warning: 'Connexion réussie mais le compte n\'a pas la permission "Upload books" dans Calibre-Web.' };
+    }
+
+    return { connected: true, uploadAllowed: true, detectedFlavor };
   } catch (err) {
     const msg = err.response
       ? `HTTP ${err.response.status} — ${err.response.statusText}`
