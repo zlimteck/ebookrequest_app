@@ -420,3 +420,4 @@ ebookrequest/
 <a href="https://github.com/Gusdezup"><img src="https://github.com/Gusdezup.png?size=80" width="40" height="40" alt="Gusdezup" style="border-radius:50%"></a>
 
 Merci à [@Gusdezup](https://github.com/Gusdezup) pour ses idées et suggestions (synchronisation Calibre, étagère Calibre, synchronisation Kobo) ainsi que pour ses contributions directes en pull request : fiabilisation de l'assignation à l'étagère Calibre-Web, recherche par auteur/série sur Valentine, et diverses corrections de performance et de fiabilité (recherche Google Books, notifications Apprise, cache des livres tendance).
+<!-- test CI: PR de vérification, à fermer sans merger -->
