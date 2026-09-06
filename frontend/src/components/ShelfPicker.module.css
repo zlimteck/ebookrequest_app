@@ -1,0 +1,95 @@
+.wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: inherit;
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.5rem;
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.sectionTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-muted);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.checkboxRowIndent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0 0.2rem 0.5rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.extraSection {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.extraSectionWithBorder {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.userBlock {
+  margin-bottom: 0.4rem;
+}
+
+.username {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.15rem;
+}
+
+.noShelves {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  padding-left: 0.5rem;
+}
+
+.closeBtn {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  background: none;
+  border: none;
+  color: var(--color-accent, #a78bfa);
+  cursor: pointer;
+  padding: 0;
+}

@@ -3,9 +3,13 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import AdminLog from '../models/AdminLog.js';
 import ReadingList from '../models/ReadingList.js';
+import axios from 'axios';
+import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
+import { fetchFromGoogle } from '../routes/googleBooks.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback } from '../services/connectorOrchestrator.js';
+import { downloadFromValentineById } from '../services/valentineService.js';
 import { emitToUser, emitToAdmins } from '../services/socketService.js';
 
 const logAdminAction = async (adminId, adminUsername, action, request, details = '') => {
@@ -339,6 +343,305 @@ export const createBookRequest = async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la création de la demande:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la demande' });
+  }
+};
+
+// ── Recherche directe sur les sources (bypass Google Books) ──────────────────
+// Crée la demande à partir d'un résultat déjà choisi par l'utilisateur sur
+// Valentine (recherche titre ou auteur), puis tente le téléchargement tout de
+// suite et répond de façon synchrone — contrairement à createBookRequest qui
+// lance downloadWithFallback en tâche de fond sans attendre le résultat.
+export const directDownloadRequest = async (req, res) => {
+  try {
+    const { isDirectSearchEnabled } = await import('../services/valentineService.js');
+    if (!(await isDirectSearchEnabled())) {
+      return res.status(403).json({ error: 'La recherche directe a été désactivée par un administrateur.' });
+    }
+
+    const { ebookId, title, author, link, publishedDate, category, targetUserId, selectedShelves, extraShelfTargets } = req.body;
+
+    if (!ebookId || !title || !author) {
+      return res.status(400).json({ error: 'ebookId, titre et auteur sont obligatoires.' });
+    }
+
+    // Étagères choisies (même logique que createBookRequest)
+    const cleanedSelectedShelves = Array.isArray(selectedShelves)
+      ? selectedShelves.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim())
+      : undefined;
+
+    const rawExtraShelfTargets = Array.isArray(extraShelfTargets)
+      ? extraShelfTargets
+          .filter(t => t?.userId)
+          .map(t => ({
+            userId: String(t.userId),
+            shelves: Array.isArray(t.shelves)
+              ? t.shelves.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim())
+              : [],
+          }))
+          .filter(t => t.shelves.length)
+      : [];
+
+    const adminUser = await User.findById(req.user.id);
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé.' });
+    }
+
+    // Si admin soumet pour un autre user, charger le user cible (même logique que createBookRequest)
+    let user = adminUser;
+    let submittedByAdmin = null;
+    if (adminUser.role === 'admin' && targetUserId && targetUserId !== adminUser._id.toString()) {
+      const targetUser = await User.findById(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Utilisateur cible introuvable.' });
+      }
+      user = targetUser;
+      submittedByAdmin = adminUser._id;
+    }
+
+    // Résolution des cibles additionnelles (multishelf multi-utilisateurs) — admin uniquement
+    let resolvedExtraShelfTargets = [];
+    if (adminUser.role === 'admin' && rawExtraShelfTargets.length) {
+      const otherTargets = rawExtraShelfTargets.filter(t => t.userId !== user._id.toString());
+      if (otherTargets.length) {
+        const extraUsers = await User.find({ _id: { $in: otherTargets.map(t => t.userId) } });
+        const extraUsersById = new Map(extraUsers.map(u => [u._id.toString(), u]));
+        resolvedExtraShelfTargets = otherTargets
+          .filter(t => extraUsersById.has(t.userId))
+          .map(t => ({
+            user: t.userId,
+            username: extraUsersById.get(t.userId).username,
+            shelves: t.shelves,
+            status: null,
+            error: null,
+            pushedAt: null,
+          }));
+      }
+    }
+
+    // Vérification du quota (même règle que createBookRequest)
+    if (user.role !== 'admin') {
+      const days = user.requestLimitDays ?? 30;
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - days);
+      const recentCount = await BookRequest.countDocuments({
+        user: user._id,
+        createdAt: { $gte: windowStart }
+      });
+      const limit = user.requestLimit ?? 10;
+      if (limit >= 0 && recentCount >= limit) {
+        return res.status(429).json({
+          error: `Vous avez atteint votre limite de ${limit} demande(s) sur les ${days} derniers jours.`
+        });
+      }
+    }
+
+    const newRequest = new BookRequest({
+      user: user._id,
+      username: user.username,
+      ...(submittedByAdmin && { submittedByAdmin }),
+      author,
+      title,
+      link: link || '',
+      publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
+      category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
+      ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),
+      ...(resolvedExtraShelfTargets.length && { extraShelfTargets: resolvedExtraShelfTargets }),
+      status: 'pending',
+      statusHistory: [{ status: 'pending', changedBy: user.username, note: 'Demande créée — recherche directe Valentine' }],
+    });
+
+    await newRequest.save();
+
+    // Auto-ajout à la liste de lecture (best-effort, non bloquant)
+    try {
+      await ReadingList.create({
+        userId: user._id,
+        title: newRequest.title,
+        author: newRequest.author,
+        source: 'request',
+        requestId: newRequest._id,
+        status: 'unread',
+      });
+    } catch (readingErr) {
+      console.error('Erreur ajout liste de lecture (direct-download):', readingErr.message);
+    }
+
+    try {
+      // downloadFromValentineById appelle déjà runPostCompletionHooks en interne
+      // en cas de succès — les étagères stockées ci-dessus sont donc poussées
+      // automatiquement, sans code supplémentaire ici.
+      const result = await downloadFromValentineById(newRequest._id.toString(), ebookId);
+      const completed = await BookRequest.findById(newRequest._id).lean();
+      return res.status(201).json({ success: true, request: completed, ...result });
+    } catch (dlErr) {
+      // La demande existe déjà en pending — elle pourra être relancée depuis
+      // l'admin (retry manuel) ou repasser plus tard dans le circuit normal.
+      const pendingRequest = await BookRequest.findById(newRequest._id).lean();
+      return res.status(200).json({ success: false, error: dlErr.message, request: pendingRequest });
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création directe de la demande:', error);
+    res.status(500).json({ error: 'Une erreur est survenue lors de la création de la demande.' });
+  }
+};
+
+// ── Récupération a posteriori des métadonnées Google Books ───────────────────
+// (patch) : l'ancienne version appliquait le 1er résultat d'autorité, sans
+// aperçu — un mauvais match (titre ambigu, homonyme) se retrouvait appliqué
+// silencieusement, sans recours (voir cas "Joseph dans la nuit" vs un vieux
+// livre de 1767 partageant juste le mot "Joseph"). Remplacé par deux étapes :
+// recherche (retourne plusieurs candidats, ne sauvegarde rien) puis
+// application explicite d'un candidat choisi par l'utilisateur.
+
+// GET /api/requests/:id/metadata-candidates
+export const getMetadataCandidates = async (req, res) => {
+  try {
+    const request = await BookRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable.' });
+
+    const requester = await User.findById(req.user.id).select('role');
+    const isOwner = request.user.toString() === req.user.id;
+    const isAdminUser = requester?.role === 'admin';
+    if (!isOwner && !isAdminUser) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+
+    const enabled = await isGoogleBooksSearchEnabled();
+    if (!enabled) {
+      return res.status(400).json({ error: 'Recherche Google Books désactivée côté serveur.' });
+    }
+
+    // (patch) : confirmé par test manuel (docker exec) — les opérateurs
+    // intitle:/inauthor: matchaient mal, alors que deux phrases entre
+    // guillemets dans le texte libre trouvent le bon livre. Deuxième piège
+    // découvert au passage : l'ordre du nom compte pour ce matching par
+    // phrase — "Olivier Grondeau" fonctionne, "Grondeau Olivier" (le format
+    // que Valentine renvoie, nom-prénom) ne fonctionne pas. On ne sait pas à
+    // l'avance dans quel ordre `request.author` est stocké (dépend de la
+    // source d'origine de la demande), donc on tente les deux.
+    const authorWords = (request.author || '').trim().split(/\s+/).filter(Boolean);
+    const authorReversed = authorWords.length > 1 ? [...authorWords].reverse().join(' ') : null;
+
+    const queries = [
+      `"${request.title}" "${request.author}"`,
+      ...(authorReversed ? [`"${request.title}" "${authorReversed}"`] : []),
+      request.title,
+    ];
+
+    // (patch) : les 3 variantes sont maintenant TOUTES interrogées et fusionnées,
+    // au lieu de s'arrêter à la première qui répond quoi que ce soit. Avec
+    // seulement le 1er résultat non-vide, une requête intitle:/inauthor: qui
+    // remonte un mauvais match (matching approximatif, pas de phrase exacte
+    // stricte côté Google) empêchait la requête titre-seul, souvent la plus
+    // fiable, d'être tentée. Maintenant qu'il y a un vrai aperçu avec choix
+    // humain, mieux vaut maximiser les chances que le bon livre apparaisse
+    // quelque part dans la liste plutôt que parier sur une seule requête.
+    // (patch) : langRestrict:'fr' retiré ici — c'est un filtre DUR côté Google
+    // (exclut tout résultat dont le champ langue n'est pas correctement tagué
+    // 'fr'), plausible explication d'une absence totale malgré un livre bien
+    // présent sur Google Books (sortie récente/petit éditeur, tag parfois
+    // manquant). Avec un vrai aperçu + choix humain maintenant en place,
+    // mieux vaut maximiser le rappel que pré-filtrer côté serveur.
+    const settled = await Promise.allSettled(
+      queries.map(q => fetchFromGoogle(q, 5, 0, {}))
+    );
+
+    // Logs explicites — pour arrêter de deviner et voir ce qui se passe réellement
+    // côté serveur à chaque requête (nb de résultats par variante, erreurs éventuelles).
+    settled.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        console.log(`[metadata-candidates] "${queries[i]}" → ${result.value.items.length} résultat(s)`);
+      } else {
+        console.log(`[metadata-candidates] "${queries[i]}" → ERREUR: ${result.reason?.message}`);
+      }
+    });
+
+    const seen = new Set();
+    let items = [];
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        console.error('[metadata-candidates] Erreur requête Google Books:', result.reason?.message);
+        continue;
+      }
+      for (const item of result.value.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        items.push(item);
+      }
+    }
+    items = items.slice(0, 8);
+
+    if (!items.length) {
+      return res.status(404).json({ error: 'Aucune métadonnée trouvée sur Google Books pour ce livre.' });
+    }
+
+    const candidates = items.map(item => ({
+      googleBooksId: item.id,
+      title: item.volumeInfo?.title || '',
+      authors: (item.volumeInfo?.authors || []).join(', '),
+      thumbnail: item.volumeInfo?.imageLinks?.thumbnail?.replace('http://', 'https://') || null,
+      description: item.volumeInfo?.description || '',
+      pageCount: item.volumeInfo?.pageCount || null,
+      publishedDate: item.volumeInfo?.publishedDate || null,
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ candidates });
+  } catch (error) {
+    console.error('Erreur metadata-candidates:', error);
+    res.status(500).json({ error: 'Erreur lors de la recherche de métadonnées.' });
+  }
+};
+
+// POST /api/requests/:id/metadata-candidates/apply — body: { googleBooksId }
+// Choix explicite après aperçu -> écrase couverture/description/pages même si
+// déjà remplies (c'est justement pour corriger une erreur précédente).
+// Date/lien : seulement si absents, pour ne pas toucher des infos de
+// téléchargement déjà correctes.
+export const applyMetadataCandidate = async (req, res) => {
+  try {
+    const { googleBooksId } = req.body;
+    if (!googleBooksId) return res.status(400).json({ error: 'googleBooksId requis.' });
+
+    const request = await BookRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable.' });
+
+    const requester = await User.findById(req.user.id).select('role');
+    const isOwner = request.user.toString() === req.user.id;
+    const isAdminUser = requester?.role === 'admin';
+    if (!isOwner && !isAdminUser) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+
+    const apiKey = await getGoogleBooksApiKey();
+    const { data } = await axios.get(`https://www.googleapis.com/books/v1/volumes/${googleBooksId}`, {
+      params: { ...(apiKey && { key: apiKey }) },
+      timeout: 10000,
+    });
+    const volumeInfo = data?.volumeInfo;
+    if (!volumeInfo) return res.status(404).json({ error: 'Métadonnée introuvable sur Google Books.' });
+
+    if (volumeInfo.imageLinks?.thumbnail) {
+      request.thumbnail = volumeInfo.imageLinks.thumbnail.replace('http://', 'https://');
+    }
+    if (volumeInfo.description) {
+      request.description = volumeInfo.description;
+    }
+    if (volumeInfo.pageCount) {
+      request.pageCount = volumeInfo.pageCount;
+    }
+    if (!request.publishedDate && volumeInfo.publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(volumeInfo.publishedDate)) {
+      request.publishedDate = volumeInfo.publishedDate;
+    }
+    if (!request.link && volumeInfo.infoLink) {
+      request.link = volumeInfo.infoLink;
+    }
+
+    await request.save();
+    res.json({ success: true, request: request.toObject() });
+  } catch (error) {
+    console.error('Erreur apply-metadata:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'application des métadonnées.' });
   }
 };
 

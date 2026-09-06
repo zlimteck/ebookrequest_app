@@ -59,6 +59,7 @@ function ValentineCard() {
     _hasPassword: false,
     cronInterval: 6,
     valentineFallbackToAdmin: false,
+    directSearchEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,6 +83,7 @@ function ValentineCard() {
           _hasPassword: res.data._hasPassword ?? false,
           cronInterval: res.data.cronInterval || 6,
           valentineFallbackToAdmin: res.data.valentineFallbackToAdmin ?? false,
+          directSearchEnabled: res.data.directSearchEnabled ?? true,
         };
         setConfig(cfg);
         // Auto-fetch quota si activé et mot de passe configuré
@@ -274,6 +276,35 @@ function ValentineCard() {
             <p className={styles.toggleOptionDesc}>Si un user a son propre compte Valentine et que son quota est épuisé, retente avec le compte admin avant de passer à Anna's Archive.</p>
           </div>
         </label>
+
+        <label className={styles.toggleOptionRow}>
+          <input
+            type="checkbox"
+            className={styles.toggleOptionCheckbox}
+            checked={config.directSearchEnabled}
+            onChange={async e => {
+              const updated = { ...config, directSearchEnabled: e.target.checked };
+              setConfig(updated);
+              try { await axiosAdmin.put('/api/connectors/valentine', updated); } catch { /* silencieux */ }
+            }}
+          />
+          <div className={styles.toggleOptionInfo}>
+            <span className={styles.toggleOptionLabel}>Recherche directe sur Valentine (bypass Google Books)</span>
+            <p className={styles.toggleOptionDesc}>Permet aux users de chercher et télécharger directement sur Valentine, sans passer par Google Books/Open Library/Hardcover.</p>
+          </div>
+        </label>
+
+        {config.directSearchEnabled && (
+          <div className={styles.solverWarning}>
+            <AlertIcon />
+            <span>
+              <strong>Risque de ban de compte.</strong> La recherche directe multiplie les
+              échanges avec Valentine (recherches, navigation par auteur/série) par rapport
+              au flux classique via Google Books. Si le compte a déjà été suspendu par le
+              passé, ou en cas de doute, désactive cette option.
+            </span>
+          </div>
+        )}
 
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>

@@ -815,6 +815,10 @@
   to { transform: rotate(360deg); }
 }
 
+.spinIcon {
+  animation: spin 1s linear infinite;
+}
+
 @media (max-width: 600px) {
   .dashboardContainer {
     padding: 1.25rem 0.75rem;

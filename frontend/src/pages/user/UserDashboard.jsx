@@ -58,12 +58,14 @@ const UserDashboard = () => {
   const [commentValue, setCommentValue] = useState('');
   const [threadModal, setThreadModal] = useState(null); // request object pour le fil
   const [expandedHistory, setExpandedHistory] = useState(null);
+  const [fetchingMetaId, setFetchingMetaId] = useState(null);
+  const [metadataModal, setMetadataModal] = useState(null); // { request, loading, candidates, error }
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_user') || 'cards');
   const [expandedTableRows, setExpandedTableRows] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ key: null, dir: 'asc' });
   const [deleteModal, setDeleteModal] = useState(null); // request object
   const [editModal, setEditModal]   = useState(null); // request object
-  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '' });
+  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '', description: '', pageCount: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [calibreEnabled, setCalibreEnabled] = useState(false);
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
@@ -351,6 +353,40 @@ const UserDashboard = () => {
     }
   };
 
+  // Récupération a posteriori des métadonnées Google Books — en DEUX temps :
+  // recherche (plusieurs candidats affichés) puis choix explicite, pour ne
+  // plus jamais appliquer un mauvais match d'autorité (ex: "Joseph dans la
+  // nuit" qui matchait un livre de 1767 sans rapport).
+  const openMetadataPicker = async (request) => {
+    setMetadataModal({ request, loading: true, candidates: [], error: null });
+    try {
+      const res = await axiosAdmin.get(`/api/requests/${request._id}/metadata-candidates`);
+      setMetadataModal({ request, loading: false, candidates: res.data.candidates || [], error: null });
+    } catch (err) {
+      setMetadataModal({
+        request, loading: false, candidates: [],
+        error: err.response?.data?.error || 'Aucune métadonnée trouvée sur Google Books.',
+      });
+    }
+  };
+
+  const applyMetadataChoice = async (candidate) => {
+    if (!metadataModal?.request) return;
+    setFetchingMetaId(metadataModal.request._id);
+    try {
+      const res = await axiosAdmin.post(`/api/requests/${metadataModal.request._id}/metadata-candidates/apply`, {
+        googleBooksId: candidate.googleBooksId,
+      });
+      setRequests(prev => prev.map(r => r._id === metadataModal.request._id ? { ...r, ...res.data.request } : r));
+      toast.success('Métadonnées mises à jour.');
+      setMetadataModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de l\'application des métadonnées.');
+    } finally {
+      setFetchingMetaId(null);
+    }
+  };
+
   // Ouvrir le modal d'édition
   const openEditModal = (request) => {
     setEditForm({
@@ -360,6 +396,8 @@ const UserDashboard = () => {
       link:          request.link          || '',
       publishedDate: isoToFr(request.publishedDate || ''),
       thumbnail:     request.thumbnail     || '',
+      description:   request.description   || '',
+      pageCount:     request.pageCount ? String(request.pageCount) : '',
     });
     setEditModal(request);
   };
@@ -397,7 +435,11 @@ const UserDashboard = () => {
     }
     setEditSaving(true);
     try {
-      const payload = { ...editForm, publishedDate: frToIso(editForm.publishedDate) };
+      const payload = {
+        ...editForm,
+        publishedDate: frToIso(editForm.publishedDate),
+        pageCount: editForm.pageCount ? parseInt(editForm.pageCount, 10) : 0,
+      };
       const { data } = await axiosAdmin.patch(`/api/requests/${editModal._id}/user-edit`, payload);
       setRequests(prev => prev.map(r => r._id === editModal._id ? { ...r, ...data.request } : r));
       toast.success('Demande mise à jour.');
@@ -1165,6 +1207,22 @@ const UserDashboard = () => {
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                       </svg>
                     </button>
+                    <button
+                      className={styles.iconBtn}
+                      onClick={() => openMetadataPicker(request)}
+                      disabled={fetchingMetaId === request._id}
+                      title="Rechercher/corriger les métadonnées (Google Books)"
+                    >
+                      {fetchingMetaId === request._id ? (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.spinIcon}>
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                        </svg>
+                      ) : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                        </svg>
+                      )}
+                    </button>
                     {request.status === 'pending' && (
                       <button className={`${styles.iconBtn} ${styles.iconBtnEdit}`} onClick={() => openEditModal(request)} title="Modifier la demande">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1227,6 +1285,61 @@ const UserDashboard = () => {
           </div>
         )}
         </>
+      )}
+
+      {/* Modal choix des métadonnées Google Books (aperçu avant application) */}
+      {metadataModal && (
+        <div className={styles.modalOverlay} onClick={() => setMetadataModal(null)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Choisir les métadonnées">
+            <h2>Métadonnées Google Books</h2>
+            <p className={styles.modalBookTitle}>« {metadataModal.request?.title} »</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+              Choisis le bon livre — rien n'est appliqué tant que tu n'as pas cliqué sur un résultat.
+            </p>
+
+            {metadataModal.loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 0' }}>
+                <div className={styles.loadingSpinner} />
+              </div>
+            ) : metadataModal.error ? (
+              <p style={{ fontSize: '0.85rem', color: '#f59e0b' }}>{metadataModal.error}</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '55vh', overflowY: 'auto' }}>
+                {metadataModal.candidates.map(c => (
+                  <button
+                    key={c.googleBooksId}
+                    onClick={() => applyMetadataChoice(c)}
+                    disabled={!!fetchingMetaId}
+                    style={{
+                      display: 'flex', gap: '0.75rem', textAlign: 'left', alignItems: 'flex-start',
+                      background: 'var(--color-bg3)', border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius)', padding: '0.6rem', cursor: 'pointer', color: 'inherit',
+                    }}
+                  >
+                    {c.thumbnail ? (
+                      <img src={c.thumbnail} alt="" style={{ width: 44, height: 66, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 44, height: 66, flexShrink: 0, background: 'var(--color-bg2)', borderRadius: 4 }} />
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{c.title}</div>
+                      {c.authors && <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{c.authors}</div>}
+                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
+                        {[c.publishedDate, c.pageCount ? `${c.pageCount} pages` : null].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className={styles.modalButtons}>
+              <button className={styles.modalCancelButton} onClick={() => setMetadataModal(null)}>
+                {metadataModal.loading || metadataModal.error ? 'Fermer' : 'Aucun ne correspond'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal suppression */}
@@ -1367,6 +1480,28 @@ const UserDashboard = () => {
                   value={editForm.publishedDate}
                   onChange={e => setEditForm(f => ({ ...f, publishedDate: e.target.value }))}
                   placeholder="2024, 06/2024 ou 15/06/2024"
+                />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Nombre de pages</label>
+                <input
+                  className={styles.editInput}
+                  type="number"
+                  min="0"
+                  value={editForm.pageCount}
+                  onChange={e => setEditForm(f => ({ ...f, pageCount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Description</label>
+                <textarea
+                  className={styles.editInput}
+                  rows={4}
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Description du livre…"
+                  style={{ resize: 'vertical', fontFamily: 'inherit' }}
                 />
               </div>
               <div className={styles.editFieldRow}>

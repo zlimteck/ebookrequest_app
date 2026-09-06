@@ -1,6 +1,29 @@
 import fetch from 'node-fetch';
+import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { getRSSFeedUrl } from './rssConfig.js';
+
+// Même mécanisme que annasArchiveService.js — predb.me est derrière Cloudflare
+// (challenge JS), qu'aucun fetch() serveur ne peut passer seul. On tente
+// d'abord un accès direct (rapide, marche pour les sites non protégés), puis
+// on se replie sur FlareSolverr (navigateur headless qui résout le challenge)
+// si ça échoue.
+const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
+const SOLVER_TIMEOUT_MS = 20000;
+const REALISTIC_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+async function cfFetchRSS(url) {
+  console.log(`[PreDB Check] Accès direct échoué, essai via FlareSolverr…`);
+  const res = await axios.post(
+    `${FLARESOLVERR_URL}/v1`,
+    { cmd: 'request.get', url, maxTimeout: SOLVER_TIMEOUT_MS },
+    { timeout: SOLVER_TIMEOUT_MS + 15000 }
+  );
+  if (res.data?.status !== 'ok') {
+    throw new Error(`FlareSolverr erreur: ${res.data?.message || 'unknown'}`);
+  }
+  return res.data.solution?.response || '';
+}
 
 export function normalizeString(str) {
   if (!str) return '';
@@ -105,20 +128,33 @@ export function calculateMatchScore(searchTitle, searchAuthor, rssTitle, rssAuth
 
 async function fetchRSSFeed(searchQuery = '') {
   let url = await getRSSFeedUrl();
+  if (!url) return []; // désactivé côté admin — aucun appel HTTP
   if (searchQuery) {
     url += `&search=${encodeURIComponent(searchQuery)}`;
   }
 
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbookRequest/1.0)' },
-    timeout: 10000
-  });
-
-  if (!response.ok) {
-    throw new Error(`Erreur HTTP: ${response.status}`);
+  let xmlText;
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': REALISTIC_UA },
+      timeout: 10000
+    });
+    if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+    xmlText = await response.text();
+  } catch (directErr) {
+    try {
+      xmlText = await cfFetchRSS(url);
+    } catch (solverErr) {
+      console.warn(`[PreDB Check] FlareSolverr a aussi échoué: ${solverErr.message}`);
+      throw directErr; // erreur d'origine, plus parlante que celle du solveur
+    }
   }
 
-  const xmlText = await response.text();
+  // (patch) : FlareSolverr renvoie le rendu navigateur de la page, qui peut
+  // envelopper le XML brut dans la visionneuse XML du navigateur plutôt que
+  // le retourner tel quel — non vérifiable depuis cet environnement. Si le
+  // parsing échoue après un passage par le solveur, ça se traduira par une
+  // erreur explicite ici plutôt qu'un plantage silencieux.
   const result = await parseStringPromise(xmlText, { explicitArray: false, trim: true });
   const items = result?.rss?.channel?.item || [];
   return Array.isArray(items) ? items : [items];
@@ -126,6 +162,16 @@ async function fetchRSSFeed(searchQuery = '') {
 
 export async function checkBookAvailability(title, author) {
   try {
+    const feedUrl = await getRSSFeedUrl();
+    if (!feedUrl) {
+      return {
+        available: false,
+        confidence: 'unknown',
+        message: 'Vérification PreDB désactivée par un administrateur',
+        score: 0,
+      };
+    }
+
     console.log(`\n[PreDB Check] Recherche de: "${title}" par "${author}"`);
 
     // Deux recherches : par auteur et par titre

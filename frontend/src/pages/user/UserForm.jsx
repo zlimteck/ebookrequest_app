@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import GoogleBooksSearch from '../../components/GoogleBooksSearch';
+import DirectSourceSearch from '../../components/DirectSourceSearch';
+import ShelfPicker from '../../components/ShelfPicker';
 import BookRecommendations from '../../components/BookRecommendations';
 import SeriesModal from '../../components/SeriesModal';
 import { compressImage, isImage } from '../../utils/imageCompressor';
@@ -122,7 +124,7 @@ function UserForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [searchMode, setSearchMode] = useState('google');
+  const [searchMode, setSearchMode] = useState(() => localStorage.getItem('ebookrequest_search_mode') || 'google');
   const [selectedBook, setSelectedBook] = useState(null);
   const [rawPublishedDate, setRawPublishedDate] = useState('');
   const [seriesInfo, setSeriesInfo]   = useState(null); // { name, index }
@@ -137,9 +139,10 @@ function UserForm() {
   const [users, setUsers] = useState([]);
   const [targetUserId, setTargetUserId] = useState('');
   const [calibreEnabled, setCalibreEnabled] = useState(false);
+  const [directSearchAllowed, setDirectSearchAllowed] = useState(true); // optimiste, corrigé après fetch
+  const [manualModeAllowed, setManualModeAllowed] = useState(true); // optimiste, corrigé après fetch
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
   const [selectedShelves, setSelectedShelves] = useState([]);
-  const [shelfPickerOpen, setShelfPickerOpen] = useState(false);
   // Multishelf multi-utilisateurs (admin) — comptes Calibre-Web ciblables en
   // plus du propriétaire de la demande, et sélection courante par user.
   const [shelfTargetUsers, setShelfTargetUsers] = useState([]); // [{ _id, username, shelves: [{name,isDefault}] }]
@@ -188,6 +191,31 @@ function UserForm() {
               .then(r => { if (isMounted) setValentineQuota(r.data); })
               .catch(() => {});
           }
+          // Recherche directe activée/désactivée côté admin — repli sur 'google'
+          // si le mode par défaut mémorisé était 'direct' mais que c'est coupé.
+          axiosAdmin.get('/api/requests/direct-search-status')
+            .then(r => {
+              if (!isMounted) return;
+              const allowed = r.data?.enabled !== false;
+              setDirectSearchAllowed(allowed);
+              if (!allowed) {
+                setSearchMode(prev => prev === 'direct' ? 'google' : prev);
+              }
+            })
+            .catch(() => {});
+          // Bouton "Manuel" (point d'entrée à blanc) — n'affecte pas le
+          // formulaire pré-rempli après sélection en recherche détaillée,
+          // qui bascule sur 'manual' indépendamment de ce réglage.
+          axiosAdmin.get('/api/requests/manual-mode-status')
+            .then(r => {
+              if (!isMounted) return;
+              const allowed = r.data?.enabled !== false;
+              setManualModeAllowed(allowed);
+              if (!allowed) {
+                setSearchMode(prev => (prev === 'manual' && !selectedBook) ? 'google' : prev);
+              }
+            })
+            .catch(() => {});
           await Promise.all(promises);
 
           // Vérifier s'il y a des données pré-remplies depuis la page Découvrir
@@ -464,7 +492,6 @@ function UserForm() {
     const userId = e.target.value;
     setTargetUserId(userId);
     fetchQuota(userId);
-    setShelfPickerOpen(false);
 
     // Le nouveau propriétaire ne doit pas rester coché comme cible additionnelle.
     setExtraShelfSelections(prev => {
@@ -514,6 +541,23 @@ function UserForm() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Callback de DirectSourceSearch (recherche directe Valentine) — la demande
+  // est déjà créée côté serveur à ce stade, on rafraîchit juste le quota et
+  // la liste des demandes existantes (pour le check anti-doublon).
+  const handleDirectCompleted = useCallback(() => {
+    fetchQuota(isAdmin && targetUserId ? targetUserId : '');
+    fetchExistingRequests();
+  }, [isAdmin, targetUserId]);
+
+  // Choix explicite d'un mode via les boutons (≠ les changements automatiques
+  // de searchMode ailleurs dans le composant, ex: bascule vers 'manual' après
+  // sélection d'un livre) — seul un choix explicite doit devenir le mode par
+  // défaut au prochain chargement.
+  const chooseSearchMode = (m) => {
+    setSearchMode(m);
+    localStorage.setItem('ebookrequest_search_mode', m);
   };
 
   const handleSubmit = async (e) => {
@@ -719,7 +763,6 @@ function UserForm() {
   const extraTargetCandidates = isAdmin
     ? shelfTargetUsers.filter(u => u.username !== currentOwnerUsername)
     : [];
-  const extraShelfCount = Object.values(extraShelfSelections).reduce((n, arr) => n + arr.length, 0);
 
   if (!isAuthenticated) {
     return (
@@ -802,14 +845,23 @@ function UserForm() {
         <div className={styles.toggleSearch}>
           <button type="button"
             className={`${styles.toggleButton} ${searchMode === 'google' ? styles.toggleActive : ''}`}
-            onClick={() => setSearchMode('google')} disabled={!!selectedBook} aria-pressed={searchMode === 'google'}>
-            <SearchIcon /> Rechercher
+            onClick={() => chooseSearchMode('google')} disabled={!!selectedBook} aria-pressed={searchMode === 'google'}>
+            <SearchIcon /> Recherche détaillée
           </button>
-          <button type="button"
-            className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
-            onClick={() => setSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
-            <EditIcon /> Manuel
-          </button>
+          {manualModeAllowed && (
+            <button type="button"
+              className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
+              onClick={() => chooseSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
+              <EditIcon /> Manuel
+            </button>
+          )}
+          {directSearchAllowed && (
+            <button type="button"
+              className={`${styles.toggleButton} ${searchMode === 'direct' ? styles.toggleActive : ''}`}
+              onClick={() => chooseSearchMode('direct')} disabled={!!selectedBook} aria-pressed={searchMode === 'direct'}>
+              <SearchIcon /> Recherche directe
+            </button>
+          )}
         </div>
 
         {isAdmin && users.length > 0 && (
@@ -850,6 +902,16 @@ function UserForm() {
 
       {searchMode === 'google' && selectedBook && (
         <SelectedBookInfo book={selectedBook} onRemove={handleRemoveBook} />
+      )}
+
+      {searchMode === 'direct' && (
+        <DirectSourceSearch
+          onCompleted={handleDirectCompleted}
+          targetUserId={isAdmin ? targetUserId : ''}
+          calibreEnabled={calibreEnabled}
+          calibreShelves={calibreShelves}
+          extraTargetCandidates={extraTargetCandidates}
+        />
       )}
 
       {searchMode === 'manual' && (
@@ -1005,76 +1067,16 @@ function UserForm() {
           </div>
 
           <div className={styles.formActions} style={{ position: 'relative' }}>
-            {(calibreEnabled || extraTargetCandidates.length > 0) && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  type="button"
-                  onClick={() => setShelfPickerOpen(o => !o)}
-                  className={styles.cancelButton}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                  title="Choisir les étagères Calibre-Web pour ce livre"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 3v18h18" /><path d="M3 8h18" /><path d="M3 13h18" /><path d="M3 18h18" />
-                  </svg>
-                  Étagères{(selectedShelves.length + extraShelfCount) ? ` (${selectedShelves.length + extraShelfCount})` : ''}
-                </button>
-                {shelfPickerOpen && (
-                  <div
-                    style={{
-                      position: 'absolute', bottom: '100%', left: 0, marginBottom: '0.5rem',
-                      background: 'var(--color-bg3)', border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius)', padding: '0.75rem', minWidth: 240,
-                      maxHeight: '60vh', overflowY: 'auto',
-                      zIndex: 20, boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-                    }}
-                  >
-                    {calibreEnabled && (<>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
-                        Envoyer ce livre vers :
-                      </div>
-                      {calibreShelves.map(s => (
-                        <label key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', fontSize: '0.85rem', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={selectedShelves.includes(s.name)} onChange={() => toggleShelf(s.name)} />
-                          {s.name}
-                        </label>
-                      ))}
-                    </>)}
-                    {extraTargetCandidates.length > 0 && (
-                      <div style={{ marginTop: calibreEnabled ? '0.6rem' : 0, paddingTop: calibreEnabled ? '0.6rem' : 0, borderTop: calibreEnabled ? '1px solid var(--color-border)' : 'none' }}>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--color-text-muted)' }}>
-                          Aussi pour :
-                        </div>
-                        {extraTargetCandidates.map(u => (
-                          <div key={u._id} style={{ marginBottom: '0.4rem' }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 500, marginBottom: '0.15rem' }}>{u.username}</div>
-                            {(u.shelves || []).length === 0 ? (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', paddingLeft: '0.5rem' }}>Aucune étagère configurée</div>
-                            ) : u.shelves.map(s => (
-                              <label key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0 0.2rem 0.5rem', fontSize: '0.82rem', cursor: 'pointer' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={(extraShelfSelections[u._id] || []).includes(s.name)}
-                                  onChange={() => toggleExtraShelf(u._id, s.name)}
-                                />
-                                {s.name}
-                              </label>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShelfPickerOpen(false)}
-                      style={{ marginTop: '0.5rem', fontSize: '0.78rem', background: 'none', border: 'none', color: 'var(--color-accent, #a78bfa)', cursor: 'pointer', padding: 0 }}
-                    >
-                      Fermer
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            <ShelfPicker
+              calibreEnabled={calibreEnabled}
+              calibreShelves={calibreShelves}
+              selectedShelves={selectedShelves}
+              toggleShelf={toggleShelf}
+              extraTargetCandidates={extraTargetCandidates}
+              extraShelfSelections={extraShelfSelections}
+              toggleExtraShelf={toggleExtraShelf}
+              buttonClassName={styles.cancelButton}
+            />
             <button type="submit" className={styles.submitButton}
               disabled={isSubmitting || (quota && quota.remaining === 0)} aria-busy={isSubmitting}>
               {isSubmitting ? 'Soumission en cours…'

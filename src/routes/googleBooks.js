@@ -216,7 +216,7 @@ async function withRetry(fn, { retries = 2, label = '', boost503 = true } = {}) 
   throw lastErr;
 }
 
-async function fetchFromGoogle(queryStr, limit, startIndex = 0, options = {}) {
+export async function fetchFromGoogle(queryStr, limit, startIndex = 0, options = {}) {
   const apiKey = await getGoogleBooksApiKey();
   return withRetry(async () => {
     // DEBUG uniquement : GOOGLE_BOOKS_SIMULATE_503=1 force une 503 pour tester retry/fallback
@@ -267,7 +267,10 @@ const toHttps = (url) => url ? url.replace(/^http:\/\//, 'https://') : url;
 // d'insister sur un repli qui n'est de toute façon qu'une supposition. Dans le cas
 // courant (la requête prioritaire trouve le livre), une seule requête part au lieu
 // de N — les autres ne sont même pas tentées.
-async function firstNonEmptyGoogleResult(queries, limit, startIndex, options) {
+// export : réutilisée aussi par bookRequestController.js (getMetadataCandidates)
+// pour bénéficier du même retry/repli proxy que la recherche standard, plutôt
+// que de dupliquer une version plus fragile sans ces protections.
+export async function firstNonEmptyGoogleResult(queries, limit, startIndex, options) {
   for (let i = 0; i < queries.length; i++) {
     try {
       const result = await fetchFromGoogle(queries[i], limit, startIndex, {

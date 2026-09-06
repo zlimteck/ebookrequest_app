@@ -188,9 +188,11 @@ const GoogleBooksSearch = ({ onSelectBook, onBatchSelectBooks, batchSubmitting =
   };
 
   // ─── Changement de mode ───────────────────────────────────────────────────
-  const handleModeChange = (e) => {
-    setSearchMode(e.target.value);
-    setValue('');
+  // (patch) : ne vide plus le champ tapé — harmonisation avec la recherche
+  // directe, qui préserve déjà le texte en changeant de mode (demande de Gus).
+  const handleModeChange = (newMode) => {
+    if (newMode === searchMode) return;
+    setSearchMode(newMode);
     setResults([]);
     setHasSearched(false);
     setTotalItems(0);
@@ -285,22 +287,23 @@ const GoogleBooksSearch = ({ onSelectBook, onBatchSelectBooks, batchSubmitting =
   return (
     <div className={styles.googleBooksSearch}>
       <form onSubmit={handleSubmit} className={styles.searchForm}>
-        <div className={styles.searchBar}>
 
-          {/* Sélecteur de mode */}
-          <div className={styles.modeSelectWrap}>
-            <span className={styles.modeSelectIcon}>{MODE_ICONS[searchMode]}</span>
-            <select
-              className={styles.modeSelect}
-              value={searchMode}
-              onChange={handleModeChange}
-              aria-label="Mode de recherche"
+        {/* Sélecteur de mode — mêmes boutons que la recherche directe */}
+        <div className={styles.modeToggle}>
+          {SEARCH_MODES.map(m => (
+            <button
+              key={m.value}
+              type="button"
+              className={`${styles.modeBtn} ${searchMode === m.value ? styles.modeBtnActive : ''}`}
+              onClick={() => handleModeChange(m.value)}
             >
-              {SEARCH_MODES.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
+              {MODE_ICONS[m.value]}
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        <div className={styles.searchBar}>
 
           {/* Champ unique */}
           <div className={styles.inputWrap} ref={inputWrapRef}>

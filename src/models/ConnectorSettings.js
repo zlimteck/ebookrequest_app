@@ -19,6 +19,10 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   fromName:   { type: String, default: '' },
   cronInterval: { type: Number, default: 6 },
   valentineFallbackToAdmin: { type: Boolean, default: false },
+  // Recherche directe Valentine (bypass Google Books) — off/on admin, avec
+  // avertissement dans l'UI sur le risque de ban lié à l'usage accru du
+  // compte Valentine que ça implique. Demande de zlimteck.
+  directSearchEnabled: { type: Boolean, default: true },
   // Anti-spam pour l'alerte "rupture provider" (googleBooks/hardcover) : date de la
   // dernière alerte envoyée pour CE service, pour ne pas réalerter avant 24h tant que
   // le problème persiste.

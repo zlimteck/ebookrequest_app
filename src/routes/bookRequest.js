@@ -15,6 +15,9 @@ import {
   editUserRequest,
   addComment,
   markCommentsSeen,
+  directDownloadRequest,
+  getMetadataCandidates,
+  applyMetadataCandidate,
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -56,6 +59,103 @@ router.get('/check-duplicate', requireAuth, async (req, res) => {
 
 // Créer une nouvelle requête de livre
 router.post('/', requireAuth, createBookRequest);
+
+// ── Recherche directe sur les sources (bypass Google Books) ──────────────────
+// Ouvert à tous les users connectés (contrairement aux routes équivalentes de
+// /api/connectors, réservées aux admins et pensées pour un retry manuel).
+// Peut être coupée par un admin (risque de ban de compte Valentine) — voir
+// isDirectSearchEnabled().
+
+// GET /api/requests/manual-mode-status — le front s'en sert pour savoir s'il
+// doit proposer le bouton "Manuel" (point d'entrée à blanc). N'affecte pas le
+// formulaire partagé pré-rempli après sélection en recherche détaillée.
+router.get('/manual-mode-status', requireAuth, async (req, res) => {
+  try {
+    const ConnectorSettings = (await import('../models/ConnectorSettings.js')).default;
+    const doc = await ConnectorSettings.findOne({ service: 'manualMode' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch {
+    res.json({ enabled: true });
+  }
+});
+
+// GET /api/requests/direct-search-status — le front s'en sert pour savoir
+// s'il doit même proposer le bouton "Recherche directe".
+router.get('/direct-search-status', requireAuth, async (req, res) => {
+  try {
+    const { isDirectSearchEnabled } = await import('../services/valentineService.js');
+    res.json({ enabled: await isDirectSearchEnabled() });
+  } catch {
+    res.json({ enabled: false });
+  }
+});
+
+// GET /api/requests/direct-search?mode=title|author|series&q=...
+router.get('/direct-search', requireAuth, async (req, res) => {
+  try {
+    const { isDirectSearchEnabled, searchValentineTitlesFast, searchValentineMatches } = await import('../services/valentineService.js');
+    if (!(await isDirectSearchEnabled())) {
+      return res.json({ results: [], unavailable: true, error: 'La recherche directe a été désactivée par un administrateur.' });
+    }
+
+    const modeParam = req.query.mode;
+    const mode = ['author', 'series'].includes(modeParam) ? modeParam : 'title';
+    const query = (req.query.q || '').trim();
+    if (query.length < 2) {
+      return res.status(400).json({ error: 'Requête trop courte (2 caractères minimum).' });
+    }
+
+    if (mode === 'author' || mode === 'series') {
+      const matches = await searchValentineMatches(query, mode);
+      return res.json({ mode, matches });
+    }
+
+    const results = await searchValentineTitlesFast(query);
+    res.json({ mode: 'title', results });
+  } catch (err) {
+    console.error(`[direct-search] mode=${req.query.mode} q=${req.query.q} :`, err.message);
+    // 200 volontaire : le front distingue « aucun résultat » de « source injoignable »
+    res.json({ results: [], unavailable: true, error: err.message });
+  }
+});
+
+// GET /api/requests/direct-search-books?type=author|series&url=...&name=...
+// 2e temps de la recherche auteur/série : liste (et enrichit) les livres de
+// la fiche choisie par l'utilisateur, une fois qu'il a cliqué sur le bon
+// résultat de /direct-search.
+router.get('/direct-search-books', requireAuth, async (req, res) => {
+  try {
+    const { isDirectSearchEnabled, getValentineListingBooks } = await import('../services/valentineService.js');
+    if (!(await isDirectSearchEnabled())) {
+      return res.json({ results: [], unavailable: true, error: 'La recherche directe a été désactivée par un administrateur.' });
+    }
+
+    const type = req.query.type === 'series' ? 'series' : 'author';
+    const pageUrl = (req.query.url || '').trim();
+    const name = (req.query.name || '').trim();
+    if (!pageUrl.startsWith('/') || pageUrl.includes('://')) {
+      return res.status(400).json({ error: 'URL invalide.' });
+    }
+
+    const results = await getValentineListingBooks(pageUrl, type, name);
+    res.json({ results });
+  } catch (err) {
+    console.error(`[direct-search-books] type=${req.query.type} url=${req.query.url} :`, err.message);
+    res.json({ results: [], unavailable: true, error: err.message });
+  }
+});
+
+// POST /api/requests/direct-download — crée la demande + télécharge tout de
+// suite le livre choisi (ebookId Valentine), retour synchrone.
+router.post('/direct-download', requireAuth, directDownloadRequest);
+
+// GET /api/requests/:id/metadata-candidates — recherche Google Books, renvoie
+// plusieurs candidats SANS rien sauvegarder (aperçu avant application).
+router.get('/:id/metadata-candidates', requireAuth, getMetadataCandidates);
+
+// POST /api/requests/:id/metadata-candidates/apply — applique le candidat
+// choisi par l'utilisateur après aperçu.
+router.post('/:id/metadata-candidates/apply', requireAuth, applyMetadataCandidate);
 
 // Quota de demandes de l'utilisateur connecté
 router.get('/quota', requireAuth, getRequestQuota);

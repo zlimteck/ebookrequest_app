@@ -78,6 +78,7 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
       _hasPassword: !!doc.password,
       cronInterval: doc.cronInterval || 6,
       valentineFallbackToAdmin: doc.valentineFallbackToAdmin ?? false,
+      directSearchEnabled: doc.directSearchEnabled ?? true,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -87,7 +88,7 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/valentine ─────────────────────────────────────────────
 router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, url, username, password, _hasPassword, cronInterval, valentineFallbackToAdmin } = req.body;
+    const { enabled, url, username, password, _hasPassword, cronInterval, valentineFallbackToAdmin, directSearchEnabled } = req.body;
 
     const update = {
       enabled: !!enabled,
@@ -95,6 +96,7 @@ router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
       username: username?.trim() || '',
       cronInterval: Number(cronInterval) || 6,
       valentineFallbackToAdmin: !!valentineFallbackToAdmin,
+      directSearchEnabled: directSearchEnabled !== false,
     };
 
     if (password && password !== '••••••••') {
@@ -636,6 +638,36 @@ router.post('/aiprovider/test', requireAuth, requireAdmin, async (req, res) => {
     res.json({ success: true, message: `Connexion réussie — ${provider}`, model: result.model });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Test impossible' });
+  }
+});
+
+// ── GET /api/connectors/manual-mode ───────────────────────────────────────────
+// Recherche "Manuelle" (point d'entrée à blanc) — pas un connecteur externe,
+// mais suit le même schéma générique { enabled } que RSS/Valentine pour
+// cohérence. Formulaire partagé avec la recherche détaillée (pré-rempli après
+// sélection) non affecté — seul le bouton d'entrée à blanc est concerné.
+router.get('/manual-mode', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'manualMode' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/manual-mode ───────────────────────────────────────────
+router.put('/manual-mode', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'manualMode' },
+      { enabled: !!enabled },
+      { upsert: true, new: true, runValidators: true }
+    );
+    logSettingsToggle(req, 'Recherche manuelle', doc.enabled);
+    res.json({ enabled: doc.enabled });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
   }
 });
 
