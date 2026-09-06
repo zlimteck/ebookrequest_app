@@ -3,9 +3,12 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import AdminLog from '../models/AdminLog.js';
 import ReadingList from '../models/ReadingList.js';
+import axios from 'axios';
+import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback } from '../services/connectorOrchestrator.js';
+import { downloadFromValentineById } from '../services/valentineService.js';
 import { emitToUser, emitToAdmins } from '../services/socketService.js';
 
 const logAdminAction = async (adminId, adminUsername, action, request, details = '') => {
@@ -339,6 +342,216 @@ export const createBookRequest = async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la création de la demande:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la demande' });
+  }
+};
+
+// ── Recherche directe sur les sources (bypass Google Books) ──────────────────
+// Crée la demande à partir d'un résultat déjà choisi par l'utilisateur sur
+// Valentine (recherche titre ou auteur), puis tente le téléchargement tout de
+// suite et répond de façon synchrone — contrairement à createBookRequest qui
+// lance downloadWithFallback en tâche de fond sans attendre le résultat.
+export const directDownloadRequest = async (req, res) => {
+  try {
+    const { isDirectSearchEnabled } = await import('../services/valentineService.js');
+    if (!(await isDirectSearchEnabled())) {
+      return res.status(403).json({ error: 'La recherche directe a été désactivée par un administrateur.' });
+    }
+
+    const { ebookId, title, author, link, publishedDate, category, targetUserId, selectedShelves, extraShelfTargets } = req.body;
+
+    if (!ebookId || !title || !author) {
+      return res.status(400).json({ error: 'ebookId, titre et auteur sont obligatoires.' });
+    }
+
+    // Étagères choisies (même logique que createBookRequest)
+    const cleanedSelectedShelves = Array.isArray(selectedShelves)
+      ? selectedShelves.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim())
+      : undefined;
+
+    const rawExtraShelfTargets = Array.isArray(extraShelfTargets)
+      ? extraShelfTargets
+          .filter(t => t?.userId)
+          .map(t => ({
+            userId: String(t.userId),
+            shelves: Array.isArray(t.shelves)
+              ? t.shelves.filter(s => typeof s === 'string' && s.trim()).map(s => s.trim())
+              : [],
+          }))
+          .filter(t => t.shelves.length)
+      : [];
+
+    const adminUser = await User.findById(req.user.id);
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé.' });
+    }
+
+    // Si admin soumet pour un autre user, charger le user cible (même logique que createBookRequest)
+    let user = adminUser;
+    let submittedByAdmin = null;
+    if (adminUser.role === 'admin' && targetUserId && targetUserId !== adminUser._id.toString()) {
+      const targetUser = await User.findById(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Utilisateur cible introuvable.' });
+      }
+      user = targetUser;
+      submittedByAdmin = adminUser._id;
+    }
+
+    // Résolution des cibles additionnelles (multishelf multi-utilisateurs) — admin uniquement
+    let resolvedExtraShelfTargets = [];
+    if (adminUser.role === 'admin' && rawExtraShelfTargets.length) {
+      const otherTargets = rawExtraShelfTargets.filter(t => t.userId !== user._id.toString());
+      if (otherTargets.length) {
+        const extraUsers = await User.find({ _id: { $in: otherTargets.map(t => t.userId) } });
+        const extraUsersById = new Map(extraUsers.map(u => [u._id.toString(), u]));
+        resolvedExtraShelfTargets = otherTargets
+          .filter(t => extraUsersById.has(t.userId))
+          .map(t => ({
+            user: t.userId,
+            username: extraUsersById.get(t.userId).username,
+            shelves: t.shelves,
+            status: null,
+            error: null,
+            pushedAt: null,
+          }));
+      }
+    }
+
+    // Vérification du quota (même règle que createBookRequest)
+    if (user.role !== 'admin') {
+      const days = user.requestLimitDays ?? 30;
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - days);
+      const recentCount = await BookRequest.countDocuments({
+        user: user._id,
+        createdAt: { $gte: windowStart }
+      });
+      const limit = user.requestLimit ?? 10;
+      if (limit >= 0 && recentCount >= limit) {
+        return res.status(429).json({
+          error: `Vous avez atteint votre limite de ${limit} demande(s) sur les ${days} derniers jours.`
+        });
+      }
+    }
+
+    const newRequest = new BookRequest({
+      user: user._id,
+      username: user.username,
+      ...(submittedByAdmin && { submittedByAdmin }),
+      author,
+      title,
+      link: link || '',
+      publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
+      category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
+      ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),
+      ...(resolvedExtraShelfTargets.length && { extraShelfTargets: resolvedExtraShelfTargets }),
+      status: 'pending',
+      statusHistory: [{ status: 'pending', changedBy: user.username, note: 'Demande créée — recherche directe Valentine' }],
+    });
+
+    await newRequest.save();
+
+    // Auto-ajout à la liste de lecture (best-effort, non bloquant)
+    try {
+      await ReadingList.create({
+        userId: user._id,
+        title: newRequest.title,
+        author: newRequest.author,
+        source: 'request',
+        requestId: newRequest._id,
+        status: 'unread',
+      });
+    } catch (readingErr) {
+      console.error('Erreur ajout liste de lecture (direct-download):', readingErr.message);
+    }
+
+    try {
+      // downloadFromValentineById appelle déjà runPostCompletionHooks en interne
+      // en cas de succès — les étagères stockées ci-dessus sont donc poussées
+      // automatiquement, sans code supplémentaire ici.
+      const result = await downloadFromValentineById(newRequest._id.toString(), ebookId);
+      const completed = await BookRequest.findById(newRequest._id).lean();
+      return res.status(201).json({ success: true, request: completed, ...result });
+    } catch (dlErr) {
+      // La demande existe déjà en pending — elle pourra être relancée depuis
+      // l'admin (retry manuel) ou repasser plus tard dans le circuit normal.
+      const pendingRequest = await BookRequest.findById(newRequest._id).lean();
+      return res.status(200).json({ success: false, error: dlErr.message, request: pendingRequest });
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création directe de la demande:', error);
+    res.status(500).json({ error: 'Une erreur est survenue lors de la création de la demande.' });
+  }
+};
+
+// ── Récupération a posteriori des métadonnées Google Books ───────────────────
+// Utile pour les demandes créées via la recherche directe (Valentine), qui
+// n'ont ni couverture ni description au départ puisqu'elles zappent Google
+// Books. Ne remplit que les champs actuellement vides — n'écrase jamais un
+// titre/auteur/lien déjà présent.
+export const fetchRequestMetadata = async (req, res) => {
+  try {
+    const request = await BookRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable.' });
+
+    const requester = await User.findById(req.user.id).select('role');
+    const isOwner = request.user.toString() === req.user.id;
+    const isAdminUser = requester?.role === 'admin';
+    if (!isOwner && !isAdminUser) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+
+    const enabled = await isGoogleBooksSearchEnabled();
+    if (!enabled) {
+      return res.status(400).json({ error: 'Recherche Google Books désactivée côté serveur.' });
+    }
+
+    const apiKey = await getGoogleBooksApiKey();
+    const queries = [
+      `intitle:"${request.title}" inauthor:"${request.author}"`,
+      `${request.title} inauthor:"${request.author}"`,
+      request.title,
+    ];
+
+    let volumeInfo = null;
+    for (const q of queries) {
+      try {
+        const { data } = await axios.get('https://www.googleapis.com/books/v1/volumes', {
+          params: { q, maxResults: 3, langRestrict: 'fr', ...(apiKey && { key: apiKey }) },
+          timeout: 10000,
+        });
+        const item = (data.items || [])[0];
+        if (item?.volumeInfo) { volumeInfo = item.volumeInfo; break; }
+      } catch (e) {
+        console.error('[fetch-metadata] Erreur requête Google Books:', e.message);
+      }
+    }
+
+    if (!volumeInfo) {
+      return res.status(404).json({ error: 'Aucune métadonnée trouvée sur Google Books pour ce livre.' });
+    }
+
+    if (!request.thumbnail && volumeInfo.imageLinks?.thumbnail) {
+      request.thumbnail = volumeInfo.imageLinks.thumbnail.replace('http://', 'https://');
+    }
+    if (!request.description && volumeInfo.description) {
+      request.description = volumeInfo.description;
+    }
+    if (!request.pageCount && volumeInfo.pageCount) {
+      request.pageCount = volumeInfo.pageCount;
+    }
+    if (!request.publishedDate && volumeInfo.publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(volumeInfo.publishedDate)) {
+      request.publishedDate = volumeInfo.publishedDate;
+    }
+    if (!request.link && volumeInfo.infoLink) {
+      request.link = volumeInfo.infoLink;
+    }
+
+    await request.save();
+    res.json({ success: true, request: request.toObject() });
+  } catch (error) {
+    console.error('Erreur fetch-metadata:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des métadonnées.' });
   }
 };
 

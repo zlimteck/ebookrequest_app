@@ -16,6 +16,14 @@ const __dirname = path.dirname(__filename);
 
 const DEFAULT_URL = 'https://valentine.wtf';
 
+// Le texte brut renvoyé par Valentine (titres, auteurs, séries) contient
+// parfois du HTML littéral (ex: "<i>(contenu dans: ...)</i>" sur les revues) —
+// jamais interprété/rendu par notre front (pas de dangerouslySetInnerHTML),
+// donc affiché tel quel comme texte. On le nettoie à la source.
+function stripTags(str) {
+  return (str || '').replace(/<[^>]+>/g, '').trim();
+}
+
 // ─── Helpers de matching ───────────────────────────────────────────────────────
 
 function normalizeForMatch(str) {
@@ -56,23 +64,80 @@ function extractVolumeNumber(title) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-// Rotation de User-Agent — évite une signature figée facilement fingerprintable
-const USER_AGENTS = [
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+// Profils navigateur cohérents — UA + jeu de headers assortis, tirés
+// ENSEMBLE (pas mélangés au hasard). Un vrai Firefox n'envoie jamais les
+// headers Sec-Ch-Ua que Chrome envoie, et inversement ; envoyer un UA Firefox
+// avec des headers Chrome (ou aucun header caractéristique) est une
+// incohérence trivialement repérable par un WAF un peu sérieux.
+// NB : pas de 'zstd' dans Accept-Encoding même si le vrai Chrome récent
+// l'annonce — si le serveur nous répond effectivement en zstd, on ne serait
+// pas garantis de pouvoir le décompresser correctement selon la version de
+// Node, donc on reste sur gzip/deflate/br (fiables) plutôt que sur l'exactitude
+// parfaite du fingerprint.
+// Limite assumée : ça ne couvre que les headers HTTP. Le fingerprint TLS d'un
+// client Node reste différent de celui d'un vrai navigateur quels que soient
+// les headers envoyés par-dessus — pas quelque chose qu'on corrige ici.
+const BROWSER_PROFILES = [
+  {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
+    headers: {
+      'Accept-Language': 'fr-FR,fr;q=0.8,en-US;q=0.5,en;q=0.3',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'Connection': 'keep-alive',
+    },
+  },
+  {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    headers: {
+      'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      'Connection': 'keep-alive',
+    },
+  },
+  {
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    headers: {
+      'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Ch-Ua': '"Chromium";v="123", "Not:A-Brand";v="8"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Linux"',
+      'Connection': 'keep-alive',
+    },
+  },
+  {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+    headers: {
+      // Safari n'envoie ni Sec-Fetch-* de façon fiable ni de Client Hints (Sec-Ch-Ua*)
+      'Accept-Language': 'fr-FR,fr;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+    },
+  },
 ];
 
-function pickUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+function pickBrowserProfile() {
+  return BROWSER_PROFILES[Math.floor(Math.random() * BROWSER_PROFILES.length)];
 }
 
 function baseHeaders() {
+  const profile = pickBrowserProfile();
   return {
-    'User-Agent': pickUserAgent(),
+    'User-Agent': profile.userAgent,
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    ...profile.headers,
   };
 }
 
@@ -190,6 +255,16 @@ async function getConfig() {
   return { ...doc, password: decrypt(raw) ?? raw }; // fallback si ancien mot de passe en clair
 }
 
+/**
+ * La recherche directe (bypass Google Books) peut être désactivée par un
+ * admin — champ absent sur un doc existant (avant migration) = activé, seul
+ * `false` explicite désactive.
+ */
+export async function isDirectSearchEnabled() {
+  const config = await getConfig();
+  return config.directSearchEnabled !== false;
+}
+
 /** Parse Set-Cookie headers into a key/value object. */
 function parseCookies(setCookieHeaders) {
   if (!setCookieHeaders) return {};
@@ -276,6 +351,39 @@ async function login(baseUrl, username, password) {
   return allCookies;
 }
 
+// ─── Cache de session ───────────────────────────────────────────────────────
+// (patch) : jusqu'ici, login() était appelé fraîchement à CHAQUE opération —
+// une simple recherche, un clic sur un auteur, un téléchargement — même en
+// pure navigation sans rien télécharger. Ça multipliait les logins sans
+// rapport avec le volume réel d'activité, un facteur plausible dans le ban de
+// compte passé (motif de requêtes non-humain). On met maintenant la session
+// en cache un temps limité ; withValentineLock sérialise déjà tout, donc pas
+// de risque de concurrence ici.
+//
+// Durée choisie prudemment — impossible de tester la vraie durée de session
+// Valentine depuis cet environnement. À raccourcir si des échecs "session
+// expirée silencieuse" apparaissent en pratique (résultats vides suspects
+// après plusieurs minutes d'inactivité).
+const SESSION_TTL_MS = 8 * 60 * 1000; // 8 minutes
+
+let cachedSession = null; // { baseUrl, username, password, cookies, expiresAt }
+
+async function getSession(baseUrl, username, password) {
+  const now = Date.now();
+  if (
+    cachedSession &&
+    cachedSession.baseUrl === baseUrl &&
+    cachedSession.username === username &&
+    cachedSession.password === password &&
+    cachedSession.expiresAt > now
+  ) {
+    return cachedSession.cookies;
+  }
+  const cookies = await login(baseUrl, username, password);
+  cachedSession = { baseUrl, username, password, cookies, expiresAt: now + SESSION_TTL_MS };
+  return cookies;
+}
+
 /**
  * Search ebooks by title/author term.
  * @param {string} baseUrl
@@ -310,8 +418,8 @@ async function searchTitles(baseUrl, cookies, query) {
     if (item.txt?.includes('Cliquez ici')) continue;
     // Extract author from txt field: "Titre [Author1, Author2]"
     const authorMatch = item.txt?.match(/\[([^\]]+)\]/);
-    const author = authorMatch ? authorMatch[1].trim() : null;
-    results.push({ id: String(item.id), title: item.value, url: item.url || '', author });
+    const author = authorMatch ? stripTags(authorMatch[1]) : null;
+    results.push({ id: String(item.id), title: stripTags(item.value), url: item.url || '', author });
   }
   return results;
 }
@@ -347,7 +455,7 @@ async function searchAuthors(baseUrl, cookies, query) {
   for (const item of data) {
     if (!item.value || !item.id) continue;
     if (item.txt?.includes('Cliquez ici')) continue;
-    results.push({ id: String(item.id), name: item.value, url: item.url || '' });
+    results.push({ id: String(item.id), name: stripTags(item.value), url: item.url || '' });
   }
   return results;
 }
@@ -356,7 +464,11 @@ async function searchAuthors(baseUrl, cookies, query) {
  * Search series by name (autocomplete endpoint, meme route, contenu=search_series).
  * Retourne les fiches serie, PAS les fichiers — un second appel est necessaire
  * pour lister les tomes/integrales d'une serie (voir listSeriesFiles).
- * @returns {Promise<Array>} list of { id, name, url }
+ * (patch) : expose aussi `hint`, le contenu brut du champ txt de Valentine —
+ * à ce jour, contenu observé inconnu (peut-être vide, peut-être un auteur ou
+ * un descriptif) ; affiché tel quel côté front si non vide, pour aider à
+ * distinguer plusieurs séries au nom proche avant de cliquer.
+ * @returns {Promise<Array>} list of { id, name, url, hint }
  */
 async function searchSeries(baseUrl, cookies, query) {
   await jitter();
@@ -383,7 +495,8 @@ async function searchSeries(baseUrl, cookies, query) {
   for (const item of data) {
     if (!item.value || !item.id) continue;
     if (item.txt?.includes('Cliquez ici')) continue;
-    results.push({ id: String(item.id), name: item.value, url: item.url || '' });
+    const hint = stripTags(item.txt || '') || null;
+    results.push({ id: String(item.id), name: stripTags(item.value), url: item.url || '', hint });
   }
   return results;
 }
@@ -412,26 +525,36 @@ async function listSeriesFiles(baseUrl, cookies, seriesUrl) {
 
   const html = typeof res.data === 'string' ? res.data : '';
   const results = [];
+  const seenSlugs = new Set();
 
-  // Chaque livre est une carte <div ... data-id="X" ... data-slug="Y" ... class="eBookInfo">
-  const cardRe = /<div[^>]*?data-id="(\d+)"[^>]*?data-slug="([^"]*)"[^>]*?class="eBookInfo"[^>]*>/g;
+  // (patch) : la balise eBookInfo peut avoir ses attributs dans un ordre
+  // différent selon le type de page (série vs auteur) — l'ancien regex exigeait
+  // data-id PUIS data-slug PUIS class dans cet ordre précis et matchait donc
+  // silencieusement zéro carte si l'ordre différait. On détecte maintenant la
+  // balise par la seule présence de class="eBookInfo", puis on extrait
+  // data-id/data-slug indépendamment de leur position dans la balise.
+  const cardRe = /<div\b[^>]*\bclass="eBookInfo"[^>]*>/g;
   let m;
   while ((m = cardRe.exec(html)) !== null) {
-    const id = m[1];
-    const slug = m[2];
+    const tag = m[0];
+    const idMatch   = tag.match(/data-id="(\d+)"/);
+    const slugMatch = tag.match(/data-slug="([^"]*)"/);
+    if (!idMatch || !slugMatch || !slugMatch[1] || seenSlugs.has(slugMatch[1])) continue;
+    seenSlugs.add(slugMatch[1]);
+
     // Fenetre de recherche = contenu de cette carte, jusqu'a la carte suivante
-    const windowEnd = html.indexOf('class="eBookInfo"', m.index + m[0].length);
-    const win = html.slice(m.index, windowEnd > -1 ? windowEnd : m.index + 1500);
+    const nextCardIdx = html.indexOf('class="eBookInfo"', cardRe.lastIndex);
+    const win = html.slice(m.index, nextCardIdx > -1 ? nextCardIdx : m.index + 1500);
 
     const titleMatch = win.match(/<h2 class="title"[^>]*>([\s\S]*?)<\/h2>/);
     const authorMatch = win.match(/<h3 class="writer">[\s\S]*?>([^<]+)<\/a>/);
     if (!titleMatch) continue;
 
     results.push({
-      id,
-      title: titleMatch[1].trim(),
-      author: authorMatch ? authorMatch[1].trim() : null,
-      slug,
+      id: idMatch[1],
+      title: stripTags(titleMatch[1]),
+      author: authorMatch ? stripTags(authorMatch[1]) : null,
+      slug: slugMatch[1],
     });
   }
 
@@ -439,26 +562,93 @@ async function listSeriesFiles(baseUrl, cookies, seriesUrl) {
 }
 
 /**
- * Recherche une série par nom, puis liste tous ses fichiers (tomes +
- * intégrales) en un seul appel combiné. Prend la meilleure correspondance
- * (Valentine trie déjà par pertinence).
- * @returns {Promise<{ series: {id, name, url}|null, files: Array }>}
+ * Liste tous les livres visibles sur la page d'une fiche auteur.
+ * (patch) : réutilise le même parsing de carte que listSeriesFiles — Valentine
+ * semble utiliser le même gabarit de carte "eBookInfo" sur les pages série ET
+ * auteur. À VÉRIFIER sur une vraie fiche auteur (Gus) : si le regex ne matche
+ * rien, il faudra ajuster sur le HTML réel (structure potentiellement
+ * différente, pagination pour les auteurs très prolifiques, etc.).
+ * @returns {Promise<Array>} list of { id, title, author, slug }
  */
-export function searchSeriesFiles(seriesName) {
+async function listAuthorFiles(baseUrl, cookies, authorUrl) {
+  return listSeriesFiles(baseUrl, cookies, authorUrl);
+}
+
+/**
+ * Enrichit une liste de résultats avec couverture + taille (séquentiellement,
+ * avec jitter, comme searchOnValentine) et construit une valentineUrl absolue.
+ * (patch) : la fiche d'un livre individuel est sur /titre/{slug} — confirmé
+ * par valentine_2.py (get_author_books), pas /livre/{slug} comme précédemment
+ * deviné à tort.
+ */
+// Recherche directe : aucun enrichissement (couverture/taille) — objectif
+// vitesse, pas metadata. Pour de belles fiches, le mode standard (Google
+// Books) fait déjà ça, et "Mes demandes" a un bouton pour les récupérer a
+// posteriori (fetchRequestMetadata) une fois la demande créée.
+function addValentineUrls(baseUrl, items) {
+  return items.map(r => ({
+    ...r,
+    cover: null,
+    size: null,
+    valentineUrl: r.url ? `${baseUrl}${r.url}` : (r.slug ? `${baseUrl}/titre/${r.slug}` : null),
+  }));
+}
+
+/**
+ * Recherche « en deux temps » : renvoie juste la LISTE des auteurs ou séries
+ * correspondants (id, name, url), sans charger leurs livres — rapide, pas
+ * d'enrichissement. Le choix du bon auteur/série revient à l'utilisateur
+ * (l'auto-pick du 1er résultat s'est révélé peu fiable en pratique : Valentine
+ * classe ses résultats par pertinence de la recherche texte, pas par nombre
+ * de livres ni par exactitude du nom).
+ * @param {string} type - 'author' | 'series'
+ * @returns {Promise<Array<{id, name, url}>>}
+ */
+export function searchValentineMatches(query, type) {
   return withValentineLock(async () => {
     const config = await getConfig();
     if (!config.enabled || !config.username || !config.password) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
-    const cookies = await login(baseUrl, config.username, config.password);
+    const cookies = await getSession(baseUrl, config.username, config.password);
 
-    const seriesMatches = await searchSeries(baseUrl, cookies, seriesName);
-    if (seriesMatches.length === 0) return { series: null, files: [] };
+    const matches = type === 'series'
+      ? await searchSeries(baseUrl, cookies, query)
+      : await searchAuthors(baseUrl, cookies, query);
 
-    const best = seriesMatches[0];
-    const files = await listSeriesFiles(baseUrl, cookies, best.url);
-    return { series: { id: best.id, name: best.name, url: best.url }, files };
+    return matches.map(m => ({ id: m.id, name: m.name, url: m.url, hint: m.hint || null }));
+  });
+}
+
+/**
+ * Deuxième temps : liste (et enrichit) les livres d'une fiche auteur ou série
+ * déjà choisie par l'utilisateur (son url, renvoyée par searchValentineMatches).
+ * @param {string} pageUrl - url relative renvoyée par Valentine (ex: /auteur/xxx)
+ * @param {string} type - 'author' | 'series'
+ * @param {string} [fallbackName] - nom à appliquer si la carte livre n'a pas
+ *   d'auteur détecté (cas normal sur une fiche auteur — cf valentine_2.py,
+ *   get_author_books réutilise le nom de l'auteur recherché, pas un champ par carte).
+ * @returns {Promise<Array>}
+ */
+export function getValentineListingBooks(pageUrl, type, fallbackName) {
+  return withValentineLock(async () => {
+    const config = await getConfig();
+    if (!config.enabled || !config.username || !config.password) {
+      throw new Error('Valentine désactivé ou configuration incomplète');
+    }
+    const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+    const cookies = await getSession(baseUrl, config.username, config.password);
+
+    const files = type === 'series'
+      ? await listSeriesFiles(baseUrl, cookies, pageUrl)
+      : await listAuthorFiles(baseUrl, cookies, pageUrl);
+
+    const withFallbackAuthor = type === 'author'
+      ? files.map(f => ({ ...f, author: f.author || fallbackName || null }))
+      : files;
+
+    return addValentineUrls(baseUrl, withFallbackAuthor);
   });
 }
 
@@ -565,7 +755,7 @@ export function testConnectionValentine(username, password) {
 export function getValentineQuota(username, password) {
   return withValentineLock(async () => {
     const baseUrl = DEFAULT_URL;
-    const cookies = await login(baseUrl, username, password);
+    const cookies = await getSession(baseUrl, username, password);
 
     await jitter();
     const homeRes = await axios.get(`${baseUrl}/`, {
@@ -634,7 +824,7 @@ export async function downloadFromValentine(title, author, requestId, category =
     // ── Login ──────────────────────────────────────────────────────────────
     let cookies;
     try {
-      cookies = await login(baseUrl, username, password);
+      cookies = await getSession(baseUrl, username, password);
     } catch (err) {
       console.error(`[Valentine] ${accountLabel} Erreur de connexion:`, err.message);
       return;
@@ -803,8 +993,10 @@ export async function downloadFromValentine(title, author, requestId, category =
 }
 
 /**
- * Search valentine.wtf and return enriched results (for admin UI).
- * Fetches cover + size for each result in parallel.
+ * Search valentine.wtf and return enriched results (for admin UI — retry
+ * manuel sur une demande existante). Fetches cover + size for each result.
+ * Inchangé : distinct de la recherche directe (voir searchValentineTitlesFast
+ * plus bas), qui elle ne doit surtout pas être ralentie par cet enrichissement.
  */
 export function searchOnValentine(query) {
   return withValentineLock(async () => {
@@ -813,11 +1005,9 @@ export function searchOnValentine(query) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
-    const cookies = await login(baseUrl, config.username, config.password);
+    const cookies = await getSession(baseUrl, config.username, config.password);
     const results = await searchTitles(baseUrl, cookies, query);
 
-    // Enrich results avec cover + size, séquentiellement (avec jitter) pour ne pas
-    // multiplier les requêtes simultanées vers Valentine — best-effort, échecs ignorés.
     const enriched = [];
     for (const r of results) {
       const details = await getBookDetails(baseUrl, cookies, r.id);
@@ -828,8 +1018,25 @@ export function searchOnValentine(query) {
         valentineUrl: r.url ? `${baseUrl}${r.url}` : null,
       });
     }
-
     return enriched;
+  });
+}
+
+/**
+ * Recherche par titre pour la recherche DIRECTE (bypass Google Books) —
+ * volontairement sans aucun enrichissement, pour rester rapide. À ne pas
+ * confondre avec searchOnValentine ci-dessus (admin, retry manuel, enrichi).
+ */
+export function searchValentineTitlesFast(query) {
+  return withValentineLock(async () => {
+    const config = await getConfig();
+    if (!config.enabled || !config.username || !config.password) {
+      throw new Error('Valentine désactivé ou configuration incomplète');
+    }
+    const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+    const cookies = await getSession(baseUrl, config.username, config.password);
+    const results = await searchTitles(baseUrl, cookies, query);
+    return addValentineUrls(baseUrl, results);
   });
 }
 
@@ -854,7 +1061,7 @@ export function quickSearchOnValentine(title, author) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
-    const cookies = await login(baseUrl, config.username, config.password);
+    const cookies = await getSession(baseUrl, config.username, config.password);
 
     const titleResults = await searchTitles(baseUrl, cookies, title);
     if (titleResults.length > 0) {
@@ -886,7 +1093,7 @@ export function downloadFromValentineById(requestId, ebookId) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
-    const cookies = await login(baseUrl, config.username, config.password);
+    const cookies = await getSession(baseUrl, config.username, config.password);
 
     const dlPath = await getDownloadPath(baseUrl, cookies, ebookId);
     if (!dlPath) throw new Error('Lien de téléchargement introuvable pour cet ebook');

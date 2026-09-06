@@ -78,6 +78,7 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
       _hasPassword: !!doc.password,
       cronInterval: doc.cronInterval || 6,
       valentineFallbackToAdmin: doc.valentineFallbackToAdmin ?? false,
+      directSearchEnabled: doc.directSearchEnabled ?? true,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -87,7 +88,7 @@ router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/valentine ─────────────────────────────────────────────
 router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, url, username, password, _hasPassword, cronInterval, valentineFallbackToAdmin } = req.body;
+    const { enabled, url, username, password, _hasPassword, cronInterval, valentineFallbackToAdmin, directSearchEnabled } = req.body;
 
     const update = {
       enabled: !!enabled,
@@ -95,6 +96,7 @@ router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
       username: username?.trim() || '',
       cronInterval: Number(cronInterval) || 6,
       valentineFallbackToAdmin: !!valentineFallbackToAdmin,
+      directSearchEnabled: directSearchEnabled !== false,
     };
 
     if (password && password !== '••••••••') {
