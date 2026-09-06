@@ -1242,6 +1242,68 @@ function SearchPathBanner() {
   );
 }
 
+function ManualModeCard() {
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/manual-mode')
+      .then(res => setEnabled(res.data.enabled ?? true))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleToggle = async (e) => {
+    const value = e.target.checked;
+    setEnabled(value);
+    try {
+      await axiosAdmin.put('/api/connectors/manual-mode', { enabled: value });
+    } catch (err) {
+      setEnabled(!value);
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={styles.cardLogoWrap}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+          </div>
+          <div>
+            <p className={styles.cardName}>Recherche manuelle</p>
+            <p className={styles.cardDesc}>Bouton "Manuel" (saisie à blanc) dans "Demander un livre". Le formulaire pré-rempli après une sélection en recherche détaillée n'est pas affecté par ce réglage.</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input type="checkbox" checked={enabled} onChange={handleToggle} />
+          <span className={styles.slider} />
+        </label>
+      </div>
+      {alert && (
+        <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`} style={{ margin: '0 1.5rem 1rem' }}>
+          {alert.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPanel() {
   return (
     <div className={styles.panel}>
@@ -1263,6 +1325,7 @@ export default function SettingsPanel() {
       <AIProviderCard />
       <EmailProviderCard />
       <RSSFeedCard />
+      <ManualModeCard />
       <ProxyCard />
     </div>
   );

@@ -16,7 +16,8 @@ import {
   addComment,
   markCommentsSeen,
   directDownloadRequest,
-  fetchRequestMetadata,
+  getMetadataCandidates,
+  applyMetadataCandidate,
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -64,6 +65,19 @@ router.post('/', requireAuth, createBookRequest);
 // /api/connectors, réservées aux admins et pensées pour un retry manuel).
 // Peut être coupée par un admin (risque de ban de compte Valentine) — voir
 // isDirectSearchEnabled().
+
+// GET /api/requests/manual-mode-status — le front s'en sert pour savoir s'il
+// doit proposer le bouton "Manuel" (point d'entrée à blanc). N'affecte pas le
+// formulaire partagé pré-rempli après sélection en recherche détaillée.
+router.get('/manual-mode-status', requireAuth, async (req, res) => {
+  try {
+    const ConnectorSettings = (await import('../models/ConnectorSettings.js')).default;
+    const doc = await ConnectorSettings.findOne({ service: 'manualMode' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch {
+    res.json({ enabled: true });
+  }
+});
 
 // GET /api/requests/direct-search-status — le front s'en sert pour savoir
 // s'il doit même proposer le bouton "Recherche directe".
@@ -135,10 +149,13 @@ router.get('/direct-search-books', requireAuth, async (req, res) => {
 // suite le livre choisi (ebookId Valentine), retour synchrone.
 router.post('/direct-download', requireAuth, directDownloadRequest);
 
-// POST /api/requests/:id/fetch-metadata — complète a posteriori une demande
-// (créée via recherche directe) avec couverture/description/pages depuis
-// Google Books, sans écraser les champs déjà présents.
-router.post('/:id/fetch-metadata', requireAuth, fetchRequestMetadata);
+// GET /api/requests/:id/metadata-candidates — recherche Google Books, renvoie
+// plusieurs candidats SANS rien sauvegarder (aperçu avant application).
+router.get('/:id/metadata-candidates', requireAuth, getMetadataCandidates);
+
+// POST /api/requests/:id/metadata-candidates/apply — applique le candidat
+// choisi par l'utilisateur après aperçu.
+router.post('/:id/metadata-candidates/apply', requireAuth, applyMetadataCandidate);
 
 // Quota de demandes de l'utilisateur connecté
 router.get('/quota', requireAuth, getRequestQuota);

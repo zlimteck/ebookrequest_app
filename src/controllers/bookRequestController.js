@@ -5,6 +5,7 @@ import AdminLog from '../models/AdminLog.js';
 import ReadingList from '../models/ReadingList.js';
 import axios from 'axios';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
+import { fetchFromGoogle } from '../routes/googleBooks.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback } from '../services/connectorOrchestrator.js';
@@ -485,11 +486,15 @@ export const directDownloadRequest = async (req, res) => {
 };
 
 // ── Récupération a posteriori des métadonnées Google Books ───────────────────
-// Utile pour les demandes créées via la recherche directe (Valentine), qui
-// n'ont ni couverture ni description au départ puisqu'elles zappent Google
-// Books. Ne remplit que les champs actuellement vides — n'écrase jamais un
-// titre/auteur/lien déjà présent.
-export const fetchRequestMetadata = async (req, res) => {
+// (patch) : l'ancienne version appliquait le 1er résultat d'autorité, sans
+// aperçu — un mauvais match (titre ambigu, homonyme) se retrouvait appliqué
+// silencieusement, sans recours (voir cas "Joseph dans la nuit" vs un vieux
+// livre de 1767 partageant juste le mot "Joseph"). Remplacé par deux étapes :
+// recherche (retourne plusieurs candidats, ne sauvegarde rien) puis
+// application explicite d'un candidat choisi par l'utilisateur.
+
+// GET /api/requests/:id/metadata-candidates
+export const getMetadataCandidates = async (req, res) => {
   try {
     const request = await BookRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ error: 'Demande introuvable.' });
@@ -506,38 +511,123 @@ export const fetchRequestMetadata = async (req, res) => {
       return res.status(400).json({ error: 'Recherche Google Books désactivée côté serveur.' });
     }
 
-    const apiKey = await getGoogleBooksApiKey();
+    // (patch) : confirmé par test manuel (docker exec) — les opérateurs
+    // intitle:/inauthor: matchaient mal, alors que deux phrases entre
+    // guillemets dans le texte libre trouvent le bon livre. Deuxième piège
+    // découvert au passage : l'ordre du nom compte pour ce matching par
+    // phrase — "Olivier Grondeau" fonctionne, "Grondeau Olivier" (le format
+    // que Valentine renvoie, nom-prénom) ne fonctionne pas. On ne sait pas à
+    // l'avance dans quel ordre `request.author` est stocké (dépend de la
+    // source d'origine de la demande), donc on tente les deux.
+    const authorWords = (request.author || '').trim().split(/\s+/).filter(Boolean);
+    const authorReversed = authorWords.length > 1 ? [...authorWords].reverse().join(' ') : null;
+
     const queries = [
-      `intitle:"${request.title}" inauthor:"${request.author}"`,
-      `${request.title} inauthor:"${request.author}"`,
+      `"${request.title}" "${request.author}"`,
+      ...(authorReversed ? [`"${request.title}" "${authorReversed}"`] : []),
       request.title,
     ];
 
-    let volumeInfo = null;
-    for (const q of queries) {
-      try {
-        const { data } = await axios.get('https://www.googleapis.com/books/v1/volumes', {
-          params: { q, maxResults: 3, langRestrict: 'fr', ...(apiKey && { key: apiKey }) },
-          timeout: 10000,
-        });
-        const item = (data.items || [])[0];
-        if (item?.volumeInfo) { volumeInfo = item.volumeInfo; break; }
-      } catch (e) {
-        console.error('[fetch-metadata] Erreur requête Google Books:', e.message);
+    // (patch) : les 3 variantes sont maintenant TOUTES interrogées et fusionnées,
+    // au lieu de s'arrêter à la première qui répond quoi que ce soit. Avec
+    // seulement le 1er résultat non-vide, une requête intitle:/inauthor: qui
+    // remonte un mauvais match (matching approximatif, pas de phrase exacte
+    // stricte côté Google) empêchait la requête titre-seul, souvent la plus
+    // fiable, d'être tentée. Maintenant qu'il y a un vrai aperçu avec choix
+    // humain, mieux vaut maximiser les chances que le bon livre apparaisse
+    // quelque part dans la liste plutôt que parier sur une seule requête.
+    // (patch) : langRestrict:'fr' retiré ici — c'est un filtre DUR côté Google
+    // (exclut tout résultat dont le champ langue n'est pas correctement tagué
+    // 'fr'), plausible explication d'une absence totale malgré un livre bien
+    // présent sur Google Books (sortie récente/petit éditeur, tag parfois
+    // manquant). Avec un vrai aperçu + choix humain maintenant en place,
+    // mieux vaut maximiser le rappel que pré-filtrer côté serveur.
+    const settled = await Promise.allSettled(
+      queries.map(q => fetchFromGoogle(q, 5, 0, {}))
+    );
+
+    // Logs explicites — pour arrêter de deviner et voir ce qui se passe réellement
+    // côté serveur à chaque requête (nb de résultats par variante, erreurs éventuelles).
+    settled.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        console.log(`[metadata-candidates] "${queries[i]}" → ${result.value.items.length} résultat(s)`);
+      } else {
+        console.log(`[metadata-candidates] "${queries[i]}" → ERREUR: ${result.reason?.message}`);
+      }
+    });
+
+    const seen = new Set();
+    let items = [];
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        console.error('[metadata-candidates] Erreur requête Google Books:', result.reason?.message);
+        continue;
+      }
+      for (const item of result.value.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        items.push(item);
       }
     }
+    items = items.slice(0, 8);
 
-    if (!volumeInfo) {
+    if (!items.length) {
       return res.status(404).json({ error: 'Aucune métadonnée trouvée sur Google Books pour ce livre.' });
     }
 
-    if (!request.thumbnail && volumeInfo.imageLinks?.thumbnail) {
+    const candidates = items.map(item => ({
+      googleBooksId: item.id,
+      title: item.volumeInfo?.title || '',
+      authors: (item.volumeInfo?.authors || []).join(', '),
+      thumbnail: item.volumeInfo?.imageLinks?.thumbnail?.replace('http://', 'https://') || null,
+      description: item.volumeInfo?.description || '',
+      pageCount: item.volumeInfo?.pageCount || null,
+      publishedDate: item.volumeInfo?.publishedDate || null,
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ candidates });
+  } catch (error) {
+    console.error('Erreur metadata-candidates:', error);
+    res.status(500).json({ error: 'Erreur lors de la recherche de métadonnées.' });
+  }
+};
+
+// POST /api/requests/:id/metadata-candidates/apply — body: { googleBooksId }
+// Choix explicite après aperçu -> écrase couverture/description/pages même si
+// déjà remplies (c'est justement pour corriger une erreur précédente).
+// Date/lien : seulement si absents, pour ne pas toucher des infos de
+// téléchargement déjà correctes.
+export const applyMetadataCandidate = async (req, res) => {
+  try {
+    const { googleBooksId } = req.body;
+    if (!googleBooksId) return res.status(400).json({ error: 'googleBooksId requis.' });
+
+    const request = await BookRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Demande introuvable.' });
+
+    const requester = await User.findById(req.user.id).select('role');
+    const isOwner = request.user.toString() === req.user.id;
+    const isAdminUser = requester?.role === 'admin';
+    if (!isOwner && !isAdminUser) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+
+    const apiKey = await getGoogleBooksApiKey();
+    const { data } = await axios.get(`https://www.googleapis.com/books/v1/volumes/${googleBooksId}`, {
+      params: { ...(apiKey && { key: apiKey }) },
+      timeout: 10000,
+    });
+    const volumeInfo = data?.volumeInfo;
+    if (!volumeInfo) return res.status(404).json({ error: 'Métadonnée introuvable sur Google Books.' });
+
+    if (volumeInfo.imageLinks?.thumbnail) {
       request.thumbnail = volumeInfo.imageLinks.thumbnail.replace('http://', 'https://');
     }
-    if (!request.description && volumeInfo.description) {
+    if (volumeInfo.description) {
       request.description = volumeInfo.description;
     }
-    if (!request.pageCount && volumeInfo.pageCount) {
+    if (volumeInfo.pageCount) {
       request.pageCount = volumeInfo.pageCount;
     }
     if (!request.publishedDate && volumeInfo.publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(volumeInfo.publishedDate)) {
@@ -550,8 +640,8 @@ export const fetchRequestMetadata = async (req, res) => {
     await request.save();
     res.json({ success: true, request: request.toObject() });
   } catch (error) {
-    console.error('Erreur fetch-metadata:', error);
-    res.status(500).json({ error: 'Erreur lors de la récupération des métadonnées.' });
+    console.error('Erreur apply-metadata:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'application des métadonnées.' });
   }
 };
 

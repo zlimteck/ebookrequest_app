@@ -641,6 +641,36 @@ router.post('/aiprovider/test', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/connectors/manual-mode ───────────────────────────────────────────
+// Recherche "Manuelle" (point d'entrée à blanc) — pas un connecteur externe,
+// mais suit le même schéma générique { enabled } que RSS/Valentine pour
+// cohérence. Formulaire partagé avec la recherche détaillée (pré-rempli après
+// sélection) non affecté — seul le bouton d'entrée à blanc est concerné.
+router.get('/manual-mode', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'manualMode' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/manual-mode ───────────────────────────────────────────
+router.put('/manual-mode', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'manualMode' },
+      { enabled: !!enabled },
+      { upsert: true, new: true, runValidators: true }
+    );
+    logSettingsToggle(req, 'Recherche manuelle', doc.enabled);
+    res.json({ enabled: doc.enabled });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
 // ── GET /api/connectors/rss ───────────────────────────────────────────────────
 router.get('/rss', requireAuth, requireAdmin, async (req, res) => {
   try {

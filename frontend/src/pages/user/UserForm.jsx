@@ -140,6 +140,7 @@ function UserForm() {
   const [targetUserId, setTargetUserId] = useState('');
   const [calibreEnabled, setCalibreEnabled] = useState(false);
   const [directSearchAllowed, setDirectSearchAllowed] = useState(true); // optimiste, corrigé après fetch
+  const [manualModeAllowed, setManualModeAllowed] = useState(true); // optimiste, corrigé après fetch
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
   const [selectedShelves, setSelectedShelves] = useState([]);
   // Multishelf multi-utilisateurs (admin) — comptes Calibre-Web ciblables en
@@ -199,6 +200,19 @@ function UserForm() {
               setDirectSearchAllowed(allowed);
               if (!allowed) {
                 setSearchMode(prev => prev === 'direct' ? 'google' : prev);
+              }
+            })
+            .catch(() => {});
+          // Bouton "Manuel" (point d'entrée à blanc) — n'affecte pas le
+          // formulaire pré-rempli après sélection en recherche détaillée,
+          // qui bascule sur 'manual' indépendamment de ce réglage.
+          axiosAdmin.get('/api/requests/manual-mode-status')
+            .then(r => {
+              if (!isMounted) return;
+              const allowed = r.data?.enabled !== false;
+              setManualModeAllowed(allowed);
+              if (!allowed) {
+                setSearchMode(prev => (prev === 'manual' && !selectedBook) ? 'google' : prev);
               }
             })
             .catch(() => {});
@@ -834,11 +848,13 @@ function UserForm() {
             onClick={() => chooseSearchMode('google')} disabled={!!selectedBook} aria-pressed={searchMode === 'google'}>
             <SearchIcon /> Recherche détaillée
           </button>
-          <button type="button"
-            className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
-            onClick={() => chooseSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
-            <EditIcon /> Manuel
-          </button>
+          {manualModeAllowed && (
+            <button type="button"
+              className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
+              onClick={() => chooseSearchMode('manual')} aria-pressed={searchMode === 'manual'}>
+              <EditIcon /> Manuel
+            </button>
+          )}
           {directSearchAllowed && (
             <button type="button"
               className={`${styles.toggleButton} ${searchMode === 'direct' ? styles.toggleActive : ''}`}
