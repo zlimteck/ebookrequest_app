@@ -151,6 +151,7 @@ curl https://app.ndd.fr/api/requests/quota \
 ```
 
 ### `POST /api/requests`
+Seuls `title` et `author` sont obligatoires — les autres champs (`link`, `thumbnail`, `description`, `pageCount`...) sont optionnels.
 ```bash
 curl -X POST https://app.ndd.fr/api/requests \
   -H "Authorization: Bearer <token>" \
@@ -322,11 +323,12 @@ curl -X POST https://app.ndd.fr/api/reading \
 ```
 
 ### `PUT /api/reading/:id`
+Tous les champs sont optionnels (`status`, `rating`, `epubLocation`, `readingProgress`, `notes`, `thumbnail`).
 ```bash
 curl -X PUT https://app.ndd.fr/api/reading/ID \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"status": "read", "rating": 5, "notes": "Excellent !", "readingProgress": 100}'
+  -d '{"status": "read", "rating": 5, "notes": "Excellent !", "readingProgress": 100, "thumbnail": "https://..."}'
 ```
 
 ### `DELETE /api/reading/:id`
