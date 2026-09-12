@@ -2090,7 +2090,7 @@ const UserSettings = () => {
                             {(s.ip || '—').replace(/^::ffff:/, '')}{s.location ? ` · ${s.location}` : ''}
                           </span>
                           <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', marginTop: '0.1rem' }}>
-                            {s.loginMethod === 'passkey' ? 'Passkey' : s.loginMethod === '2fa' ? '2FA' : s.loginMethod === 'invitation' ? 'Invitation' : 'Mot de passe'}
+                            {s.loginMethod === 'passkey' ? 'Passkey' : s.loginMethod === '2fa' ? '2FA' : s.loginMethod === 'invitation' ? 'Invitation' : s.loginMethod === 'token' ? 'Accès par jeton (app/OPDS/MCP)' : 'Mot de passe'}
                             {' · '}
                             {new Date(s.lastActivity).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>

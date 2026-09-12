@@ -38,6 +38,7 @@ router.get('/', requireAuth, async (req, res) => {
     const sessions = await Session.find({
       userId: req.user.id,
       expiresAt: { $gt: new Date() },
+      revokedAt: null,
     }).sort({ lastActivity: -1 }).lean();
 
     const result = sessions.map(s => {
@@ -80,9 +81,21 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Impossible de révoquer la session courante depuis cet endpoint. Utilisez /api/auth/logout.' });
     }
 
-    const result = await Session.deleteOne({ _id: id, userId: req.user.id });
-    if (result.deletedCount === 0) {
+    const session = await Session.findOne({ _id: id, userId: req.user.id });
+    if (!session) {
       return res.status(404).json({ error: 'Session non trouvée.' });
+    }
+
+    // Sessions 'token' (app iOS/OPDS/MCP) : le document est gardé, marqué
+    // révoqué — voir Session.revokedAt et le chemin token de auth.js, qui s'en
+    // sert pour bloquer réellement l'accès de cet appareil précis. Les autres
+    // types de session sont supprimés pour de bon : le JWT est vérifié via son
+    // sid (auth.js), sa session ne peut donc jamais être "recréée" derrière.
+    if (session.loginMethod === 'token') {
+      session.revokedAt = new Date();
+      await session.save();
+    } else {
+      await session.deleteOne();
     }
 
     res.json({ success: true });
@@ -95,12 +108,21 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // DELETE /api/sessions — revoke all sessions except the current one
 router.delete('/', requireAuth, async (req, res) => {
   try {
-    const result = await Session.deleteMany({
+    const filter = {
       userId: req.user.id,
       _id: { $ne: req.sessionId },
-    });
+      revokedAt: null,
+    };
 
-    res.json({ success: true, revoked: result.deletedCount });
+    // Même logique que DELETE /:id : révocation douce pour les sessions
+    // 'token', suppression pour les autres.
+    const tokenResult = await Session.updateMany(
+      { ...filter, loginMethod: 'token' },
+      { $set: { revokedAt: new Date() } }
+    );
+    const deleteResult = await Session.deleteMany({ ...filter, loginMethod: { $ne: 'token' } });
+
+    res.json({ success: true, revoked: tokenResult.modifiedCount + deleteResult.deletedCount });
   } catch (err) {
     console.error('DELETE /sessions:', err);
     res.status(500).json({ error: 'Erreur serveur.' });
