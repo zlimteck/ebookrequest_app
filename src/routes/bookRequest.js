@@ -25,9 +25,10 @@ import BookRequest from '../models/BookRequest.js';
 
 const router = express.Router();
 
-// ── Vérification doublon inter-utilisateurs ───────────────────────────────────
-// Retourne la demande existante (d'un autre user) pour ce titre+auteur, si elle existe.
-// Les demandes annulées sont ignorées (peuvent être re-demandées).
+// ── Vérification doublon ───────────────────────────────────────────────────────
+// Retourne la demande existante (tout utilisateur, y compris soi-même) pour ce
+// titre+auteur, si elle existe. Les demandes annulées sont ignorées (peuvent
+// être re-demandées).
 router.get('/check-duplicate', requireAuth, async (req, res) => {
   try {
     const { title, author } = req.query;
@@ -37,7 +38,6 @@ router.get('/check-duplicate', requireAuth, async (req, res) => {
     const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     const existing = await BookRequest.findOne({
-      user: { $ne: req.user.id },
       title: { $regex: `^${escRe(title.trim())}$`, $options: 'i' },
       author: { $regex: `^${escRe(author.trim())}$`, $options: 'i' },
       status: { $nin: ['canceled'] },
