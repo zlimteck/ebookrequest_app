@@ -198,6 +198,19 @@ app.get('/env.js', (req, res) => {
   res.send(`window.env = { VITE_API_URL: ${JSON.stringify(process.env.VITE_API_URL || '')} };`);
 });
 
+// Associated Domains (app iOS, Passkey/Face ID) — Apple vérifie les deux
+// emplacements. Doit être monté avant express.static/le catch-all SPA ci-dessous,
+// sinon ce chemin sans extension retombe sur index.html (React Router).
+const APPLE_APP_SITE_ASSOCIATION = {
+  webcredentials: {
+    apps: ['N5X9SZ4Q5B.com.ebookrequest.ios.full'],
+  },
+};
+app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association'], (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(APPLE_APP_SITE_ASSOCIATION);
+});
+
 app.use(express.static(frontendBuild));
 
 // Toutes les routes non-API → index.html (React Router)

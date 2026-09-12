@@ -191,7 +191,7 @@ router.post('/authenticate-verify', async (req, res) => {
       return res.status(401).json({ error: 'Authentification échouée.' });
     }
 
-    const user = await User.findById(userId).select('username role isActive passkeys twoFactor').lean();
+    const user = await User.findById(userId).select('username role isActive passkeys twoFactor opdsToken').lean();
     if (!user || user.isActive === false) {
       return res.status(401).json({ error: 'Authentification échouée.' });
     }
@@ -238,9 +238,20 @@ router.post('/authenticate-verify', async (req, res) => {
     });
     const token = jwt.sign({ id: user._id, role: user.role, sid }, JWT_SECRET, { expiresIn: '30d' });
     res.cookie('token', token, COOKIE_OPTIONS);
+
+    // L'app iOS s'authentifie exclusivement par Bearer (opdsToken, voir le
+    // fallback dans requireAuth) — jamais par cookie. Sans ça, une connexion
+    // passkey réussie ne laisse à l'app aucun moyen de continuer à s'authentifier.
+    let opdsToken = user.opdsToken;
+    if (!opdsToken) {
+      opdsToken = crypto.randomUUID();
+      await User.updateOne({ _id: userId }, { $set: { opdsToken } });
+    }
+
     res.json({
       role: user.role,
       user: { id: user._id, username: user.username, role: user.role },
+      token: opdsToken,
     });
   } catch (err) {
     console.error('Passkey authenticate-verify:', err);
