@@ -71,7 +71,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const book = await ReadingList.findOne({ _id: req.params.id, userId: req.user.id });
     if (!book) return res.status(404).json({ message: 'Livre non trouvé' });
 
-    const { status, rating, epubLocation, readingProgress, notes } = req.body;
+    const { status, rating, epubLocation, readingProgress, notes, thumbnail } = req.body;
     const wasUnstarted = book.readingProgress === 0;
     if (status !== undefined) {
       book.status = status;
@@ -83,6 +83,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (epubLocation !== undefined) book.epubLocation = epubLocation;
     if (readingProgress !== undefined) book.readingProgress = Math.min(100, Math.max(0, Number(readingProgress)));
     if (notes !== undefined) book.notes = notes.trim();
+    if (thumbnail !== undefined) book.thumbnail = thumbnail;
     await book.save();
 
     // Synchro Hardcover : on attend le résultat (appel unique, rapide) pour pouvoir
