@@ -6,6 +6,13 @@ import { sendNewLoginAlertEmail } from '../services/emailService.js';
 
 function parseUserAgent(ua) {
   if (!ua) return { browser: 'Inconnu', os: 'Inconnu' };
+
+  // App iOS (header custom, pas un vrai UA de navigateur) : "EbookRequest-iOS/1.0 (Version 26.0 (Build 23A5297g))"
+  const iosAppMatch = ua.match(/^EbookRequest-iOS\/([\d.]+)/);
+  if (iosAppMatch) {
+    return { browser: 'EbookRequest', os: `iOS v${iosAppMatch[1]}` };
+  }
+
   let browser = 'Inconnu';
   let os = 'Inconnu';
   if (/Edg\//.test(ua))             browser = 'Edge';
