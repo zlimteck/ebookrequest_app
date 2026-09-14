@@ -29,6 +29,7 @@ RUN npm ci --only=production
 
 # Code backend
 COPY src/ ./src/
+COPY PRIVACY.md ./
 
 # Build React issu du stage précédent
 COPY --from=frontend-builder /app/frontend/build ./frontend/build

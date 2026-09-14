@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -188,6 +189,19 @@ app.use('/api/sessions', sessionsRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));
+
+// Politique de confidentialité — sert le contenu brut de PRIVACY.md (racine du
+// repo), lu à chaque requête plutôt que caché en mémoire au démarrage pour que
+// la page reflète toujours le fichier réellement déployé. Public (pas de
+// requireAuth) : accessible avant connexion, notamment pour l'app iOS.
+app.get('/api/legal/privacy', (req, res) => {
+  try {
+    const content = fs.readFileSync(path.join(__dirname, '../PRIVACY.md'), 'utf8');
+    res.json({ content });
+  } catch {
+    res.status(404).json({ error: 'Document introuvable.' });
+  }
+});
 
 // Servir le build React (production)
 const frontendBuild = path.join(__dirname, '../frontend/build');

@@ -21,6 +21,7 @@ const ForgotPassword = React.lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = React.lazy(() => import('./pages/auth/ResetPassword'));
 const Register      = React.lazy(() => import('./pages/auth/Register'));
 const SetupPage     = React.lazy(() => import('./pages/auth/SetupPage'));
+const PrivacyPage   = React.lazy(() => import('./pages/PrivacyPage'));
 import styles from './styles/Navbar.module.css';
 import axiosAdmin from './axiosAdmin';
 import { checkAuth, logout as authLogout } from './services/authService';
@@ -147,6 +148,11 @@ function App() {
   const isResetPage = location.pathname.startsWith('/reset-password/');
   const isRegisterPage = location.pathname === '/register';
   const isSetupPage = location.pathname === '/setup';
+  const isPrivacyPage = location.pathname === '/privacy';
+
+  if (isPrivacyPage) {
+    return <Suspense fallback={null}><PrivacyPage /></Suspense>;
+  }
 
   if (isSetupPage) {
     return <Suspense fallback={null}><SetupPage /></Suspense>;
