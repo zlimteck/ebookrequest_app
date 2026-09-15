@@ -1,5 +1,7 @@
 import webpush from 'web-push';
 import PushSubscription from '../models/PushSubscription.js';
+import User from '../models/User.js';
+import { sendApnsToUser } from './apnsService.js';
 
 // Configuration VAPID (optionnelle — pas de crash si les clés sont absentes)
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -11,11 +13,23 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 }
 
 /**
- * Envoie une notification push à tous les appareils d'un utilisateur
+ * Envoie une notification push à tous les appareils d'un utilisateur — à la fois Web Push
+ * (navigateurs) et APNs (app iOS native), selon ce qui est configuré côté serveur et ce que
+ * l'utilisateur a effectivement enregistré comme souscription/jeton.
  * @param {string} userId
  * @param {object} payload  { title, body, url, icon }
  */
 export const sendPushToUser = async (userId, payload) => {
+  const user = await User.findById(userId).select('notificationPreferences.push').catch(() => null);
+  if (user?.notificationPreferences?.push?.enabled === false) return;
+
+  await Promise.allSettled([
+    sendWebPushToUser(userId, payload),
+    sendApnsToUser(userId, payload),
+  ]);
+};
+
+const sendWebPushToUser = async (userId, payload) => {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
 
   let subscriptions;

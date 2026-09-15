@@ -1,6 +1,8 @@
 import express from 'express';
 import PushSubscription from '../models/PushSubscription.js';
 import { requireAuth } from '../middleware/auth.js';
+import DeviceToken from '../models/DeviceToken.js';
+import { isApnsConfigured } from '../services/apnsService.js';
 
 const router = express.Router();
 
@@ -55,6 +57,49 @@ router.get('/status', requireAuth, async (req, res) => {
     const count = await PushSubscription.countDocuments({ user: req.user.id });
     res.json({ subscribed: count > 0 });
   } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Indique si le serveur est configuré pour envoyer du push natif (APNs) — l'app iOS
+// s'en sert pour éviter de demander l'autorisation de notifications si ça ne sert à rien.
+router.get('/apns-status', requireAuth, (req, res) => {
+  res.json({ enabled: isApnsConfigured() });
+});
+
+// Enregistre le jeton d'appareil APNs de l'app iOS (équivalent natif de /subscribe).
+router.post('/apns/register', requireAuth, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Jeton invalide' });
+    }
+
+    // Upsert par token (pas par couple user+token) : si l'appareil avait été enregistré
+    // par un autre compte (déconnexion/reconnexion sous un autre utilisateur), on veut que
+    // ce token repointe vers le nouvel utilisateur plutôt que de créer un doublon.
+    await DeviceToken.findOneAndUpdate(
+      { token },
+      { user: req.user.id, token },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erreur enregistrement device token:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Supprime le jeton d'appareil APNs (déconnexion, désactivation du toggle push).
+router.post('/apns/unregister', requireAuth, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Jeton requis' });
+    await DeviceToken.deleteOne({ user: req.user.id, token });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erreur désenregistrement device token:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
