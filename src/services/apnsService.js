@@ -107,6 +107,11 @@ export const sendApnsToUser = async (userId, payload) => {
     const reason = failure.response?.reason;
     if (failure.status === '410' || reason === 'Unregistered' || reason === 'BadDeviceToken') {
       toDelete.push(failure.device);
+      // `BadDeviceToken` est très souvent un mismatch d'environnement (token sandbox d'un
+      // build Xcode debug envoyé alors qu'APNS_PRODUCTION=true côté serveur, ou l'inverse)
+      // plutôt qu'un jeton réellement périmé — logger même ce cas évite un échec totalement
+      // silencieux, indiscernable d'un envoi réussi depuis les logs.
+      console.warn(`[APNs] Jeton invalide supprimé (${reason || failure.status}) pour ${failure.device.slice(0, 12)}...`);
     } else {
       console.error(`[APNs] Erreur envoi à ${failure.device}:`, reason || failure.error?.message);
     }
