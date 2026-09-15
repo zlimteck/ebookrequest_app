@@ -24,6 +24,7 @@ import { testAIProviderConnection } from '../services/aiProviderService.js';
 import { invalidateRSSUrlCache } from '../services/rssConfig.js';
 import { invalidateProxyConfigCache, getProxyAgent } from '../services/proxyConfig.js';
 import { invalidateEmailConfigCache } from '../services/emailConfig.js';
+import { invalidateApnsConfigCache } from '../services/apnsService.js';
 
 async function triggerKindleIfEnabled(bookRequestLean) {
   try {
@@ -453,6 +454,82 @@ router.put('/googlebooks', requireAuth, requireAdmin, async (req, res) => {
       enabled: doc.enabled,
       apiKey: doc.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc.apiKey,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── GET /api/connectors/apns ───────────────────────────────────────────────────
+router.get('/apns', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    let doc = await ConnectorSettings.findOne({ service: 'apns' }).lean();
+    // Migration transparente : importe la clé du .env en base au premier accès,
+    // pour que les instances existantes voient leur config déjà pré-remplie.
+    if (!doc && process.env.APNS_KEY_P8) {
+      doc = await ConnectorSettings.findOneAndUpdate(
+        { service: 'apns' },
+        {
+          $setOnInsert: {
+            enabled: true,
+            apiKey: encrypt(process.env.APNS_KEY_P8),
+            apnsKeyId: process.env.APNS_KEY_ID || '',
+            apnsTeamId: process.env.APNS_TEAM_ID || '',
+            apnsBundleId: process.env.APNS_BUNDLE_ID || 'com.ebookrequest.ios.full',
+            apnsProduction: process.env.APNS_PRODUCTION !== 'false',
+          },
+        },
+        { upsert: true, new: true, runValidators: true }
+      ).lean();
+      invalidateApnsConfigCache();
+    }
+    res.json({
+      enabled: doc?.enabled ?? false,
+      apiKey: doc?.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc?.apiKey,
+      keyId: doc?.apnsKeyId || '',
+      teamId: doc?.apnsTeamId || '',
+      bundleId: doc?.apnsBundleId || 'com.ebookrequest.ios.full',
+      production: doc?.apnsProduction ?? true,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/apns ───────────────────────────────────────────────────
+router.put('/apns', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, apiKey, _hasApiKey, keyId, teamId, bundleId, production } = req.body;
+    const update = enabled !== undefined ? { enabled: !!enabled } : {};
+
+    if (apiKey && apiKey !== '••••••••') {
+      update.apiKey = encrypt(apiKey);
+    }
+    if (!apiKey && !_hasApiKey) {
+      update.apiKey = '';
+    }
+    if (keyId !== undefined) update.apnsKeyId = keyId.trim();
+    if (teamId !== undefined) update.apnsTeamId = teamId.trim();
+    if (bundleId !== undefined) update.apnsBundleId = bundleId.trim();
+    if (production !== undefined) update.apnsProduction = !!production;
+
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'apns' },
+      update,
+      { upsert: true, new: true, runValidators: true }
+    );
+    invalidateApnsConfigCache();
+    if (enabled !== undefined) logSettingsToggle(req, 'Push natif iOS (APNs)', doc.enabled);
+
+    res.json({
+      enabled: doc.enabled,
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+      keyId: doc.apnsKeyId || '',
+      teamId: doc.apnsTeamId || '',
+      bundleId: doc.apnsBundleId || 'com.ebookrequest.ios.full',
+      production: doc.apnsProduction,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });

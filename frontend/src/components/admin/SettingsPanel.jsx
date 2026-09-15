@@ -1304,6 +1304,174 @@ function ManualModeCard() {
   );
 }
 
+function ApnsCard() {
+  const [config, setConfig] = useState({
+    enabled: false, apiKey: '', _hasApiKey: false,
+    keyId: '', teamId: '', bundleId: 'com.ebookrequest.ios.full', production: true,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/apns')
+      .then(res => {
+        setConfig({
+          enabled: res.data.enabled ?? false,
+          apiKey: res.data.apiKey || '',
+          _hasApiKey: res.data._hasApiKey ?? false,
+          keyId: res.data.keyId || '',
+          teamId: res.data.teamId || '',
+          bundleId: res.data.bundleId || 'com.ebookrequest.ios.full',
+          production: res.data.production ?? true,
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setAlert(null);
+    try {
+      const { enabled, ...rest } = config;
+      const res = await axiosAdmin.put('/api/connectors/apns', rest);
+      setConfig(c => ({ ...c, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+      showAlertMsg('success', 'Configuration enregistrée.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = async (e) => {
+    const enabled = e.target.checked;
+    setConfig(c => ({ ...c, enabled }));
+    try {
+      const res = await axiosAdmin.put('/api/connectors/apns', { ...config, enabled });
+      setConfig(c => ({ ...c, enabled: res.data.enabled, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+    } catch (err) {
+      setConfig(c => ({ ...c, enabled: !enabled }));
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={styles.cardLogoWrap}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+            </svg>
+          </div>
+          <div>
+            <p className={styles.cardName}>Push natif iOS (APNs)</p>
+            <p className={styles.cardDesc}>Notifications push pour l'application iOS native, en complément du Web Push (navigateurs).</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={handleToggle}
+          />
+          <span className={styles.slider} />
+        </label>
+      </div>
+
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Clé .p8 (contenu du fichier)</label>
+          <textarea
+            className={styles.fieldInput}
+            rows={4}
+            style={{ fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', padding: '0.6rem 0.9rem' }}
+            placeholder={config._hasApiKey ? '••••••••' : '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
+            value={config.apiKey}
+            autoComplete="off"
+            onChange={e => setConfig(c => ({ ...c, apiKey: e.target.value }))}
+          />
+          {config._hasApiKey && !config.apiKey && (
+            <p className={styles.fieldHint}>Clé déjà enregistrée - laisser vide pour conserver.</p>
+          )}
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Key ID</label>
+          <input
+            className={styles.fieldInput}
+            type="text"
+            placeholder="ex. ABC123DEFG"
+            value={config.keyId}
+            onChange={e => setConfig(c => ({ ...c, keyId: e.target.value }))}
+          />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Team ID</label>
+          <input
+            className={styles.fieldInput}
+            type="text"
+            placeholder="ex. AB12CD34EF"
+            value={config.teamId}
+            onChange={e => setConfig(c => ({ ...c, teamId: e.target.value }))}
+          />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Bundle ID</label>
+          <input
+            className={styles.fieldInput}
+            type="text"
+            placeholder="com.ebookrequest.ios.full"
+            value={config.bundleId}
+            onChange={e => setConfig(c => ({ ...c, bundleId: e.target.value }))}
+          />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Environnement</label>
+          <select
+            className={styles.fieldInput}
+            value={config.production ? 'production' : 'sandbox'}
+            onChange={e => setConfig(c => ({ ...c, production: e.target.value === 'production' }))}
+          >
+            <option value="production">Production (TestFlight / App Store)</option>
+            <option value="sandbox">Sandbox (debug Xcode sur appareil)</option>
+          </select>
+        </div>
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function SettingsPanel() {
   return (
     <div className={styles.panel}>
@@ -1326,6 +1494,7 @@ export default function SettingsPanel() {
       <EmailProviderCard />
       <RSSFeedCard />
       <ManualModeCard />
+      <ApnsCard />
       <ProxyCard />
     </div>
   );

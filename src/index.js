@@ -256,6 +256,14 @@ mongoose.connect(process.env.MONGODB_URI, {
       else console.log('[Trending] Préchargement au démarrage désactivé (ConnectorSettings.trending.preloadOnStartup=false)');
     });
 
+    // Statut APNs (push natif iOS) au démarrage — utile pour diagnostiquer rapidement
+    // une clé .p8/config manquante sans avoir à passer par l'UI admin.
+    import('./services/apnsService.js').then(({ isApnsConfigured }) => {
+      isApnsConfigured().then(enabled => {
+        console.log(enabled ? '[APNs] Push natif iOS configuré' : '[APNs] Push natif iOS non configuré (APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID absents, ou ConnectorSettings.apns désactivé)');
+      });
+    });
+
     // Cron Valentine : re-tentative de téléchargement pour les demandes en attente
     startValentineCron();
 

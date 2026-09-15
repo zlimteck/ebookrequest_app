@@ -63,8 +63,8 @@ router.get('/status', requireAuth, async (req, res) => {
 
 // Indique si le serveur est configuré pour envoyer du push natif (APNs) — l'app iOS
 // s'en sert pour éviter de demander l'autorisation de notifications si ça ne sert à rien.
-router.get('/apns-status', requireAuth, (req, res) => {
-  res.json({ enabled: isApnsConfigured() });
+router.get('/apns-status', requireAuth, async (req, res) => {
+  res.json({ enabled: await isApnsConfigured() });
 });
 
 // Enregistre le jeton d'appareil APNs de l'app iOS (équivalent natif de /subscribe).
