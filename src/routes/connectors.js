@@ -485,12 +485,16 @@ router.get('/apns', requireAuth, requireAdmin, async (req, res) => {
     }
     res.json({
       enabled: doc?.enabled ?? false,
+      mode: doc?.apnsMode === 'relay' ? 'relay' : 'direct',
       apiKey: doc?.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc?.apiKey,
       keyId: doc?.apnsKeyId || '',
       teamId: doc?.apnsTeamId || '',
       bundleId: doc?.apnsBundleId || 'com.ebookrequest.ios.full',
       production: doc?.apnsProduction ?? true,
+      relayUrl: doc?.apnsRelayUrl || '',
+      relayToken: doc?.apnsRelayToken ? '••••••••' : '',
+      _hasRelayToken: !!doc?.apnsRelayToken,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -500,8 +504,13 @@ router.get('/apns', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/apns ───────────────────────────────────────────────────
 router.put('/apns', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, apiKey, _hasApiKey, keyId, teamId, bundleId, production } = req.body;
+    const {
+      enabled, mode, apiKey, _hasApiKey, keyId, teamId, bundleId, production,
+      relayUrl, relayToken, _hasRelayToken,
+    } = req.body;
     const update = enabled !== undefined ? { enabled: !!enabled } : {};
+
+    if (mode !== undefined) update.apnsMode = mode === 'relay' ? 'relay' : 'direct';
 
     if (apiKey && apiKey !== '••••••••') {
       update.apiKey = encrypt(apiKey);
@@ -514,6 +523,14 @@ router.put('/apns', requireAuth, requireAdmin, async (req, res) => {
     if (bundleId !== undefined) update.apnsBundleId = bundleId.trim();
     if (production !== undefined) update.apnsProduction = !!production;
 
+    if (relayUrl !== undefined) update.apnsRelayUrl = relayUrl.trim();
+    if (relayToken && relayToken !== '••••••••') {
+      update.apnsRelayToken = encrypt(relayToken);
+    }
+    if (!relayToken && !_hasRelayToken) {
+      update.apnsRelayToken = '';
+    }
+
     const doc = await ConnectorSettings.findOneAndUpdate(
       { service: 'apns' },
       update,
@@ -524,12 +541,16 @@ router.put('/apns', requireAuth, requireAdmin, async (req, res) => {
 
     res.json({
       enabled: doc.enabled,
+      mode: doc.apnsMode === 'relay' ? 'relay' : 'direct',
       apiKey: doc.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc.apiKey,
       keyId: doc.apnsKeyId || '',
       teamId: doc.apnsTeamId || '',
       bundleId: doc.apnsBundleId || 'com.ebookrequest.ios.full',
       production: doc.apnsProduction,
+      relayUrl: doc.apnsRelayUrl || '',
+      relayToken: doc.apnsRelayToken ? '••••••••' : '',
+      _hasRelayToken: !!doc.apnsRelayToken,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });

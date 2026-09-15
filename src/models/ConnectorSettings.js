@@ -47,6 +47,12 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   apnsTeamId:     { type: String, default: '' },
   apnsBundleId:   { type: String, default: '' },
   apnsProduction: { type: Boolean, default: true },
+  // Mode 'relay' : délègue l'envoi à un relais externe qui détient la vraie clé Apple
+  // (utile pour une instance self-hébergée sans compte Apple Developer). apnsRelayToken
+  // est chiffré comme apiKey ci-dessus, jamais stocké en clair.
+  apnsMode:        { type: String, enum: ['direct', 'relay'], default: 'direct' },
+  apnsRelayUrl:    { type: String, default: '' },
+  apnsRelayToken:  { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

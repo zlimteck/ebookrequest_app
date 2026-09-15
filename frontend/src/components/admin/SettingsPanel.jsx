@@ -1306,8 +1306,9 @@ function ManualModeCard() {
 
 function ApnsCard() {
   const [config, setConfig] = useState({
-    enabled: false, apiKey: '', _hasApiKey: false,
+    enabled: false, mode: 'direct', apiKey: '', _hasApiKey: false,
     keyId: '', teamId: '', bundleId: 'com.ebookrequest.ios.full', production: true,
+    relayUrl: '', relayToken: '', _hasRelayToken: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1318,12 +1319,16 @@ function ApnsCard() {
       .then(res => {
         setConfig({
           enabled: res.data.enabled ?? false,
+          mode: res.data.mode === 'relay' ? 'relay' : 'direct',
           apiKey: res.data.apiKey || '',
           _hasApiKey: res.data._hasApiKey ?? false,
           keyId: res.data.keyId || '',
           teamId: res.data.teamId || '',
           bundleId: res.data.bundleId || 'com.ebookrequest.ios.full',
           production: res.data.production ?? true,
+          relayUrl: res.data.relayUrl || '',
+          relayToken: res.data.relayToken || '',
+          _hasRelayToken: res.data._hasRelayToken ?? false,
         });
       })
       .catch(() => {})
@@ -1342,7 +1347,11 @@ function ApnsCard() {
     try {
       const { enabled, ...rest } = config;
       const res = await axiosAdmin.put('/api/connectors/apns', rest);
-      setConfig(c => ({ ...c, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+      setConfig(c => ({
+        ...c,
+        apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey,
+        relayToken: res.data.relayToken, _hasRelayToken: res.data._hasRelayToken,
+      }));
       showAlertMsg('success', 'Configuration enregistrée.');
     } catch (err) {
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
@@ -1356,7 +1365,12 @@ function ApnsCard() {
     setConfig(c => ({ ...c, enabled }));
     try {
       const res = await axiosAdmin.put('/api/connectors/apns', { ...config, enabled });
-      setConfig(c => ({ ...c, enabled: res.data.enabled, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+      setConfig(c => ({
+        ...c,
+        enabled: res.data.enabled,
+        apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey,
+        relayToken: res.data.relayToken, _hasRelayToken: res.data._hasRelayToken,
+      }));
     } catch (err) {
       setConfig(c => ({ ...c, enabled: !enabled }));
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
@@ -1395,65 +1409,110 @@ function ApnsCard() {
 
       <form className={styles.form} onSubmit={handleSave}>
         <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel}>Clé .p8 (contenu du fichier)</label>
-          <textarea
-            className={styles.fieldInput}
-            rows={4}
-            style={{ fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', padding: '0.6rem 0.9rem' }}
-            placeholder={config._hasApiKey ? '••••••••' : '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
-            value={config.apiKey}
-            autoComplete="off"
-            onChange={e => setConfig(c => ({ ...c, apiKey: e.target.value }))}
-          />
-          {config._hasApiKey && !config.apiKey && (
-            <p className={styles.fieldHint}>Clé déjà enregistrée - laisser vide pour conserver.</p>
-          )}
-        </div>
-
-        <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel}>Key ID</label>
-          <input
-            className={styles.fieldInput}
-            type="text"
-            placeholder="ex. ABC123DEFG"
-            value={config.keyId}
-            onChange={e => setConfig(c => ({ ...c, keyId: e.target.value }))}
-          />
-        </div>
-
-        <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel}>Team ID</label>
-          <input
-            className={styles.fieldInput}
-            type="text"
-            placeholder="ex. AB12CD34EF"
-            value={config.teamId}
-            onChange={e => setConfig(c => ({ ...c, teamId: e.target.value }))}
-          />
-        </div>
-
-        <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel}>Bundle ID</label>
-          <input
-            className={styles.fieldInput}
-            type="text"
-            placeholder="com.ebookrequest.ios.full"
-            value={config.bundleId}
-            onChange={e => setConfig(c => ({ ...c, bundleId: e.target.value }))}
-          />
-        </div>
-
-        <div className={styles.fieldRow}>
-          <label className={styles.fieldLabel}>Environnement</label>
+          <label className={styles.fieldLabel}>Mode</label>
           <select
             className={styles.fieldInput}
-            value={config.production ? 'production' : 'sandbox'}
-            onChange={e => setConfig(c => ({ ...c, production: e.target.value === 'production' }))}
+            value={config.mode}
+            onChange={e => setConfig(c => ({ ...c, mode: e.target.value }))}
           >
-            <option value="production">Production (TestFlight / App Store)</option>
-            <option value="sandbox">Sandbox (debug Xcode sur appareil)</option>
+            <option value="direct">Direct (ma propre clé Apple)</option>
+            <option value="relay">Via un relais</option>
           </select>
         </div>
+
+        {config.mode === 'direct' ? (
+          <>
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Clé .p8 (contenu du fichier)</label>
+              <textarea
+                className={styles.fieldInput}
+                rows={4}
+                style={{ fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', padding: '0.6rem 0.9rem' }}
+                placeholder={config._hasApiKey ? '••••••••' : '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'}
+                value={config.apiKey}
+                autoComplete="off"
+                onChange={e => setConfig(c => ({ ...c, apiKey: e.target.value }))}
+              />
+              {config._hasApiKey && !config.apiKey && (
+                <p className={styles.fieldHint}>Clé déjà enregistrée - laisser vide pour conserver.</p>
+              )}
+            </div>
+
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Key ID</label>
+              <input
+                className={styles.fieldInput}
+                type="text"
+                placeholder="ex. ABC123DEFG"
+                value={config.keyId}
+                onChange={e => setConfig(c => ({ ...c, keyId: e.target.value }))}
+              />
+            </div>
+
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Team ID</label>
+              <input
+                className={styles.fieldInput}
+                type="text"
+                placeholder="ex. AB12CD34EF"
+                value={config.teamId}
+                onChange={e => setConfig(c => ({ ...c, teamId: e.target.value }))}
+              />
+            </div>
+
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Bundle ID</label>
+              <input
+                className={styles.fieldInput}
+                type="text"
+                placeholder="com.ebookrequest.ios.full"
+                value={config.bundleId}
+                onChange={e => setConfig(c => ({ ...c, bundleId: e.target.value }))}
+              />
+            </div>
+
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Environnement</label>
+              <select
+                className={styles.fieldInput}
+                value={config.production ? 'production' : 'sandbox'}
+                onChange={e => setConfig(c => ({ ...c, production: e.target.value === 'production' }))}
+              >
+                <option value="production">Production (TestFlight / App Store)</option>
+                <option value="sandbox">Sandbox (debug Xcode sur appareil)</option>
+              </select>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>URL du relais</label>
+              <input
+                className={styles.fieldInput}
+                type="text"
+                placeholder="https://push-relay.mondomaine.fr"
+                value={config.relayUrl}
+                onChange={e => setConfig(c => ({ ...c, relayUrl: e.target.value }))}
+              />
+            </div>
+
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Jeton d'instance</label>
+              <textarea
+                className={styles.fieldInput}
+                rows={2}
+                style={{ fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical', padding: '0.6rem 0.9rem' }}
+                placeholder={config._hasRelayToken ? '••••••••' : 'Jeton fourni par l\'opérateur du relais'}
+                value={config.relayToken}
+                autoComplete="off"
+                onChange={e => setConfig(c => ({ ...c, relayToken: e.target.value }))}
+              />
+              {config._hasRelayToken && !config.relayToken && (
+                <p className={styles.fieldHint}>Jeton déjà enregistré - laisser vide pour conserver.</p>
+              )}
+            </div>
+          </>
+        )}
 
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>

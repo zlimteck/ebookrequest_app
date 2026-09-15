@@ -1,4 +1,5 @@
 import apn from '@parse/node-apn';
+import axios from 'axios';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import DeviceToken from '../models/DeviceToken.js';
 import { decrypt } from './cryptoService.js';
@@ -33,54 +34,94 @@ function buildProvider(cfg) {
   }
 }
 
-// Résout la config APNs (DB si activée, sinon repli .env) et construit le provider
-// correspondant. DB prioritaire une fois qu'un admin a configuré/activé le service
-// depuis Réglages — même logique que getEmailContext()/getProxyConfig().
+// Résout la config APNs (DB si activée, sinon repli .env pour le mode direct — le mode
+// relais n'a pas d'équivalent .env, réglage admin uniquement) et construit le provider
+// local correspondant (mode direct). DB prioritaire une fois qu'un admin a configuré/
+// activé le service depuis Réglages — même logique que getEmailContext()/getProxyConfig().
 async function getApnsContext() {
   if (cache.expiresAt > Date.now()) return cache.value;
 
   let cfg = {
+    mode: 'direct',
     keyP8: process.env.APNS_KEY_P8 || '',
     keyId: process.env.APNS_KEY_ID || '',
     teamId: process.env.APNS_TEAM_ID || '',
     bundleId: process.env.APNS_BUNDLE_ID || 'com.ebookrequest.ios.full',
     production: process.env.APNS_PRODUCTION !== 'false',
+    relayUrl: '',
+    relayToken: '',
   };
 
   try {
     const doc = await ConnectorSettings.findOne({ service: 'apns' }).lean();
     if (doc?.enabled) {
+      const mode = doc.apnsMode === 'relay' ? 'relay' : 'direct';
       const secret = doc.apiKey ? (decrypt(doc.apiKey) ?? doc.apiKey) : '';
+      const relayToken = doc.apnsRelayToken ? (decrypt(doc.apnsRelayToken) ?? doc.apnsRelayToken) : '';
       cfg = {
+        mode,
         keyP8: secret || cfg.keyP8,
         keyId: doc.apnsKeyId || cfg.keyId,
         teamId: doc.apnsTeamId || cfg.teamId,
         bundleId: doc.apnsBundleId || cfg.bundleId,
         production: doc.apnsProduction ?? cfg.production,
+        relayUrl: (doc.apnsRelayUrl || '').replace(/\/$/, ''),
+        relayToken,
       };
     }
   } catch {
-    // MongoDB indisponible → repli .env
+    // MongoDB indisponible → repli .env (mode direct uniquement)
   }
 
-  const context = { cfg, provider: buildProvider(cfg) };
+  const context = {
+    cfg,
+    provider: cfg.mode === 'direct' ? buildProvider(cfg) : null,
+  };
   cache = { value: context, expiresAt: Date.now() + CACHE_TTL_MS };
   return context;
 }
 
 export async function isApnsConfigured() {
-  const { provider } = await getApnsContext();
+  const { cfg, provider } = await getApnsContext();
+  if (cfg.mode === 'relay') return !!(cfg.relayUrl && cfg.relayToken);
   return provider !== null;
 }
 
+// Envoie via le relais externe (projet ebookrequest_apns) — ce serveur détient la vraie
+// clé Apple, cette instance ne lui transmet que les jetons d'appareil et le contenu de
+// la notification. Jamais de throw vers l'appelant : mêmes garanties de robustesse que
+// l'envoi direct (une panne réseau du relais ne doit jamais faire échouer sendApnsToUser).
+async function sendViaRelay(cfg, tokens, payload) {
+  try {
+    const res = await axios.post(`${cfg.relayUrl}/send`, {
+      deviceTokens: tokens,
+      title: payload.title || 'EbookRequest',
+      body: payload.body || '',
+      url: payload.url || '/',
+    }, {
+      headers: { Authorization: `Bearer ${cfg.relayToken}` },
+      timeout: 8000,
+    });
+
+    const invalidTokens = res.data?.invalidTokens || [];
+    if (invalidTokens.length) {
+      console.warn(`[APNs][relais] ${invalidTokens.length} jeton(s) invalide(s) signalé(s), suppression.`);
+      await DeviceToken.deleteMany({ token: { $in: invalidTokens } });
+    }
+  } catch (err) {
+    console.error('[APNs][relais] Erreur envoi:', err.response?.data?.error || err.message);
+  }
+}
+
 /**
- * Envoie une notification push native (APNs) à tous les appareils iOS d'un utilisateur.
+ * Envoie une notification push native (APNs) à tous les appareils iOS d'un utilisateur —
+ * en direct (clé Apple propre à cette instance) ou via un relais externe, selon la config.
  * @param {string} userId
  * @param {object} payload  { title, body, url }
  */
 export const sendApnsToUser = async (userId, payload) => {
   const { provider, cfg } = await getApnsContext();
-  if (!provider) return;
+  if (cfg.mode === 'relay' ? !(cfg.relayUrl && cfg.relayToken) : !provider) return;
 
   let deviceTokens;
   try {
@@ -90,6 +131,11 @@ export const sendApnsToUser = async (userId, payload) => {
     return;
   }
   if (!deviceTokens.length) return;
+
+  if (cfg.mode === 'relay') {
+    await sendViaRelay(cfg, deviceTokens.map(d => d.token), payload);
+    return;
+  }
 
   const notification = new apn.Notification();
   notification.topic = cfg.bundleId;

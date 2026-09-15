@@ -373,6 +373,64 @@ curl -X POST https://app.ndd.fr/api/notifications/ID/seen \
 
 ---
 
+## Notifications push
+
+### `GET /api/push/vapid-key`
+Clé publique VAPID pour l'abonnement Web Push (navigateurs).
+```bash
+curl https://app.ndd.fr/api/push/vapid-key \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/push/subscribe`
+```bash
+curl -X POST https://app.ndd.fr/api/push/subscribe \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"subscription": {"endpoint": "...", "keys": {"p256dh": "...", "auth": "..."}}}'
+```
+
+### `POST /api/push/unsubscribe`
+```bash
+curl -X POST https://app.ndd.fr/api/push/unsubscribe \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"endpoint": "..."}'
+```
+
+### `GET /api/push/status`
+Indique si l'utilisateur a une souscription Web Push active.
+```bash
+curl https://app.ndd.fr/api/push/status \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/push/apns-status`
+Indique si le serveur est configuré pour envoyer du push natif iOS (APNs), en direct ou via un relais.
+```bash
+curl https://app.ndd.fr/api/push/apns-status \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/push/apns/register`
+Enregistre le jeton d'appareil APNs de l'app iOS (upsert par token : un appareil reconnecté sous un autre compte repointe automatiquement vers le nouvel utilisateur).
+```bash
+curl -X POST https://app.ndd.fr/api/push/apns/register \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<jeton APNs de l'\''appareil>"}'
+```
+
+### `POST /api/push/apns/unregister`
+```bash
+curl -X POST https://app.ndd.fr/api/push/apns/unregister \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<jeton APNs de l'\''appareil>"}'
+```
+
+---
+
 ## Recherche Google Books
 
 ### `GET /api/books/search`
@@ -828,6 +886,29 @@ curl -X PUT https://app.ndd.fr/api/connectors/rss \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true, "url": "https://predb.me/?cats=books-ebooks&rss=1"}'
+```
+
+### `GET /api/connectors/apns`
+Configuration du push natif iOS (APNs). `mode` vaut `direct` (clé Apple propre à l'instance) ou `relay` (délègue l'envoi à un relais externe qui détient la vraie clé).
+```bash
+curl https://app.ndd.fr/api/connectors/apns \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/apns`
+Mode direct :
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/apns \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "mode": "direct", "apiKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----", "keyId": "ABC123DEFG", "teamId": "AB12CD34EF", "bundleId": "com.ebookrequest.ios.full", "production": true}'
+```
+Mode relais :
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/apns \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "mode": "relay", "relayUrl": "https://push-relay.mondomaine.fr", "relayToken": "jeton-fourni-par-le-relais"}'
 ```
 
 ### `GET /api/connectors/proxy`
