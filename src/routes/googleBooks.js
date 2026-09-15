@@ -6,6 +6,13 @@ import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
 
 const router = express.Router();
 
+// Annote la réponse avec la source ayant réellement répondu (Google Books,
+// Hardcover, Open Library...) — utile pour diagnostiquer un problème de
+// couverture/métadonnée propre à une source sans avoir à rajouter des logs
+// à chaque fois. Masqué par défaut, uniquement en debug explicite.
+const DEBUG_BOOK_SEARCH_SOURCE = process.env.DEBUG_BOOK_SEARCH_SOURCE === 'true';
+const debugSourceField = (source) => DEBUG_BOOK_SEARCH_SOURCE ? { _source: source } : {};
+
 // Exécute une requête axios en tenant compte du proxy configuré (mode 'default' :
 // proxy en priorité avec repli direct ; mode 'fallback' : direct en priorité avec repli proxy).
 async function axiosGetWithProxy(url, axiosOptions, label) {
@@ -348,10 +355,102 @@ async function fetchFromHardcoverSearch(q, limit) {
   }, { label: `Hardcover search "${q}"` });
 }
 
+// Recherche dédiée par ISBN exact (editions.isbn_13/isbn_10), bien plus fiable
+// que fetchFromHardcoverSearch en full-text sur une chaîne de chiffres — voir
+// schema.graphql de hardcoverapp/hardcover-docs, editions_bool_exp expose ces
+// deux champs pour un filtre _eq exact. Donne aussi accès à une vraie couverture
+// (edition.image.url) sans dépendre du fallback Open Library.
+async function fetchFromHardcoverISBN(isbn) {
+  const apiKey = await getHardcoverApiKey();
+  if (!apiKey) return null;
+  if (!takeHardcoverQuota()) {
+    console.warn('[Books] Hardcover quota (60 req/min) atteint, appel ignoré');
+    return null;
+  }
+
+  return withRetry(async () => {
+    const res = await axiosPostWithProxy(
+      'https://api.hardcover.app/v1/graphql',
+      {
+        query: `query FindByIsbn($isbn: String!) {
+          editions(where: { _or: [{ isbn_13: { _eq: $isbn } }, { isbn_10: { _eq: $isbn } }] }, limit: 1) {
+            image { url }
+            book {
+              id
+              title
+              description
+              pages
+              release_year
+              slug
+              rating
+              ratings_count
+              contributions { author { name } }
+            }
+          }
+        }`,
+        variables: { isbn },
+      },
+      {
+        timeout: HARDCOVER_TIMEOUT,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`,
+        },
+      },
+      `Hardcover ISBN "${isbn}"`
+    );
+    if (res.data?.errors) {
+      throw new Error(res.data.errors[0]?.message || 'Erreur Hardcover');
+    }
+    const edition = res.data?.data?.editions?.[0];
+    if (!edition?.book) return null;
+    return normalizeHardcoverDocument({
+      id:            edition.book.id,
+      title:         edition.book.title,
+      author_names:  (edition.book.contributions || []).map(c => c.author?.name).filter(Boolean),
+      release_year:  edition.book.release_year,
+      description:   edition.book.description,
+      pages:         edition.book.pages,
+      image:         edition.image,
+      slug:          edition.book.slug,
+      rating:        edition.book.rating,
+      ratings_count: edition.book.ratings_count,
+    });
+  }, { label: `Hardcover ISBN "${isbn}"` });
+}
+
 // ─── Open Library fallback ────────────────────────────────────────────────────
 
-function normalizeOpenLibraryISBN(data, isbn) {
-  const cover = data.cover?.large || data.cover?.medium || data.cover?.small || null;
+// L'API Covers d'Open Library (par ISBN) renvoie un placeholder "image absente"
+// en 200 OK au lieu d'un vrai 404 — un petit gris générique de quelques centaines
+// d'octets, indiscernable d'une vraie couverture sans regarder la taille réelle.
+// Seuil large (5 Ko) pour ne jamais confondre une vraie couverture compressée
+// avec ce placeholder, dont la taille exacte n'est pas garantie stable dans le temps.
+const OPENLIBRARY_COVER_PLACEHOLDER_MAX_BYTES = 5000;
+
+async function checkOpenLibraryCoverExists(isbn) {
+  const url = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+  try {
+    const res = await axiosGetWithProxy(url, {
+      responseType: 'arraybuffer',
+      timeout: 8000,
+      headers: OPENLIBRARY_HEADERS,
+      validateStatus: s => s === 200,
+    }, `OpenLibrary cover check "${isbn}"`);
+    const contentType = res.headers['content-type'] || '';
+    if (!contentType.startsWith('image/')) return false;
+    return res.data.byteLength > OPENLIBRARY_COVER_PLACEHOLDER_MAX_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+async function normalizeOpenLibraryISBN(data, isbn) {
+  let cover = data.cover?.large || data.cover?.medium || data.cover?.small || null;
+  if (!cover) {
+    const fallbackUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+    if (await checkOpenLibraryCoverExists(isbn)) cover = fallbackUrl;
+  }
   const year = (data.publish_date || '').match(/\d{4}/)?.[0] || '';
   return {
     id: `ol-isbn-${isbn}`,
@@ -409,7 +508,7 @@ async function fetchFromOpenLibraryISBN(isbn) {
       headers: OPENLIBRARY_HEADERS,
     }, `OpenLibrary ISBN "${isbn}"`);
     const data = res.data[`ISBN:${isbn}`];
-    return data ? normalizeOpenLibraryISBN(data, isbn) : null;
+    return data ? await normalizeOpenLibraryISBN(data, isbn) : null;
   }, { label: `OpenLibrary ISBN "${isbn}"` });
 }
 
@@ -594,6 +693,9 @@ router.get('/search', async (req, res) => {
 
     const googleEnabled = await isGoogleBooksSearchEnabled();
 
+    const isbnClean = (q || '').trim().replace(/[-\s]/g, '');
+    const isISBN = /^\d{10}$/.test(isbnClean) || /^\d{13}$/.test(isbnClean);
+
     // Pour auteur seul, la clé de cache ignore l'offset (pool complet mis en cache)
     const authorOnly = !!(author?.trim() && !q?.trim());
     // Discriminant de mode (patch) : evite qu'une meme chaine "q" tapee en
@@ -693,17 +795,47 @@ router.get('/search', async (req, res) => {
       }
     }
 
+    // Google Books trouve parfois la fiche d'un ISBN sans fournir de couverture
+    // (volumeInfo.imageLinks absent) — plutôt que de laisser Google écraser un
+    // vrai résultat vide de couverture, on tente de la compléter via l'API
+    // Covers d'Open Library (même vérification anti-placeholder que le fallback
+    // ISBN ci-dessous). Limité à la recherche par ISBN exact (pas une liste de
+    // résultats titre/auteur, pour éviter un aller-retour réseau par résultat).
+    if (isISBN && rawItems.length > 0 && offset === 0 && !authorOnly) {
+      const item = rawItems[0];
+      if (!item.volumeInfo?.imageLinks?.thumbnail) {
+        try {
+          const fallbackUrl = `https://covers.openlibrary.org/b/isbn/${isbnClean}-L.jpg`;
+          if (await checkOpenLibraryCoverExists(isbnClean)) {
+            item.volumeInfo = item.volumeInfo || {};
+            item.volumeInfo.imageLinks = { thumbnail: fallbackUrl, smallThumbnail: fallbackUrl };
+          }
+        } catch (coverErr) {
+          console.warn('[Books] Complément couverture Open Library échoué:', coverErr.message);
+        }
+      }
+    }
+
     // ── Fallback Hardcover puis Open Library si Google Books n'a rien trouvé (page 1) ─
     if (rawItems.length === 0 && offset === 0 && !authorOnly) {
-      const isbnClean = (q || '').trim().replace(/[-\s]/g, '');
-      const isISBN = /^\d{10}$/.test(isbnClean) || /^\d{13}$/.test(isbnClean);
+      if (isISBN) {
+        try {
+          const hcIsbnResult = await fetchFromHardcoverISBN(isbnClean);
+          if (hcIsbnResult) {
+            console.log(`[Books] Hardcover fallback ISBN → "${hcIsbnResult.volumeInfo.title}"`);
+            return res.json({ results: [hcIsbnResult], totalItems: 1, ...debugSourceField('hardcover-isbn') });
+          }
+        } catch (hcIsbnErr) {
+          console.warn('[Books] Hardcover fallback ISBN échoué:', hcIsbnErr.message);
+        }
+      }
 
       if (q?.trim()) {
         try {
           const hcResults = await fetchFromHardcoverSearch(q.trim(), limit);
           if (hcResults.length > 0) {
             console.log(`[Books] Hardcover fallback → ${hcResults.length} résultat(s)`);
-            return res.json({ results: hcResults, totalItems: hcResults.length });
+            return res.json({ results: hcResults, totalItems: hcResults.length, ...debugSourceField('hardcover') });
           }
         } catch (hcErr) {
           console.warn('[Books] Hardcover fallback échoué:', hcErr.message);
@@ -715,13 +847,13 @@ router.get('/search', async (req, res) => {
           const olResult = await fetchFromOpenLibraryISBN(isbnClean);
           if (olResult) {
             console.log(`[Books] Open Library fallback ISBN → "${olResult.volumeInfo.title}"`);
-            return res.json({ results: [olResult], totalItems: 1 });
+            return res.json({ results: [olResult], totalItems: 1, ...debugSourceField('openlibrary-isbn') });
           }
         } else if (q?.trim()) {
           const olResults = await fetchFromOpenLibrarySearch(q.trim(), limit);
           if (olResults.length > 0) {
             console.log(`[Books] Open Library fallback → ${olResults.length} résultat(s)`);
-            return res.json({ results: olResults, totalItems: olResults.length });
+            return res.json({ results: olResults, totalItems: olResults.length, ...debugSourceField('openlibrary-search') });
           }
         }
       } catch (olErr) {
@@ -744,7 +876,7 @@ router.get('/search', async (req, res) => {
       }
     }
 
-    res.json(responseData);
+    res.json({ ...responseData, ...debugSourceField(authorOnly ? 'google-author' : 'google') });
   } catch (error) {
     console.error(`Erreur lors de la recherche Google Books (q="${req.query.q || ''}", author="${req.query.author || ''}"):`, error.message);
 

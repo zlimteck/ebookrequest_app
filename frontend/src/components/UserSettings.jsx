@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axiosAdmin from '../axiosAdmin';
 import styles from './UserSettings.module.css';
@@ -2090,7 +2091,7 @@ const UserSettings = () => {
                             {(s.ip || '—').replace(/^::ffff:/, '')}{s.location ? ` · ${s.location}` : ''}
                           </span>
                           <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', marginTop: '0.1rem' }}>
-                            {s.loginMethod === 'passkey' ? 'Passkey' : s.loginMethod === '2fa' ? '2FA' : s.loginMethod === 'invitation' ? 'Invitation' : 'Mot de passe'}
+                            {s.loginMethod === 'passkey' ? 'Passkey' : s.loginMethod === '2fa' ? '2FA' : s.loginMethod === 'invitation' ? 'Invitation' : s.loginMethod === 'token' ? 'Accès par jeton (app/OPDS/MCP)' : 'Mot de passe'}
                             {' · '}
                             {new Date(s.lastActivity).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -2194,6 +2195,30 @@ const UserSettings = () => {
           </div>
         </div>
 
+        {/* ── Légal ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Légal
+          </h2>
+          <Link to="/privacy" className={styles.toggleRow} style={{ textDecoration: 'none' }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Politique de confidentialité</p>
+                <p className={styles.toggleDesc}>Comment vos données sont traitées</p>
+              </div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </Link>
+        </div>
     </div>
   );
 };

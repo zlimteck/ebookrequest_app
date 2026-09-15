@@ -1,6 +1,6 @@
 {
   "name": "ebookrequest",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "EbookRequest — gestion de demandes de livres numériques",
   "main": "src/index.js",
   "type": "module",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
+    "@parse/node-apn": "^8.1.0",
     "@simplewebauthn/server": "^13.3.2",
     "@types/bcryptjs": "^2.4.6",
     "axios": "^1.15.2",

@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -189,6 +190,19 @@ app.use('/api/sessions', sessionsRoutes);
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));
 
+// Politique de confidentialité — sert le contenu brut de PRIVACY.md (racine du
+// repo), lu à chaque requête plutôt que caché en mémoire au démarrage pour que
+// la page reflète toujours le fichier réellement déployé. Public (pas de
+// requireAuth) : accessible avant connexion, notamment pour l'app iOS.
+app.get('/api/legal/privacy', (req, res) => {
+  try {
+    const content = fs.readFileSync(path.join(__dirname, '../PRIVACY.md'), 'utf8');
+    res.json({ content });
+  } catch {
+    res.status(404).json({ error: 'Document introuvable.' });
+  }
+});
+
 // Servir le build React (production)
 const frontendBuild = path.join(__dirname, '../frontend/build');
 
@@ -196,6 +210,19 @@ const frontendBuild = path.join(__dirname, '../frontend/build');
 app.get('/env.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.send(`window.env = { VITE_API_URL: ${JSON.stringify(process.env.VITE_API_URL || '')} };`);
+});
+
+// Associated Domains (app iOS, Passkey/Face ID) — Apple vérifie les deux
+// emplacements. Doit être monté avant express.static/le catch-all SPA ci-dessous,
+// sinon ce chemin sans extension retombe sur index.html (React Router).
+const APPLE_APP_SITE_ASSOCIATION = {
+  webcredentials: {
+    apps: ['N5X9SZ4Q5B.com.ebookrequest.ios.full'],
+  },
+};
+app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association'], (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(APPLE_APP_SITE_ASSOCIATION);
 });
 
 app.use(express.static(frontendBuild));
@@ -227,6 +254,14 @@ mongoose.connect(process.env.MONGODB_URI, {
     isTrendingPreloadEnabled().then(enabled => {
       if (enabled) initializeTrendingBooksCache();
       else console.log('[Trending] Préchargement au démarrage désactivé (ConnectorSettings.trending.preloadOnStartup=false)');
+    });
+
+    // Statut APNs (push natif iOS) au démarrage — utile pour diagnostiquer rapidement
+    // une clé .p8/config manquante sans avoir à passer par l'UI admin.
+    import('./services/apnsService.js').then(({ isApnsConfigured }) => {
+      isApnsConfigured().then(enabled => {
+        console.log(enabled ? '[APNs] Push natif iOS configuré' : '[APNs] Push natif iOS non configuré (APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID absents, ou ConnectorSettings.apns désactivé)');
+      });
     });
 
     // Cron Valentine : re-tentative de téléchargement pour les demandes en attente

@@ -94,14 +94,18 @@ export const createBookRequest = async (req, res) => {
           .filter(t => t.shelves.length)
       : [];
     
-    // Vérification du lien côté backend
-    try {
-      const url = new URL(link);
-      if (!/^https?:/.test(url.protocol)) {
-        return res.status(400).json({ error: 'Le lien doit commencer par http:// ou https://.' });
+    // Vérification du lien côté backend — optionnel (ex. demande créée sans
+    // recherche préalable, comme via un raccourci Siri qui n'envoie que
+    // titre/auteur), on ne valide le format que s'il est fourni.
+    if (link) {
+      try {
+        const url = new URL(link);
+        if (!/^https?:/.test(url.protocol)) {
+          return res.status(400).json({ error: 'Le lien doit commencer par http:// ou https://.' });
+        }
+      } catch {
+        return res.status(400).json({ error: "Le lien fourni n'est pas une URL valide." });
       }
-    } catch {
-      return res.status(400).json({ error: "Le lien fourni n'est pas une URL valide." });
     }
     
     // Récupérer l'utilisateur complet depuis la base de données

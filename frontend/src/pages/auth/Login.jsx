@@ -355,6 +355,11 @@ function Login() {
           Vous avez un code d'invitation ? S'inscrire
         </Link>
       </div>
+      <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+        <Link to="/privacy" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textDecoration: 'none' }}>
+          Politique de confidentialité
+        </Link>
+      </div>
     </div>
   );
 }
