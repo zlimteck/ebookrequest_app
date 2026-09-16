@@ -29,6 +29,7 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
   const [loading, setLoading] = useState(true);
   const [checkingOwnerLive, setCheckingOwnerLive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingToCalibre, setSendingToCalibre] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -98,6 +99,27 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
         : [...current, shelfName];
       return { ...prev, [userId]: next };
     });
+  };
+
+  const handleSendOwnerToCalibre = async () => {
+    const owner = candidates.find(u => u.username === request.username);
+    if (!owner) return;
+    setSendingToCalibre(true);
+    setError('');
+    try {
+      const res = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, {
+        shelves: selections[owner._id] || [],
+      });
+      setStatuses(prev => ({
+        ...prev,
+        [owner._id]: { status: res.data?.failed?.length ? 'partial' : 'success', error: res.data?.failed?.length ? `Échec sur : ${res.data.failed.map(f => f.name).join(', ')}` : null },
+      }));
+      onUpdated?.();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de l\'envoi vers Calibre.');
+    } finally {
+      setSendingToCalibre(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -189,7 +211,7 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
                   <div className={styles.userHeader}>
                     <span className={styles.userName}>{u.username}</span>
                     {isOwner && <span className={styles.statusBadge} title="A fait la demande">Propriétaire</span>}
-                    {isOwner && checkingOwnerLive && <span className={styles.emptyMsg} style={{ fontSize: '0.8em' }}>Vérification…</span>}
+                    {isOwner && <span className={styles.emptyMsg} style={{ fontSize: '0.8em', visibility: checkingOwnerLive ? 'visible' : 'hidden' }}>Vérification…</span>}
                     {st?.status && (
                       <span
                         className={`${styles.statusBadge} ${
@@ -220,6 +242,19 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
                 </div>
               );
             })
+          )}
+          {!loading && candidates.some(u => u.username === request.username) && (
+            <div className={styles.userSection} style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem' }}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={handleSendOwnerToCalibre}
+                disabled={sendingToCalibre || submitting}
+                title="Envoie le livre vers Calibre-Web sans forcément choisir d'étagère"
+              >
+                {sendingToCalibre ? 'Envoi…' : 'Envoyer vers Calibre (sans étagère)'}
+              </button>
+            </div>
           )}
         </div>
 

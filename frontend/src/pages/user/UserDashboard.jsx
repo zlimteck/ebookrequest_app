@@ -73,6 +73,7 @@ const UserDashboard = () => {
   const [shelfModalSelection, setShelfModalSelection] = useState([]);
   const [shelfModalSaving, setShelfModalSaving] = useState(false);
   const [shelfModalChecking, setShelfModalChecking] = useState(false);
+  const [shelfModalSendingOnly, setShelfModalSendingOnly] = useState(false);
   const [shelfModalError, setShelfModalError] = useState('');
   // Multishelf multi-utilisateurs (admin) — comptes Calibre-Web ciblables en
   // plus du propriétaire de la demande, directement depuis "Mes demandes".
@@ -294,6 +295,27 @@ const UserDashboard = () => {
       setShelfModalError(err.response?.data?.error || 'Erreur lors de l\'envoi vers les étagères');
     } finally {
       setShelfModalSaving(false);
+    }
+  };
+
+  // Envoi vers Calibre sans passer par la validation "au moins une étagère" —
+  // n'a de sens (et n'est affiché) que quand le livre est confirmé absent.
+  const handleSendToCalibreOnly = async () => {
+    if (!shelfModalRequest) return;
+    setShelfModalSendingOnly(true);
+    setShelfModalError('');
+    try {
+      const res = await axiosAdmin.post(`/api/users/calibre/requests/${shelfModalRequest._id}/shelves`, {
+        shelves: shelfModalSelection,
+      });
+      setRequests(prev => prev.map(r => r._id === shelfModalRequest._id
+        ? { ...r, selectedShelves: shelfModalSelection, calibrePush: { ...r.calibrePush, status: res.data.failed?.length ? 'partial' : 'success', calibreBookId: res.data.calibreBookId } }
+        : r));
+      toast.success('Livre envoyé vers Calibre-Web');
+    } catch (err) {
+      setShelfModalError(err.response?.data?.error || 'Erreur lors de l\'envoi vers Calibre');
+    } finally {
+      setShelfModalSendingOnly(false);
     }
   };
   
@@ -1411,11 +1433,9 @@ const UserDashboard = () => {
           <div className={styles.modalContent} ref={shelfModalRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Envoyer vers des étagères">
             <h2>Envoyer vers des étagères</h2>
             <p className={styles.modalBookTitle}>« {shelfModalRequest.title} »</p>
-            {shelfModalChecking && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem' }}>
-                Vérification de l'état réel sur Calibre-Web…
-              </p>
-            )}
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem', visibility: shelfModalChecking ? 'visible' : 'hidden' }}>
+              Vérification de l'état réel sur Calibre-Web…
+            </p>
             {calibreShelves.length === 0 ? (
               <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
                 Aucune étagère configurée — ajoutez-en dans les Réglages.
@@ -1459,6 +1479,17 @@ const UserDashboard = () => {
                 ))}
               </div>
             )}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <button
+                type="button"
+                className={styles.modalCancelButton}
+                onClick={handleSendToCalibreOnly}
+                disabled={shelfModalSendingOnly || shelfModalSaving}
+                title="Envoie le livre vers Calibre-Web sans forcément choisir d'étagère"
+              >
+                {shelfModalSendingOnly ? 'Envoi…' : 'Envoyer vers Calibre (sans étagère)'}
+              </button>
+            </div>
             {shelfModalError && (
               <p style={{ fontSize: '0.83rem', color: 'var(--color-danger, #ef4444)', marginBottom: '1rem' }}>{shelfModalError}</p>
             )}

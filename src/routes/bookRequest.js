@@ -343,6 +343,7 @@ router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) =>
 
     const targetUsers = await User.find({ _id: { $in: cleanedTargets.map(t => t.userId) } });
     const usersById = new Map(targetUsers.map(u => [u._id.toString(), u]));
+    const owner = await User.findById(request.user).select('calibreWeb');
 
     // calibreBookId : déjà connu (push du propriétaire) sinon retrouvé via le
     // premier compte Calibre-Web valide parmi les cibles.
@@ -357,6 +358,46 @@ router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) =>
           calibreBookId = await resolveCalibreBookId(request, cfg.url.replace(/\/$/, ''), cfg.username, password);
           if (calibreBookId) break;
         } catch {}
+      }
+    }
+    if (!calibreBookId) {
+      // Toujours introuvable chez les comptes ciblés : probablement pas encore
+      // dans Calibre du tout (ou plus : ID périmé). Upload complet plutôt
+      // qu'échouer — via le compte du propriétaire de la demande en priorité
+      // ("son" livre), sinon le premier compte ciblé qui a Calibre-Web configuré.
+      const uploaderUser = owner?.calibreWeb?.enabled && owner?.calibreWeb?.url
+        ? owner
+        : targetUsers.find(u => u.calibreWeb?.enabled && u.calibreWeb?.url);
+
+      if (uploaderUser) {
+        const { pushToCalibre } = await import('../services/calibreService.js');
+        const { default: path } = await import('path');
+        const { default: fs } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
+        const filePath = path.join(__dirname2, '../../uploads', request.filePath);
+        if (fs.existsSync(filePath)) {
+          try {
+            // Étagères du propriétaire lui-même au passage, si c'est son compte
+            // qui sert à l'upload — pas de raison de les perdre au passage.
+            const ownerShelves = uploaderUser._id.toString() === request.user.toString()
+              ? (request.selectedShelves || [])
+              : [];
+            const result = await pushToCalibre(uploaderUser, filePath, request.title, ownerShelves);
+            calibreBookId = result?.calibreBookId || null;
+            if (calibreBookId && uploaderUser._id.toString() === request.user.toString()) {
+              request.selectedShelves = ownerShelves;
+              request.calibrePush = {
+                status: result.shelfResult?.failed?.length ? 'partial' : 'success',
+                error: result.shelfResult?.failed?.length
+                  ? `Étagère(s) en échec : ${result.shelfResult.failed.map(f => f.name).join(', ')}`
+                  : null,
+                pushedAt: new Date(),
+                calibreBookId,
+              };
+            }
+          } catch {}
+        }
       }
     }
     if (!calibreBookId) {
