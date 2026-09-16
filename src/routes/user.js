@@ -425,22 +425,39 @@ router.put('/valentine', requireAuth, async (req, res) => {
 });
 
 // GET /api/users/valentine/quota
+// Utilise le compte Valentine personnel de l'utilisateur s'il en a configuré un,
+// sinon retombe sur le compte admin partagé (celui que la recherche directe
+// utilise réellement pour tout le monde — voir getConfig() dans valentineService.js).
+// `source` indique lequel des deux a répondu, pour l'affichage côté client.
 router.get('/valentine/quota', requireAuth, async (req, res) => {
   try {
     const { getValentineQuota } = await import('../services/valentineService.js');
     const user = await User.findById(req.user.id).select('valentine');
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
-    const raw = user?.valentine?.password || '';
-    const password = decrypt(raw) ?? raw;
-    const username = user?.valentine?.username || '';
+    const rawOwn = user?.valentine?.password || '';
+    const ownPassword = decrypt(rawOwn) ?? rawOwn;
+    const ownUsername = user?.valentine?.username || '';
+
+    let username = ownUsername;
+    let password = ownPassword;
+    let source = 'own';
+
+    if (!username || !password) {
+      const ConnectorSettings = (await import('../models/ConnectorSettings.js')).default;
+      const adminDoc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
+      const rawAdmin = adminDoc?.password || '';
+      username = adminDoc?.enabled ? (adminDoc?.username || '') : '';
+      password = adminDoc?.enabled ? (decrypt(rawAdmin) ?? rawAdmin) : '';
+      source = 'admin';
+    }
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Aucun compte Valentine configuré' });
     }
 
     const quota = await getValentineQuota(username, password);
-    res.json(quota);
+    res.json({ ...quota, source });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erreur lors de la récupération du quota' });
   }

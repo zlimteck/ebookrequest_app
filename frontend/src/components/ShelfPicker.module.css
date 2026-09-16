@@ -3,6 +3,13 @@
   display: inline-block;
 }
 
+@media (max-width: 600px) {
+  .wrap {
+    display: block;
+    width: 100%;
+  }
+}
+
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -14,6 +21,10 @@
   padding: 0.55rem 1rem;
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+.countBadge {
+  color: var(--color-text);
 }
 
 .panel {

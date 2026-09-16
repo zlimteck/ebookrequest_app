@@ -134,11 +134,11 @@ router.get('/direct-search', requireAuth, async (req, res) => {
     }
 
     if (mode === 'author' || mode === 'series') {
-      const matches = await searchValentineMatches(query, mode);
+      const matches = await searchValentineMatches(query, mode, req.user.id);
       return res.json({ mode, matches });
     }
 
-    const results = await searchValentineTitlesFast(query);
+    const results = await searchValentineTitlesFast(query, req.user.id);
     res.json({ mode: 'title', results });
   } catch (err) {
     console.error(`[direct-search] mode=${req.query.mode} q=${req.query.q} :`, err.message);
@@ -165,7 +165,7 @@ router.get('/direct-search-books', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'URL invalide.' });
     }
 
-    const results = await getValentineListingBooks(pageUrl, type, name);
+    const results = await getValentineListingBooks(pageUrl, type, name, req.user.id);
     res.json({ results });
   } catch (err) {
     console.error(`[direct-search-books] type=${req.query.type} url=${req.query.url} :`, err.message);

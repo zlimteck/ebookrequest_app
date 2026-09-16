@@ -493,7 +493,7 @@ export const directDownloadRequest = async (req, res) => {
       // supplémentaire ici.
       const result = isFourtoutici
         ? await downloadFromFourtoutici(sourceId, newRequest._id.toString())
-        : await downloadFromValentineById(newRequest._id.toString(), sourceId);
+        : await downloadFromValentineById(newRequest._id.toString(), sourceId, user._id.toString());
       const completed = await BookRequest.findById(newRequest._id).lean();
       return res.status(201).json({ success: true, request: completed, ...result });
     } catch (dlErr) {

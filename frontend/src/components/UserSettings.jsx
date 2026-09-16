@@ -1141,6 +1141,14 @@ const UserSettings = () => {
             <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '0 0 1rem' }}>
               Utilisez votre propre compte <a href="https://valentine.wtf" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>valentine.wtf</a> pour les téléchargements automatiques. Sans compte personnel, le compte administrateur est utilisé.
             </p>
+            <div className={`${styles.alert} ${styles.alertWarning}`} style={{ marginBottom: '1rem' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>
+                <strong>Risque de ban de compte.</strong> Tous les comptes de cette instance (le vôtre comme celui de l'administrateur) se connectent à Valentine depuis la même adresse IP du serveur. Valentine peut interpréter plusieurs comptes actifs derrière une même IP comme un comportement suspect, donc l'usage d'un compte personnel n'élimine pas ce risque, il le déplace simplement sur votre propre compte plutôt que sur celui de l'administrateur.
+              </span>
+            </div>
             {valentineQuota && !valentineQuota.error && (
               <div className={styles.valentineQuotaBar}>
                 <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">

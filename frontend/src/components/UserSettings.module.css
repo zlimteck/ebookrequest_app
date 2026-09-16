@@ -23,6 +23,23 @@
   border-color: rgba(239,68,68,0.25);
 }
 
+.alertWarning {
+  background: rgba(245,158,11,0.08);
+  color: #f59e0b;
+  border-color: rgba(245,158,11,0.25);
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+.alertWarning svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.alertWarning strong {
+  font-weight: 600;
+}
+
 /* ── Page layout ── */
 .pageWrapper {
   max-width: 1400px;

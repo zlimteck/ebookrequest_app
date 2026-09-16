@@ -111,6 +111,7 @@ const PLACEHOLDERS = {
  */
 const DirectSourceSearch = ({
   onCompleted,
+  onModeChange,
   targetUserId,
   calibreEnabled,
   selectedShelves = [],
@@ -125,6 +126,14 @@ const DirectSourceSearch = ({
     if (VALID_MODES.includes(stored) && (stored === 'fourtoutici' ? fourtouticiEnabled : valentineEnabled)) return stored;
     return availableModes[0]?.value || 'title';
   });
+  // Notifie le parent (UserForm) du mode réellement actif — sert notamment à
+  // savoir s'il faut afficher/rafraîchir le quota Valentine (sans objet pour
+  // Fourtoutici), une info que le parent n'a sinon aucun moyen de connaître
+  // puisque ce state est interne à ce composant.
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, [mode, onModeChange]);
+
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);

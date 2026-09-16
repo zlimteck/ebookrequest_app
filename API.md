@@ -134,6 +134,13 @@ curl -X POST https://app.ndd.fr/api/users/opds-token/regenerate \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/users/valentine/quota`
+Quota de téléchargements Valentine restants. Utilise le compte personnel de l'utilisateur s'il en a configuré un (`source: "own"`), sinon le compte admin partagé (`source: "admin"`).
+```bash
+curl https://app.ndd.fr/api/users/valentine/quota \
+  -H "Authorization: Bearer <token>"
+```
+
 ---
 
 ## Demandes de livres
@@ -196,7 +203,7 @@ curl "https://app.ndd.fr/api/requests/fourtoutici-search?q=Dune" \
 ```
 
 ### `GET /api/requests/direct-search?mode=title|author|series&q=...`
-Recherche immédiate sur Valentine. En mode `title`, renvoie une liste de livres directement téléchargeables. En mode `author`/`series`, renvoie une liste de fiches à explorer ensuite via `direct-search-books`.
+Recherche immédiate sur Valentine. En mode `title`, renvoie une liste de livres directement téléchargeables. En mode `author`/`series`, renvoie une liste de fiches à explorer ensuite via `direct-search-books`. Utilise le compte Valentine personnel de l'utilisateur s'il en a configuré un (**Paramètres**), sinon le compte admin partagé — idem pour `direct-search-books` et `direct-download`.
 ```bash
 curl "https://app.ndd.fr/api/requests/direct-search?mode=title&q=Dune" \
   -H "Authorization: Bearer <token>"

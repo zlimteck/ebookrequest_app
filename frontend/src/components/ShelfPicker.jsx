@@ -34,7 +34,10 @@ const ShelfPicker = ({
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 3v18h18" /><path d="M3 8h18" /><path d="M3 13h18" /><path d="M3 18h18" />
         </svg>
-        Étagères{(selectedShelves.length + extraShelfCount) ? ` (${selectedShelves.length + extraShelfCount})` : ''}
+        Étagères
+        {(selectedShelves.length + extraShelfCount) > 0 && (
+          <span className={styles.countBadge}> ({selectedShelves.length + extraShelfCount})</span>
+        )}
       </button>
 
       {open && (

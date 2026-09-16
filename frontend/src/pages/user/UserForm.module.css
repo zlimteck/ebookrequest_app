@@ -56,13 +56,24 @@
 /* ── Quota bar compact ── */
 .quotaBar {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
   margin-bottom: 1.25rem;
   padding: 0.5rem 0.75rem;
   background: var(--color-bg3);
   border-radius: 8px;
   border: 1px solid var(--color-border);
+}
+
+/* Chaque ligne est un flex row indépendant, mais comme les deux lignes ont la
+   même largeur totale (celle de .quotaBar) et que la barre (flex:1) pousse le
+   compteur jusqu'au bord droit dans chaque ligne, les deux chiffres tombent
+   déjà naturellement au même bord droit sans avoir besoin d'une grille
+   partagée — y compris quand une ligne n'a pas de barre du tout (total null). */
+.quotaLine {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .quotaBarLabel {
@@ -86,6 +97,7 @@
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 @media (max-width: 500px) {
@@ -259,7 +271,7 @@
   background: var(--color-bg3);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  color: var(--color-text);
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   font-family: inherit;
   cursor: pointer;
@@ -286,6 +298,13 @@
   .toggleSearch {
     width: 100%;
     height: auto;
+  }
+
+  .topRowShelfBtn {
+    width: 100%;
+    height: auto;
+    padding: 0.45rem 0.9rem;
+    justify-content: center;
   }
 }
 

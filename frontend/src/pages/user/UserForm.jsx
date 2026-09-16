@@ -143,6 +143,22 @@ function UserForm() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [quota, setQuota] = useState(null);
   const [valentineQuota, setValentineQuota] = useState(null);
+  // Sous-mode actif dans DirectSourceSearch (title/author/series/fourtoutici) —
+  // remonté via onModeChange, pour savoir si Valentine est réellement concerné
+  // (Fourtoutici n'a ni quota ni compte à surveiller).
+  const [directSubMode, setDirectSubMode] = useState(null);
+
+  // Quota Valentine (compte perso si configuré, sinon compte admin partagé —
+  // voir GET /api/users/valentine/quota) : affiché uniquement en recherche
+  // directe ET quand le sous-mode actif est bien Valentine, pas Fourtoutici.
+  useEffect(() => {
+    if (searchMode !== 'direct' || directSubMode === 'fourtoutici') { setValentineQuota(null); return; }
+    let cancelled = false;
+    axiosAdmin.get('/api/users/valentine/quota')
+      .then(res => { if (!cancelled) setValentineQuota(res.data); })
+      .catch(() => { if (!cancelled) setValentineQuota(null); });
+    return () => { cancelled = true; };
+  }, [searchMode, directSubMode]);
   const isAdmin = localStorage.getItem('role') === 'admin';
   const [users, setUsers] = useState([]);
   const [targetUserId, setTargetUserId] = useState('');
@@ -821,42 +837,44 @@ function UserForm() {
       <div className={styles.formCard}>
 
       {/* ── Quota compact ── */}
-      {valentineQuota && !valentineQuota.error && (
+      {(quota || (valentineQuota && !valentineQuota.error)) && (
         <div className={styles.quotaBar}>
-          <span className={styles.quotaBarLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine"
-              style={{ height: '11px', width: 'auto', filter: 'brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%)' }} />
-            Valentine
-          </span>
-          {valentineQuota.total != null && (
-            <div className={styles.quotaBarTrack}>
-              <div className={`${styles.quotaBarFill} ${valentineQuota.remaining === 0 ? styles.quotaBarEmpty : valentineQuota.remaining <= 5 ? styles.quotaBarLow : styles.quotaBarOk}`}
-                style={{ width: `${Math.round(((valentineQuota.total - valentineQuota.remaining) / valentineQuota.total) * 100)}%` }} />
+          {quota && (
+            <div className={styles.quotaLine}>
+              <span className={styles.quotaBarLabel}>
+                {quota.used} demande{quota.used > 1 ? 's' : ''} utilisée{quota.used > 1 ? 's' : ''}
+                {' '}sur {quota.days ?? 30} jours
+                {isAdmin && targetUserId && users.find(u => u._id === targetUserId) && (
+                  <span style={{ color: 'var(--color-accent)', marginLeft: '0.4rem' }}>
+                    · {users.find(u => u._id === targetUserId).username}
+                  </span>
+                )}
+              </span>
+              <div className={styles.quotaBarTrack}>
+                <div className={`${styles.quotaBarFill} ${quota.unlimited ? styles.quotaBarUnlimited : quota.remaining === 0 ? styles.quotaBarEmpty : quota.remaining <= 2 ? styles.quotaBarLow : styles.quotaBarOk}`}
+                  style={{ width: quota.unlimited ? '100%' : `${Math.round((quota.used / quota.limit) * 100)}%` }} />
+              </div>
+              <span className={`${styles.quotaBarCount} ${quota.unlimited ? styles.quotaCountUnlimited : quota.remaining === 0 ? styles.quotaCountEmpty : quota.remaining <= 2 ? styles.quotaCountLow : styles.quotaCountOk}`}>
+                {quota.unlimited ? '∞ Illimité' : `${quota.remaining} / ${quota.limit} restante${quota.remaining > 1 ? 's' : ''}`}
+              </span>
             </div>
           )}
-          <span className={`${styles.quotaBarCount} ${valentineQuota.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.remaining <= 5 ? styles.quotaCountLow : styles.quotaCountOk}`}>
-            {valentineQuota.remaining ?? '—'}{valentineQuota.total != null && ` / ${valentineQuota.total}`} restant{valentineQuota.remaining > 1 ? 's' : ''}
-          </span>
-        </div>
-      )}
-      {quota && (
-        <div className={styles.quotaBar}>
-          <span className={styles.quotaBarLabel}>
-            {quota.used} demande{quota.used > 1 ? 's' : ''} utilisée{quota.used > 1 ? 's' : ''}
-            {' '}sur {quota.days ?? 30} jours
-            {isAdmin && targetUserId && users.find(u => u._id === targetUserId) && (
-              <span style={{ color: 'var(--color-accent)', marginLeft: '0.4rem' }}>
-                · {users.find(u => u._id === targetUserId).username}
+          {valentineQuota && !valentineQuota.error && (
+            <div className={styles.quotaLine}>
+              <span className={styles.quotaBarLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine"
+                  style={{ height: '11px', width: 'auto', filter: 'brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%)' }} />
+                Valentine
               </span>
-            )}
-          </span>
-          <div className={styles.quotaBarTrack}>
-            <div className={`${styles.quotaBarFill} ${quota.unlimited ? styles.quotaBarUnlimited : quota.remaining === 0 ? styles.quotaBarEmpty : quota.remaining <= 2 ? styles.quotaBarLow : styles.quotaBarOk}`}
-              style={{ width: quota.unlimited ? '100%' : `${Math.round((quota.used / quota.limit) * 100)}%` }} />
-          </div>
-          <span className={`${styles.quotaBarCount} ${quota.unlimited ? styles.quotaCountUnlimited : quota.remaining === 0 ? styles.quotaCountEmpty : quota.remaining <= 2 ? styles.quotaCountLow : styles.quotaCountOk}`}>
-            {quota.unlimited ? '∞ Illimité' : `${quota.remaining} / ${quota.limit} restante${quota.remaining > 1 ? 's' : ''}`}
-          </span>
+              <div className={styles.quotaBarTrack}>
+                <div className={`${styles.quotaBarFill} ${valentineQuota.remaining === 0 ? styles.quotaBarEmpty : valentineQuota.remaining <= 5 ? styles.quotaBarLow : styles.quotaBarOk}`}
+                  style={{ width: valentineQuota.total != null ? `${Math.round(((valentineQuota.total - valentineQuota.remaining) / valentineQuota.total) * 100)}%` : '100%' }} />
+              </div>
+              <span className={`${styles.quotaBarCount} ${valentineQuota.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.remaining <= 5 ? styles.quotaCountLow : styles.quotaCountOk}`}>
+                {valentineQuota.remaining ?? '—'}{valentineQuota.total != null && ` / ${valentineQuota.total}`} restant{valentineQuota.remaining > 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -946,6 +964,7 @@ function UserForm() {
       {searchMode === 'direct' && (
         <DirectSourceSearch
           onCompleted={handleDirectCompleted}
+          onModeChange={setDirectSubMode}
           targetUserId={isAdmin ? targetUserId : ''}
           calibreEnabled={calibreEnabled}
           selectedShelves={selectedShelves}

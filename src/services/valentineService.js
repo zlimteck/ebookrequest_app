@@ -266,6 +266,27 @@ async function getConfig() {
   return { ...doc, password: decrypt(raw) ?? raw }; // fallback si ancien mot de passe en clair
 }
 
+// Recherche directe : utilise le compte Valentine personnel de l'utilisateur
+// s'il en a configuré un (mêmes url/enabled/directSearchEnabled que l'admin,
+// seuls username/password diffèrent), sinon retombe sur le compte admin
+// partagé — comme getConfig() seul le faisait jusqu'ici pour tout le monde.
+async function getConfigForUser(userId) {
+  const base = await getConfig();
+  if (!userId) return base;
+  try {
+    const user = await User.findById(userId).select('valentine').lean();
+    const rawPwd = user?.valentine?.password || '';
+    const password = decrypt(rawPwd) ?? rawPwd;
+    const username = user?.valentine?.username || '';
+    if (username && password) {
+      return { ...base, username, password };
+    }
+  } catch {
+    // Repli silencieux sur le compte admin en cas d'erreur DB
+  }
+  return base;
+}
+
 /**
  * La recherche directe (bypass Google Books) multiplie les échanges avec
  * Valentine (risque de ban de compte) — opt-in, un admin doit l'activer
@@ -615,9 +636,9 @@ function addValentineUrls(baseUrl, items) {
  * @param {string} type - 'author' | 'series'
  * @returns {Promise<Array<{id, name, url}>>}
  */
-export function searchValentineMatches(query, type) {
+export function searchValentineMatches(query, type, userId) {
   return withValentineLock(async () => {
-    const config = await getConfig();
+    const config = await getConfigForUser(userId);
     if (!config.enabled || !config.username || !config.password) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
@@ -642,9 +663,9 @@ export function searchValentineMatches(query, type) {
  *   get_author_books réutilise le nom de l'auteur recherché, pas un champ par carte).
  * @returns {Promise<Array>}
  */
-export function getValentineListingBooks(pageUrl, type, fallbackName) {
+export function getValentineListingBooks(pageUrl, type, fallbackName, userId) {
   return withValentineLock(async () => {
-    const config = await getConfig();
+    const config = await getConfigForUser(userId);
     if (!config.enabled || !config.username || !config.password) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
@@ -1040,9 +1061,9 @@ export function searchOnValentine(query) {
  * volontairement sans aucun enrichissement, pour rester rapide. À ne pas
  * confondre avec searchOnValentine ci-dessus (admin, retry manuel, enrichi).
  */
-export function searchValentineTitlesFast(query) {
+export function searchValentineTitlesFast(query, userId) {
   return withValentineLock(async () => {
-    const config = await getConfig();
+    const config = await getConfigForUser(userId);
     if (!config.enabled || !config.username || !config.password) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
@@ -1104,9 +1125,9 @@ export function quickSearchOnValentine(title, author) {
 /**
  * Download a specific ebook by its valentine ID for a given request (admin manual action).
  */
-export function downloadFromValentineById(requestId, ebookId) {
+export function downloadFromValentineById(requestId, ebookId, userId) {
   return withValentineLock(async () => {
-    const config = await getConfig();
+    const config = await getConfigForUser(userId);
     if (!config.enabled || !config.username || !config.password) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
