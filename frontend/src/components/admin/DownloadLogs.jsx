@@ -5,13 +5,22 @@ import styles from './DownloadLogs.module.css';
 const CONNECTOR_LABELS = {
   valentine: 'Valentine',
   annasarchive: "Anna's Archive",
+  fourtoutici: 'Fourtoutici',
   manual: 'Manuel',
 };
 
 const CONNECTOR_CHIP_CLASS = {
   valentine: 'chipValentine',
   annasarchive: 'chipAnnas',
+  fourtoutici: 'chipManual',
   manual: 'chipManual',
+};
+
+const SEARCH_MODE_LABELS = {
+  detailed: 'Détaillée',
+  'direct-valentine': 'Direct Valentine',
+  'direct-fourtoutici': 'Direct Fourtoutici',
+  'admin-manual': 'Manuel admin',
 };
 
 const formatDate = (iso) => {
@@ -30,6 +39,7 @@ const DownloadLogs = () => {
   const [loading, setLoading] = useState(true);
   const [filterConnector, setFilterConnector] = useState('');
   const [filterSuccess, setFilterSuccess] = useState('');
+  const [filterSearchMode, setFilterSearchMode] = useState('');
   const [expandedError, setExpandedError] = useState(null);
 
   const fetchLogs = useCallback(async (p = 1) => {
@@ -38,6 +48,7 @@ const DownloadLogs = () => {
       const params = { page: p, limit: 50 };
       if (filterConnector) params.connector = filterConnector;
       if (filterSuccess !== '') params.success = filterSuccess;
+      if (filterSearchMode) params.searchMode = filterSearchMode;
       const res = await axiosAdmin.get('/api/admin/download-logs', { params });
       setLogs(res.data.logs);
       setTotal(res.data.total);
@@ -48,7 +59,7 @@ const DownloadLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterConnector, filterSuccess]);
+  }, [filterConnector, filterSuccess, filterSearchMode]);
 
   useEffect(() => { fetchLogs(1); }, [fetchLogs]);
 
@@ -59,11 +70,19 @@ const DownloadLogs = () => {
           <option value="">Tous les connecteurs</option>
           <option value="valentine">Valentine</option>
           <option value="annasarchive">Anna's Archive</option>
+          <option value="fourtoutici">Fourtoutici</option>
         </select>
         <select className={styles.select} value={filterSuccess} onChange={e => setFilterSuccess(e.target.value)}>
           <option value="">Tous les résultats</option>
           <option value="true">Succès</option>
           <option value="false">Échec</option>
+        </select>
+        <select className={styles.select} value={filterSearchMode} onChange={e => setFilterSearchMode(e.target.value)}>
+          <option value="">Tous les modes</option>
+          <option value="detailed">Détaillée</option>
+          <option value="direct-valentine">Direct Valentine</option>
+          <option value="direct-fourtoutici">Direct Fourtoutici</option>
+          <option value="admin-manual">Manuel admin</option>
         </select>
         <button className={styles.refreshBtn} onClick={() => fetchLogs(page)} title="Rafraîchir">
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -95,6 +114,7 @@ const DownloadLogs = () => {
                   <th>Titre</th>
                   <th>Utilisateur</th>
                   <th>Connecteur</th>
+                  <th>Mode</th>
                   <th>Déclencheur</th>
                   <th>Résultat</th>
                 </tr>
@@ -118,6 +138,11 @@ const DownloadLogs = () => {
                         </span>
                       </td>
                       <td>
+                        <span className={styles.chip}>
+                          {SEARCH_MODE_LABELS[log.searchMode] || 'Détaillée'}
+                        </span>
+                      </td>
+                      <td>
                         <span className={`${styles.chip} ${log.triggeredBy === 'admin' ? styles.chipAdmin : styles.chipAuto}`}>
                           {log.triggeredBy === 'admin' ? 'Manuel' : 'Auto'}
                         </span>
@@ -131,7 +156,7 @@ const DownloadLogs = () => {
                     </tr>
                     {expandedError === log._id && log.error && (
                       <tr className={styles.errorRow}>
-                        <td colSpan={6}>
+                        <td colSpan={7}>
                           <p className={styles.errorText}>{log.error}</p>
                         </td>
                       </tr>

@@ -102,11 +102,12 @@ router.get('/download-logs', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 50);
-    const { connector, success } = req.query;
+    const { connector, success, searchMode } = req.query;
 
     const filter = {};
     if (connector) filter.connector = connector;
     if (success !== undefined) filter.success = success === 'true';
+    if (searchMode) filter.searchMode = searchMode;
 
     const [logs, total] = await Promise.all([
       DownloadLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),

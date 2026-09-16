@@ -10,7 +10,7 @@ import { cleanSeriesTitle, extractVolumeSubtitle, extractBareVolumeSubtitle } fr
 import { authorMatchScore, titleMatchScore } from '../utils/textMatch.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
-import { downloadWithFallback } from '../services/connectorOrchestrator.js';
+import { downloadWithFallback, logDownload, notifyCompletion } from '../services/connectorOrchestrator.js';
 import { downloadFromValentineById, getConfigForUser } from '../services/valentineService.js';
 import { downloadFromFourtoutici } from '../services/fourtouticiService.js';
 import { emitToUser, emitToAdmins } from '../services/socketService.js';
@@ -262,7 +262,7 @@ export const createBookRequest = async (req, res) => {
         console.error('Erreur notification auto-completion:', e.message);
       }
       // Apprise admin global + Apprise personnel user
-      appriseService.notifyBookCompleted(newRequest).catch(() => {});
+      appriseService.notifyBookCompleted(newRequest, { searchMode: 'already-available' }).catch(() => {});
       appriseService.notifyUserBookCompleted(user, newRequest).catch(() => {});
 
       // Livraison Kindle
@@ -522,11 +522,24 @@ export const directDownloadRequest = async (req, res) => {
         ? await downloadFromFourtoutici(sourceId, newRequest._id.toString())
         : await downloadFromValentineById(newRequest._id.toString(), sourceId, user._id.toString());
       const completed = await BookRequest.findById(newRequest._id).lean();
+      const searchMode = isFourtoutici ? 'direct-fourtoutici' : 'direct-valentine';
+      // Même chemin log + notif admin que la recherche détaillée (connectorOrchestrator) —
+      // seul searchMode change, pour pouvoir distinguer a posteriori d'où vient le téléchargement.
+      logDownload({ bookRequest: completed, connector: isFourtoutici ? 'fourtoutici' : 'valentine', success: true, triggeredBy: 'auto', searchMode }).catch(() => {});
+      notifyCompletion(completed, { connector: isFourtoutici ? 'fourtoutici' : 'valentine', searchMode }).catch(() => {});
       return res.status(201).json({ success: true, request: completed, ...result });
     } catch (dlErr) {
       // La demande existe déjà en pending — elle pourra être relancée depuis
       // l'admin (retry manuel) ou repasser plus tard dans le circuit normal.
       const pendingRequest = await BookRequest.findById(newRequest._id).lean();
+      logDownload({
+        bookRequest: pendingRequest || { title, author },
+        connector: isFourtoutici ? 'fourtoutici' : 'valentine',
+        success: false,
+        error: dlErr.message,
+        triggeredBy: 'auto',
+        searchMode: isFourtoutici ? 'direct-fourtoutici' : 'direct-valentine',
+      }).catch(() => {});
       return res.status(200).json({ success: false, error: dlErr.message, request: pendingRequest });
     }
   } catch (error) {
@@ -864,7 +877,7 @@ export const updateRequestStatus = async (req, res) => {
           body: `"${currentRequest.title}" est prêt au téléchargement.`,
           url: '/dashboard'
         }).catch(() => {});
-        appriseService.notifyBookCompleted(currentRequest).catch(() => {});
+        appriseService.notifyBookCompleted(currentRequest, { searchMode: 'admin-manual' }).catch(() => {});
         // Notif Apprise personnelle + livraison Kindle
         User.findById(currentRequest.user)
           .select('username notificationPreferences kindleEmail emailVerified')
@@ -1112,7 +1125,7 @@ export const addDownloadLink = async (req, res) => {
     }
 
     // Apprise admin global (indépendant de l'existence de l'user)
-    appriseService.notifyBookCompleted(request).catch(() => {});
+    appriseService.notifyBookCompleted(request, { searchMode: 'admin-manual' }).catch(() => {});
 
     // Email aux admins — complétion
     getAdminEmailPrefs().then(async prefs => {

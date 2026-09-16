@@ -83,12 +83,25 @@ class AppriseService {
     );
   }
 
-  async notifyBookCompleted(bookRequest) {
+  // Libellé de source affiché dans la notif « Livre disponible » — permet de
+  // savoir a posteriori d'où vient un téléchargement sans aller croiser les
+  // logs (recherche détaillée classique, recherche directe V/Fourtoutici,
+  // déjà en bibliothèque, ou ajout manuel admin).
+  _sourceLabel({ connector, searchMode } = {}) {
+    if (searchMode === 'already-available') return 'Déjà disponible (demande précédente)';
+    if (searchMode === 'admin-manual') return 'Ajout manuel admin';
+    const connectorLabels = { valentine: 'Valentine', fourtoutici: 'Fourtoutici', annasarchive: "Anna's Archive / LibGen" };
+    const cLabel = connectorLabels[connector] || connector || 'Source inconnue';
+    const modeLabel = (searchMode === 'direct-valentine' || searchMode === 'direct-fourtoutici') ? 'directe' : 'détaillée';
+    return `${cLabel} (recherche ${modeLabel})`;
+  }
+
+  async notifyBookCompleted(bookRequest, meta = {}) {
     const config = await this.getConfig();
     if (!config?.enabled || config.notifyOnComplete === false) return;
     await this.sendNotification(
       '✅ Livre disponible',
-      `📖 "${bookRequest.title}" de ${bookRequest.author}\n👤 Demandé par : ${bookRequest.username}`
+      `📖 "${bookRequest.title}" de ${bookRequest.author}\n👤 Demandé par : ${bookRequest.username}\n🔌 ${this._sourceLabel(meta)}`
     );
   }
 
