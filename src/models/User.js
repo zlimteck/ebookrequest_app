@@ -86,6 +86,19 @@ const userSchema = new mongoose.Schema({
     default: 30,
     min: 1
   },
+  // Limite de téléchargements via la recherche directe Valentine, uniquement
+  // quand le compte admin partagé est utilisé (pas de limite si l'utilisateur
+  // a son propre compte Valentine — voir #26). -1 = illimité.
+  valentineDirectLimit: {
+    type: Number,
+    default: 5,
+    min: -1
+  },
+  valentineDirectLimitDays: {
+    type: Number,
+    default: 7,
+    min: 1
+  },
   avatar: {
     type: String,
     default: null

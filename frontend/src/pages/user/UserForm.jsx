@@ -870,8 +870,15 @@ function UserForm() {
                 <div className={`${styles.quotaBarFill} ${valentineQuota.remaining === 0 ? styles.quotaBarEmpty : valentineQuota.remaining <= 5 ? styles.quotaBarLow : styles.quotaBarOk}`}
                   style={{ width: valentineQuota.total != null ? `${Math.round(((valentineQuota.total - valentineQuota.remaining) / valentineQuota.total) * 100)}%` : '100%' }} />
               </div>
-              <span className={`${styles.quotaBarCount} ${valentineQuota.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.remaining <= 5 ? styles.quotaCountLow : styles.quotaCountOk}`}>
-                {valentineQuota.remaining ?? '—'}{valentineQuota.total != null && ` / ${valentineQuota.total}`} restant{valentineQuota.remaining > 1 ? 's' : ''}
+              <span className={styles.quotaBarCountGroup}>
+                <span className={`${styles.quotaBarCount} ${valentineQuota.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.remaining <= 5 ? styles.quotaCountLow : styles.quotaCountOk}`}>
+                  {valentineQuota.remaining ?? '—'}{valentineQuota.total != null && ` / ${valentineQuota.total}`} restant{valentineQuota.remaining > 1 ? 's' : ''}
+                </span>
+                {valentineQuota.personalLimit && (
+                  <span className={`${styles.quotaBarCount} ${valentineQuota.personalLimit.remaining === 0 ? styles.quotaCountEmpty : valentineQuota.personalLimit.remaining <= 2 ? styles.quotaCountLow : styles.quotaCountOk}`} title={`Votre part sur le compte partagé, ${valentineQuota.personalLimit.days} jours`}>
+                    · {valentineQuota.personalLimit.remaining} / {valentineQuota.personalLimit.limit} ({valentineQuota.personalLimit.days}j)
+                  </span>
+                )}
               </span>
             </div>
           )}

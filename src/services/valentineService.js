@@ -261,16 +261,19 @@ async function enforceDownloadPacing() {
 
 async function getConfig() {
   const doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-  if (!doc) return { enabled: false, url: DEFAULT_URL, username: '', password: '' };
+  if (!doc) return { enabled: false, url: DEFAULT_URL, username: '', password: '', source: 'admin' };
   const raw = doc.password || '';
-  return { ...doc, password: decrypt(raw) ?? raw }; // fallback si ancien mot de passe en clair
+  return { ...doc, password: decrypt(raw) ?? raw, source: 'admin' }; // fallback si ancien mot de passe en clair
 }
 
 // Recherche directe : utilise le compte Valentine personnel de l'utilisateur
 // s'il en a configuré un (mêmes url/enabled/directSearchEnabled que l'admin,
 // seuls username/password diffèrent), sinon retombe sur le compte admin
 // partagé — comme getConfig() seul le faisait jusqu'ici pour tout le monde.
-async function getConfigForUser(userId) {
+// `source` ('own'|'admin') dans la valeur de retour indique lequel des deux a
+// été retenu — utilisé notamment pour le quota par utilisateur (voir #26) :
+// seuls les téléchargements via le compte admin partagé doivent y être soumis.
+export async function getConfigForUser(userId) {
   const base = await getConfig();
   if (!userId) return base;
   try {
@@ -279,7 +282,7 @@ async function getConfigForUser(userId) {
     const password = decrypt(rawPwd) ?? rawPwd;
     const username = user?.valentine?.username || '';
     if (username && password) {
-      return { ...base, username, password };
+      return { ...base, username, password, source: 'own' };
     }
   } catch {
     // Repli silencieux sur le compte admin en cas d'erreur DB

@@ -432,7 +432,7 @@ router.put('/valentine', requireAuth, async (req, res) => {
 router.get('/valentine/quota', requireAuth, async (req, res) => {
   try {
     const { getValentineQuota } = await import('../services/valentineService.js');
-    const user = await User.findById(req.user.id).select('valentine');
+    const user = await User.findById(req.user.id).select('valentine role valentineDirectLimit valentineDirectLimitDays');
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
     const rawOwn = user?.valentine?.password || '';
@@ -457,7 +457,25 @@ router.get('/valentine/quota', requireAuth, async (req, res) => {
     }
 
     const quota = await getValentineQuota(username, password);
-    res.json({ ...quota, source });
+
+    // Quota personnel sur le compte admin partagé (#26) — sans objet si
+    // l'utilisateur a son propre compte (il ne partage alors avec personne),
+    // ni pour un admin, ni si aucune limite n'a été configurée (-1 = illimité).
+    let personalLimit = null;
+    const vLimit = user.valentineDirectLimit ?? -1;
+    if (source === 'admin' && user.role !== 'admin' && vLimit >= 0) {
+      const vDays = user.valentineDirectLimitDays ?? 30;
+      const vWindowStart = new Date();
+      vWindowStart.setDate(vWindowStart.getDate() - vDays);
+      const used = await BookRequest.countDocuments({
+        user: user._id,
+        viaValentineAdminAccount: true,
+        createdAt: { $gte: vWindowStart },
+      });
+      personalLimit = { limit: vLimit, used, remaining: Math.max(0, vLimit - used), days: vDays };
+    }
+
+    res.json({ ...quota, source, personalLimit });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erreur lors de la récupération du quota' });
   }

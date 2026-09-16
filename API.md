@@ -135,7 +135,7 @@ curl -X POST https://app.ndd.fr/api/users/opds-token/regenerate \
 ```
 
 ### `GET /api/users/valentine/quota`
-Quota de téléchargements Valentine restants. Utilise le compte personnel de l'utilisateur s'il en a configuré un (`source: "own"`), sinon le compte admin partagé (`source: "admin"`).
+Quota de téléchargements Valentine restants. Utilise le compte personnel de l'utilisateur s'il en a configuré un (`source: "own"`), sinon le compte admin partagé (`source: "admin"`). Dans ce second cas, si une limite personnelle est configurée par un admin (`User.valentineDirectLimit`), la réponse inclut aussi `personalLimit: { limit, used, remaining, days }`, la part que cet utilisateur peut consommer sur le compte partagé, sur une fenêtre glissante de `days` jours.
 ```bash
 curl https://app.ndd.fr/api/users/valentine/quota \
   -H "Authorization: Bearer <token>"
@@ -203,7 +203,7 @@ curl "https://app.ndd.fr/api/requests/fourtoutici-search?q=Dune" \
 ```
 
 ### `GET /api/requests/direct-search?mode=title|author|series&q=...`
-Recherche immédiate sur Valentine. En mode `title`, renvoie une liste de livres directement téléchargeables. En mode `author`/`series`, renvoie une liste de fiches à explorer ensuite via `direct-search-books`. Utilise le compte Valentine personnel de l'utilisateur s'il en a configuré un (**Paramètres**), sinon le compte admin partagé — idem pour `direct-search-books` et `direct-download`.
+Recherche immédiate sur Valentine. En mode `title`, renvoie une liste de livres directement téléchargeables. En mode `author`/`series`, renvoie une liste de fiches à explorer ensuite via `direct-search-books`. Utilise le compte Valentine personnel de l'utilisateur s'il en a configuré un (**Paramètres**), sinon le compte admin partagé, idem pour `direct-search-books` et `direct-download`.
 ```bash
 curl "https://app.ndd.fr/api/requests/direct-search?mode=title&q=Dune" \
   -H "Authorization: Bearer <token>"
@@ -637,11 +637,12 @@ curl -X POST https://app.ndd.fr/api/admin/users \
 ```
 
 ### `PUT /api/admin/users/:id` — Modifier un utilisateur
+`valentineDirectLimit`/`valentineDirectLimitDays` limitent la consommation de cet utilisateur sur le compte Valentine admin partagé (recherche directe), sans effet s'il a son propre compte Valentine. `-1` = illimité.
 ```bash
 curl -X PUT https://app.ndd.fr/api/admin/users/ID \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"role": "admin", "requestLimit": 10, "requestLimitDays": 30}'
+  -d '{"role": "admin", "requestLimit": 10, "requestLimitDays": 30, "valentineDirectLimit": 5, "valentineDirectLimitDays": 7}'
 ```
 
 ### `PATCH /api/admin/users/:id/toggle-active`

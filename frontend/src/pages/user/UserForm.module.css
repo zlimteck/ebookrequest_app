@@ -100,9 +100,29 @@
   margin-left: auto;
 }
 
+/* Regroupe deux compteurs (quota du compte + limite personnelle) sur la même
+   ligne, séparés par un point médian — le margin-left:auto se déplace sur le
+   groupe entier plutôt que sur chaque compteur individuellement. */
+.quotaBarCountGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.quotaBarCountGroup .quotaBarCount {
+  margin-left: 0;
+}
+
 @media (max-width: 500px) {
   .quotaBarLabel {
     display: none;
+  }
+
+  .quotaBarCountGroup {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 

@@ -111,6 +111,10 @@ const bookRequestSchema = new mongoose.Schema({
   }],
   format: { type: String, enum: ['epub', 'pdf', 'mobi', 'azw3', 'fb2', 'cbz', 'cbr', ''], default: '' },
   category: { type: String, enum: ['ebook', 'comic', 'manga', ''], default: 'ebook' },
+  // Vrai uniquement pour une demande créée via la recherche directe Valentine
+  // ET ayant utilisé le compte admin partagé (pas le compte perso de
+  // l'utilisateur) — sert au quota par utilisateur sur ce compte partagé (#26).
+  viaValentineAdminAccount: { type: Boolean, default: false },
   statusHistory: [{
     status: { type: String },
     changedAt: { type: Date, default: Date.now },

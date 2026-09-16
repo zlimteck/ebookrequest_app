@@ -107,7 +107,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays avatar isActive chatbotEnabled chatbotDailyLimit valentine.username'
+      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays valentineDirectLimit valentineDirectLimitDays avatar isActive chatbotEnabled chatbotDailyLimit valentine.username'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {
@@ -183,6 +183,23 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'La fenêtre glissante doit être d\'au moins 1 jour.' });
       }
       updates.requestLimitDays = parsed;
+    }
+
+    const { valentineDirectLimit, valentineDirectLimitDays } = req.body;
+    if (valentineDirectLimit !== undefined) {
+      const parsed = parseInt(valentineDirectLimit, 10);
+      if (isNaN(parsed) || parsed < -1) {
+        return res.status(400).json({ error: 'La limite Valentine doit être un entier positif, 0, ou -1 (illimité).' });
+      }
+      updates.valentineDirectLimit = parsed;
+    }
+
+    if (valentineDirectLimitDays !== undefined) {
+      const parsed = parseInt(valentineDirectLimitDays, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        return res.status(400).json({ error: 'La fenêtre glissante Valentine doit être d\'au moins 1 jour.' });
+      }
+      updates.valentineDirectLimitDays = parsed;
     }
 
     const { chatbotDailyLimit } = req.body;

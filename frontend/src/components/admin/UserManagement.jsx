@@ -45,7 +45,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, chatbotDailyLimit: 10 });
+  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, chatbotDailyLimit: 10 });
   const [errors, setErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -138,6 +138,8 @@ const UserManagement = () => {
       if (!userData.password) delete userData.password;
       if (userData.unlimitedRequests) userData.requestLimit = -1;
       delete userData.unlimitedRequests;
+      if (userData.unlimitedValentineDirect) userData.valentineDirectLimit = -1;
+      delete userData.unlimitedValentineDirect;
       if (userData._id) {
         await axiosAdmin.put(`/api/admin/users/${userData._id}`, userData);
         toast.success('Utilisateur mis à jour');
@@ -153,14 +155,20 @@ const UserManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, chatbotDailyLimit: 10 });
+    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, chatbotDailyLimit: 10 });
     setErrors({});
     setShowModal(false);
   };
 
   const handleEdit = (user) => {
     const unlimited = (user.requestLimit ?? 10) < 0;
-    setFormData({ _id: user._id, username: user.username, email: user.email, password: '', role: user.role, requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited, chatbotDailyLimit: user.chatbotDailyLimit ?? 10 });
+    const unlimitedValentine = (user.valentineDirectLimit ?? -1) < 0;
+    setFormData({
+      _id: user._id, username: user.username, email: user.email, password: '', role: user.role,
+      requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited,
+      valentineDirectLimit: unlimitedValentine ? 5 : (user.valentineDirectLimit ?? 5), valentineDirectLimitDays: user.valentineDirectLimitDays ?? 7, unlimitedValentineDirect: unlimitedValentine,
+      chatbotDailyLimit: user.chatbotDailyLimit ?? 10,
+    });
     setUserStats(null);
     setShowModal(true);
     axiosAdmin.get(`/api/admin/user-stats/${user._id}`)
@@ -434,6 +442,38 @@ const UserManagement = () => {
                     <label>Fenêtre glissante (jours)</label>
                     <input type="number" name="requestLimitDays" value={formData.requestLimitDays}
                       onChange={handleInputChange} className={styles.formInput} min="1" />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Limite Valentine (compte partagé)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <input
+                        type="number" name="valentineDirectLimit" value={formData.valentineDirectLimit}
+                        onChange={handleInputChange} className={styles.formInput} min="1"
+                        disabled={formData.unlimitedValentineDirect}
+                        style={{ flex: 1, opacity: formData.unlimitedValentineDirect ? 0.4 : 1 }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.unlimitedValentineDirect}
+                          onChange={e => setFormData(p => ({ ...p, unlimitedValentineDirect: e.target.checked }))}
+                          style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }}
+                        />
+                        Illimité
+                      </label>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.3rem 0 0' }}>
+                      Nombre de téléchargements via la recherche directe Valentine, uniquement quand cet utilisateur passe par le compte admin partagé (sans effet s'il a son propre compte Valentine).
+                    </p>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Fenêtre glissante Valentine (jours)</label>
+                    <input type="number" name="valentineDirectLimitDays" value={formData.valentineDirectLimitDays}
+                      onChange={handleInputChange} className={styles.formInput} min="1"
+                      disabled={formData.unlimitedValentineDirect}
+                      style={{ opacity: formData.unlimitedValentineDirect ? 0.4 : 1 }} />
                   </div>
                 </div>
 

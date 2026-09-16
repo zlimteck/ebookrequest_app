@@ -11,7 +11,7 @@ import { authorMatchScore, titleMatchScore } from '../utils/textMatch.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback } from '../services/connectorOrchestrator.js';
-import { downloadFromValentineById } from '../services/valentineService.js';
+import { downloadFromValentineById, getConfigForUser } from '../services/valentineService.js';
 import { downloadFromFourtoutici } from '../services/fourtouticiService.js';
 import { emitToUser, emitToAdmins } from '../services/socketService.js';
 
@@ -455,6 +455,32 @@ export const directDownloadRequest = async (req, res) => {
       }
     }
 
+    // Quota par utilisateur sur le compte Valentine ADMIN partagé (#26) — ne
+    // s'applique jamais si l'utilisateur a son propre compte Valentine (il ne
+    // partage alors le quota avec personne), ni à Fourtoutici (sans objet), ni
+    // à un admin (jamais limité, même règle que le quota de demandes ci-dessus).
+    let viaValentineAdminAccount = false;
+    if (!isFourtoutici) {
+      const valentineConfig = await getConfigForUser(user._id.toString());
+      viaValentineAdminAccount = valentineConfig.source === 'admin';
+      if (viaValentineAdminAccount && user.role !== 'admin') {
+        const vDays = user.valentineDirectLimitDays ?? 30;
+        const vWindowStart = new Date();
+        vWindowStart.setDate(vWindowStart.getDate() - vDays);
+        const vRecentCount = await BookRequest.countDocuments({
+          user: user._id,
+          viaValentineAdminAccount: true,
+          createdAt: { $gte: vWindowStart },
+        });
+        const vLimit = user.valentineDirectLimit ?? -1;
+        if (vLimit >= 0 && vRecentCount >= vLimit) {
+          return res.status(429).json({
+            error: `Vous avez atteint votre limite de ${vLimit} téléchargement(s) Valentine via le compte partagé sur les ${vDays} derniers jours.`
+          });
+        }
+      }
+    }
+
     const newRequest = new BookRequest({
       user: user._id,
       username: user.username,
@@ -466,6 +492,7 @@ export const directDownloadRequest = async (req, res) => {
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),
       ...(resolvedExtraShelfTargets.length && { extraShelfTargets: resolvedExtraShelfTargets }),
+      viaValentineAdminAccount,
       status: 'pending',
       statusHistory: [{ status: 'pending', changedBy: user.username, note: `Demande créée — recherche directe ${isFourtoutici ? 'Fourtoutici' : 'Valentine'}` }],
     });
