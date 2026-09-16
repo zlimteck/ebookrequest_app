@@ -194,12 +194,19 @@ router.get('/calibre/shelves', requireAuth, async (req, res) => {
 // dashboard avec la vérité du moment plutôt qu'un état mis en cache.
 router.get('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
   try {
-    const [user, request] = await Promise.all([
-      User.findById(req.user.id).select('calibreWeb'),
-      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
-    ]);
+    const callingUser = await User.findById(req.user.id).select('role calibreWeb');
+    const isAdmin = callingUser?.role === 'admin';
+
+    const request = await BookRequest.findOne(
+      isAdmin ? { _id: req.params.id } : { _id: req.params.id, user: req.user.id }
+    );
     if (!request) return res.status(404).json({ error: 'Demande introuvable' });
-    const cfg = user?.calibreWeb;
+
+    const isActingForOther = isAdmin && request.user.toString() !== req.user.id;
+    const owner = isActingForOther
+      ? await User.findById(request.user).select('calibreWeb')
+      : callingUser;
+    const cfg = owner?.calibreWeb;
     if (!cfg?.enabled || !cfg?.url) {
       return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
     }
@@ -234,6 +241,11 @@ router.get('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
 // déjà complété vers les étagères choisies, a posteriori. N'effectue PAS de
 // ré-upload : utilise le calibreBookId déjà connu si disponible, sinon le
 // retrouve par recherche de titre (comme le fait pushToCalibre en interne).
+// Un admin peut aussi corriger les étagères du PROPRIÉTAIRE d'une demande
+// (pas seulement les siennes) — c'est le seul chemin qui gérait ce cas
+// jusqu'ici (le propriétaire lui-même, en self-service) ; sans ça, un admin
+// ne pouvait pas corriger les étagères de la personne qui a fait la demande,
+// seulement celles des comptes additionnels (voir extra-shelves ci-dessous).
 router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
   try {
     const { shelves } = req.body;
@@ -241,12 +253,21 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Liste d\'étagères manquante' });
     }
 
-    const [user, request] = await Promise.all([
-      User.findById(req.user.id).select('calibreWeb'),
-      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
-    ]);
+    const callingUser = await User.findById(req.user.id).select('role calibreWeb');
+    const isAdmin = callingUser?.role === 'admin';
+
+    const request = await BookRequest.findOne(
+      isAdmin ? { _id: req.params.id } : { _id: req.params.id, user: req.user.id }
+    );
     if (!request) return res.status(404).json({ error: 'Demande introuvable' });
-    const cfg = user?.calibreWeb;
+
+    // Admin agissant pour un autre utilisateur que lui-même : on pousse vers le
+    // compte Calibre-Web du PROPRIÉTAIRE de la demande, pas celui de l'admin.
+    const isActingForOther = isAdmin && request.user.toString() !== req.user.id;
+    const owner = isActingForOther
+      ? await User.findById(request.user).select('calibreWeb')
+      : callingUser;
+    const cfg = owner?.calibreWeb;
     if (!cfg?.enabled || !cfg?.url) {
       return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
     }
