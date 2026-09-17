@@ -520,10 +520,20 @@ const UserSettings = () => {
         // Rien à synchroniser — pas de tâche de fond, réponse immédiate définitive.
         setCalibreSyncResult(res.data);
         setCalibreSyncing(false);
+      } else {
+        // La synchronisation continue en tâche de fond (peut prendre plusieurs
+        // dizaines de secondes par livre sur Calibre-Web-Automated) — le résultat
+        // arrive via l'événement socket 'calibre:sync-done' ci-dessous. Filet de
+        // sécurité si l'événement se perd (redémarrage serveur en cours de tâche,
+        // websocket coupé) : on ne laisse pas le bouton bloqué indéfiniment.
+        setTimeout(() => {
+          setCalibreSyncing(syncing => {
+            if (!syncing) return syncing;
+            setCalibreSyncResult({ error: "Pas de réponse — la synchronisation a peut-être été interrompue côté serveur. Réessayez." });
+            return false;
+          });
+        }, 5 * 60 * 1000);
       }
-      // Sinon : la synchronisation continue en tâche de fond (peut prendre plusieurs
-      // dizaines de secondes par livre sur Calibre-Web-Automated) — le résultat
-      // arrive via l'événement socket 'calibre:sync-done' ci-dessous.
     } catch (err) {
       setCalibreSyncResult({ error: err.response?.data?.error || err.message });
       setCalibreSyncing(false);
