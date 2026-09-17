@@ -1124,6 +1124,86 @@
   background: rgba(239,68,68,0.1);
 }
 
+/* Modal étagères Calibre-Web */
+.shelfCheckingNotice {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0.25rem 0 0.75rem;
+  transition: opacity 0.2s ease;
+}
+
+.shelfEmptyNotice {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-bottom: 1.25rem;
+}
+
+.shelfSection {
+  margin: 1rem 0 1.25rem;
+}
+
+.shelfSection.shelfSectionExtra {
+  margin: 0 0 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.shelfSectionLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-muted);
+}
+
+.shelfCheckboxList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.shelfCheckboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.shelfExtraUser {
+  margin-bottom: 0.5rem;
+}
+
+.shelfExtraUserLabel {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+
+.shelfExtraEmpty {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  padding-left: 0.5rem;
+}
+
+.shelfExtraCheckboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0 0.15rem 0.5rem;
+  font-size: 0.87rem;
+  cursor: pointer;
+}
+
+.shelfSendOnlyRow {
+  margin-bottom: 0.75rem;
+}
+
+.shelfModalError {
+  font-size: 0.83rem;
+  color: var(--color-danger, #ef4444);
+  margin-bottom: 1rem;
+}
+
 /* Edit modal form */
 .editFieldRow {
   margin-bottom: 0.9rem;

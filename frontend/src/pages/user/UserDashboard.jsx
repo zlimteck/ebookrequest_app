@@ -1433,21 +1433,21 @@ const UserDashboard = () => {
           <div className={styles.modalContent} ref={shelfModalRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Envoyer vers des étagères">
             <h2>Envoyer vers des étagères</h2>
             <p className={styles.modalBookTitle}>« {shelfModalRequest.title} »</p>
-            <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem', opacity: shelfModalChecking ? 1 : 0, transition: 'opacity 0.2s ease' }}>
+            <p className={styles.shelfCheckingNotice} style={{ opacity: shelfModalChecking ? 1 : 0 }}>
               Vérification de l'état réel sur Calibre-Web…
             </p>
             {calibreShelves.length === 0 ? (
-              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
+              <p className={styles.shelfEmptyNotice}>
                 Aucune étagère configurée — ajoutez-en dans les Réglages.
               </p>
             ) : (
-              <div style={{ margin: '1rem 0 1.25rem' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
+              <div className={styles.shelfSection}>
+                <div className={styles.shelfSectionLabel}>
                   Mes étagères
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div className={styles.shelfCheckboxList}>
                   {calibreShelves.map(s => (
-                    <label key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <label key={s.name} className={styles.shelfCheckboxRow}>
                       <input type="checkbox" checked={shelfModalSelection.includes(s.name)} onChange={() => toggleShelfModalSelection(s.name)} />
                       {s.name}
                     </label>
@@ -1456,17 +1456,17 @@ const UserDashboard = () => {
               </div>
             )}
             {extraTargetCandidates.length > 0 && (
-              <div style={{ margin: calibreShelves.length ? '0 0 1.25rem' : '1rem 0 1.25rem', paddingTop: calibreShelves.length ? '0.75rem' : 0, borderTop: calibreShelves.length ? '1px solid var(--color-border)' : 'none' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
+              <div className={`${styles.shelfSection} ${calibreShelves.length ? styles.shelfSectionExtra : ''}`}>
+                <div className={styles.shelfSectionLabel}>
                   Autres étagères
                 </div>
                 {extraTargetCandidates.map(u => (
-                  <div key={u._id} style={{ marginBottom: '0.5rem' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.2rem' }}>Étagères de {u.username} :</div>
+                  <div key={u._id} className={styles.shelfExtraUser}>
+                    <div className={styles.shelfExtraUserLabel}>Étagères de {u.username} :</div>
                     {(u.shelves || []).length === 0 ? (
-                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', paddingLeft: '0.5rem' }}>Aucune étagère configurée</div>
+                      <div className={styles.shelfExtraEmpty}>Aucune étagère configurée</div>
                     ) : u.shelves.map(s => (
-                      <label key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.15rem 0 0.15rem 0.5rem', fontSize: '0.87rem', cursor: 'pointer' }}>
+                      <label key={s.name} className={styles.shelfExtraCheckboxRow}>
                         <input
                           type="checkbox"
                           checked={(extraShelfSelections[u._id] || []).includes(s.name)}
@@ -1479,7 +1479,7 @@ const UserDashboard = () => {
                 ))}
               </div>
             )}
-            <div style={{ marginBottom: '0.75rem' }}>
+            <div className={styles.shelfSendOnlyRow}>
               <button
                 type="button"
                 className={styles.modalCancelButton}
@@ -1491,7 +1491,7 @@ const UserDashboard = () => {
               </button>
             </div>
             {shelfModalError && (
-              <p style={{ fontSize: '0.83rem', color: 'var(--color-danger, #ef4444)', marginBottom: '1rem' }}>{shelfModalError}</p>
+              <p className={styles.shelfModalError}>{shelfModalError}</p>
             )}
             <div className={styles.modalButtons}>
               <button className={styles.modalCancelButton} onClick={() => setShelfModalRequest(null)} disabled={shelfModalSaving}>Annuler</button>

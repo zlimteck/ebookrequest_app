@@ -489,9 +489,35 @@ curl -X POST https://app.ndd.fr/api/users/calibre/test \
 ```
 
 ### `POST /api/users/calibre/sync`
+Traite en tâche de fond les demandes complétées non synchronisées. Répond immédiatement avec `{started, total}` (ou `{started: false, total: 0}` s'il n'y a rien à faire) ; le résultat final (`{pushed, failed, skipped, total, lastSync}`) arrive via l'événement Socket.IO `calibre:sync-done`, adressé à l'utilisateur.
 ```bash
 curl -X POST https://app.ndd.fr/api/users/calibre/sync \
   -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/users/calibre/requests/:id/shelves`
+État réel (live) des étagères Calibre-Web pour une demande. Un admin peut consulter celles du propriétaire de la demande (pas uniquement les siennes).
+```bash
+curl https://app.ndd.fr/api/users/calibre/requests/64f.../shelves \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/users/calibre/requests/:id/shelves`
+Pousse/corrige les étagères d'une demande déjà complétée. Utilise le `calibreBookId` déjà connu si disponible, sinon retrouve le livre par titre ; si toujours introuvable, envoie l'upload complet vers Calibre-Web. Un admin peut agir pour le compte du propriétaire de la demande, pas seulement le sien.
+```bash
+curl -X POST https://app.ndd.fr/api/users/calibre/requests/64f.../shelves \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"shelves": ["Romans", "À lire"]}'
+```
+
+### `POST /api/requests/:id/extra-shelves` (admin)
+Pousse une demande complétée vers les étagères Calibre-Web d'un ou plusieurs comptes additionnels (et, depuis peu, celles du propriétaire de la demande lui-même). Upload complet automatique si le livre n'est retrouvé chez aucun des comptes ciblés.
+```bash
+curl -X POST https://app.ndd.fr/api/requests/64f.../extra-shelves \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"targets": [{"userId": "64f...", "shelves": ["Romans"]}]}'
 ```
 
 ### `GET /api/users/hardcover`
@@ -580,6 +606,13 @@ curl https://app.ndd.fr/api/admin/stats \
 ### `GET /api/admin/health`
 ```bash
 curl https://app.ndd.fr/api/admin/health \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/download-logs`
+Filtrable par `connector` (`valentine`, `annasarchive`, `fourtoutici`), `success` (`true`/`false`) et `searchMode` (`detailed`, `direct-valentine`, `direct-fourtoutici`, `admin-manual`) — ce dernier distingue le chemin de recherche ayant mené au téléchargement, indépendamment de `triggeredBy`.
+```bash
+curl "https://app.ndd.fr/api/admin/download-logs?page=1&limit=50&searchMode=direct-valentine" \
   -H "Authorization: Bearer <token>"
 ```
 

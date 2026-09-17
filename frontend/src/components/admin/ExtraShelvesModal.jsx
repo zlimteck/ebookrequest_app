@@ -211,7 +211,7 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
                   <div className={styles.userHeader}>
                     <span className={styles.userName}>{u.username}</span>
                     {isOwner && <span className={styles.statusBadge} title="A fait la demande">Propriétaire</span>}
-                    {isOwner && <span className={styles.emptyMsg} style={{ fontSize: '0.8em', visibility: checkingOwnerLive ? 'visible' : 'hidden' }}>Vérification…</span>}
+                    {isOwner && <span className={`${styles.emptyMsg} ${styles.checkingNotice}`} style={{ opacity: checkingOwnerLive ? 1 : 0 }}>Vérification…</span>}
                     {st?.status && (
                       <span
                         className={`${styles.statusBadge} ${
@@ -244,7 +244,7 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
             })
           )}
           {!loading && candidates.some(u => u.username === request.username) && (
-            <div className={styles.userSection} style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem' }}>
+            <div className={`${styles.userSection} ${styles.ownerSendRow}`}>
               <button
                 type="button"
                 className={styles.cancelBtn}
