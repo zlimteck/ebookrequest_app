@@ -69,8 +69,9 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 router.get('/update-check', requireAuth, requireAdmin, async (req, res) => {
   try {
     const now = Date.now();
+    const force = req.query.force === 'true';
 
-    if (updateCache.data && now - updateCache.fetchedAt < UPDATE_TTL) {
+    if (!force && updateCache.data && now - updateCache.fetchedAt < UPDATE_TTL) {
       return res.json(updateCache.data);
     }
 
