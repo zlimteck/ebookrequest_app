@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 import { testCalibreConnection, pushToCalibre, getSessionCookie, listShelves, addToShelves, reconcileShelves, getBookShelfMembership, resolveCalibreBookId } from '../services/calibreService.js';
 import { emitToUser } from '../services/socketService.js';
+import { sendPushToUser } from '../services/webPushService.js';
 import BookRequest from '../models/BookRequest.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -432,9 +433,21 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
 
     const lastSync = pushed > 0 ? new Date() : null;
     emitToUser(userId, 'calibre:sync-done', { pushed, failed, skipped, total: requests.length, lastSync });
+    sendPushToUser(userId, {
+      title: 'Synchronisation Calibre-Web terminée',
+      body: failed > 0
+        ? `${pushed} livre(s) synchronisé(s), ${failed} échec(s).`
+        : `${pushed} livre(s) synchronisé(s) avec succès.`,
+      url: '/settings',
+    }).catch(() => {});
   })().catch(err => {
     console.error('[Calibre] sync (tâche de fond) erreur:', err.message);
     emitToUser(userId, 'calibre:sync-done', { error: err.message });
+    sendPushToUser(userId, {
+      title: 'Synchronisation Calibre-Web échouée',
+      body: err.message,
+      url: '/settings',
+    }).catch(() => {});
   });
 });
 
