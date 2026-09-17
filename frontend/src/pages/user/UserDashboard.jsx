@@ -9,6 +9,7 @@ import styles from './UserDashboard.module.css';
 import BookPreviewModal from '../../components/BookPreviewModal';
 import BookReaderModal from '../../components/BookReaderModal';
 import DownloadModal from '../../components/DownloadModal';
+import SendEmailModal from '../../components/SendEmailModal';
 import CommentThread from '../../components/CommentThread';
 import { compressImage, isImage } from '../../utils/imageCompressor';
 
@@ -49,6 +50,7 @@ const UserDashboard = () => {
   const [reportModal, setReportModal] = useState({ isOpen: false, requestId: null, requestTitle: '' });
   const [readerRequest, setReaderRequest] = useState(null);
   const [downloadModalRequest, setDownloadModalRequest] = useState(null);
+  const [emailModalRequest, setEmailModalRequest] = useState(null);
   const [reportReason, setReportReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
@@ -921,6 +923,18 @@ const UserDashboard = () => {
                                     <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                                   </svg>
                                 </button>
+                                {request.filePath && (
+                                  <button
+                                    className={styles.iconBtn}
+                                    onClick={() => setEmailModalRequest(request)}
+                                    title="Envoyer par email"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                      <polyline points="22 6 12 13 2 6"/>
+                                    </svg>
+                                  </button>
+                                )}
                                 {(calibreEnabled || extraTargetCandidates.length > 0) && (
                                   <button className={styles.iconBtn} onClick={() => openShelfModal(request)} title="Envoyer vers des étagères Calibre-Web">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1230,6 +1244,18 @@ const UserDashboard = () => {
                             <line x1="12" y1="15" x2="12" y2="3"/>
                           </svg>
                         </button>
+                        {request.filePath && (
+                          <button
+                            className={styles.iconBtn}
+                            onClick={() => setEmailModalRequest(request)}
+                            title="Envoyer par email"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                              <polyline points="22 6 12 13 2 6"/>
+                            </svg>
+                          </button>
+                        )}
                         {(calibreEnabled || extraTargetCandidates.length > 0) && (
                           <button className={styles.iconBtn} onClick={() => openShelfModal(request)} title="Envoyer vers des étagères Calibre-Web">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1670,6 +1696,14 @@ const UserDashboard = () => {
         <DownloadModal
           request={downloadModalRequest}
           onClose={() => setDownloadModalRequest(null)}
+        />
+      )}
+
+      {emailModalRequest && (
+        <SendEmailModal
+          request={emailModalRequest}
+          mode="user"
+          onClose={() => setEmailModalRequest(null)}
         />
       )}
     </div>
