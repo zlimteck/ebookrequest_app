@@ -1433,7 +1433,7 @@ const UserDashboard = () => {
           <div className={styles.modalContent} ref={shelfModalRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Envoyer vers des étagères">
             <h2>Envoyer vers des étagères</h2>
             <p className={styles.modalBookTitle}>« {shelfModalRequest.title} »</p>
-            <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem', visibility: shelfModalChecking ? 'visible' : 'hidden' }}>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0.75rem', opacity: shelfModalChecking ? 1 : 0, transition: 'opacity 0.2s ease' }}>
               Vérification de l'état réel sur Calibre-Web…
             </p>
             {calibreShelves.length === 0 ? (
