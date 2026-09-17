@@ -55,7 +55,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 
 - **Frontend :** React, React Router, Chart.js, Axios
 - **Backend :** Node.js, Express, MongoDB (Mongoose), JWT
-- **Notifications :** Email (SMTP), Push (VAPID), Apprise
+- **Notifications :** Email (SMTP), Push web (VAPID), Push natif iOS (APNs, direct ou relais), Apprise
 - **IA :** OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **APIs :** Google Books, Hardcover, Open Library (recherche et métadonnées, avec repli automatique entre les trois)
 - **Connecteurs :** V (téléchargement auto), Fourtoutici (bibliothèque communautaire francophone, API JSON directe sans quota ni anti-bot), Anna's Archive (recherche + téléchargement via solveur anti-bot [actuellement bloqué](#téléchargement)), LibGen (repli sans protection anti-bot), Calibre-Web (envoi + sync étagère Kobo), PreDB.fr (API de vérification de disponibilité)
@@ -113,7 +113,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Catalogue OPDS pour accès depuis les liseuses (Calibre, KOReader…)
 
 **Notifications**
-- Notifications email et push (VAPID) par événement
+- Notifications email et push (web VAPID + natif iOS via APNs) par événement
 - Notifications multi-services via Apprise (Pushover, Discord, Telegram, Slack, Gotify, Ntfy…)
   - Côté admin : notifications globales configurables par événement (nouvelle demande, complétion, annulation, commentaire, signalement, nouvel utilisateur)
   - Côté utilisateur : chaque utilisateur peut configurer ses propres URLs Apprise dans ses paramètres pour recevoir ses notifications personnelles (livre disponible, annulation, commentaire admin)
@@ -274,6 +274,12 @@ Générer les clés VAPID :
 ```bash
 npx web-push generate-vapid-keys
 ```
+
+**Notifications push natives (iOS/APNs) :** aucune variable d'environnement — configurable uniquement depuis **Admin → Réglages**, avec les secrets (clé `.p8` ou token de relais) chiffrés en base. Deux modes disponibles :
+- **Direct :** l'instance contacte directement Apple (APNs) avec sa propre clé `.p8`, Key ID et Team ID — nécessite un compte Apple Developer.
+- **Relais :** l'instance délègue l'envoi à un serveur relais externe (URL + token), sans avoir besoin de ses propres identifiants Apple.
+
+Dans les deux cas, la couverture est identique : tout utilisateur de l'instance ayant enregistré l'app iOS et accepté les notifications reçoit les pushs, seul le transport diffère.
 
 #### Intelligence artificielle
 
