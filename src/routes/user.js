@@ -5,6 +5,7 @@ import { updateUserProfile, verifyEmail, getCurrentUser, changePassword, updateA
 import User from '../models/User.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 import { testCalibreConnection, pushToCalibre, getSessionCookie, listShelves, addToShelves, reconcileShelves, getBookShelfMembership, resolveCalibreBookId } from '../services/calibreService.js';
+import { emitToUser } from '../services/socketService.js';
 import BookRequest from '../models/BookRequest.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -194,12 +195,19 @@ router.get('/calibre/shelves', requireAuth, async (req, res) => {
 // dashboard avec la vérité du moment plutôt qu'un état mis en cache.
 router.get('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
   try {
-    const [user, request] = await Promise.all([
-      User.findById(req.user.id).select('calibreWeb'),
-      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
-    ]);
+    const callingUser = await User.findById(req.user.id).select('role calibreWeb');
+    const isAdmin = callingUser?.role === 'admin';
+
+    const request = await BookRequest.findOne(
+      isAdmin ? { _id: req.params.id } : { _id: req.params.id, user: req.user.id }
+    );
     if (!request) return res.status(404).json({ error: 'Demande introuvable' });
-    const cfg = user?.calibreWeb;
+
+    const isActingForOther = isAdmin && request.user.toString() !== req.user.id;
+    const owner = isActingForOther
+      ? await User.findById(request.user).select('calibreWeb')
+      : callingUser;
+    const cfg = owner?.calibreWeb;
     if (!cfg?.enabled || !cfg?.url) {
       return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
     }
@@ -234,6 +242,11 @@ router.get('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
 // déjà complété vers les étagères choisies, a posteriori. N'effectue PAS de
 // ré-upload : utilise le calibreBookId déjà connu si disponible, sinon le
 // retrouve par recherche de titre (comme le fait pushToCalibre en interne).
+// Un admin peut aussi corriger les étagères du PROPRIÉTAIRE d'une demande
+// (pas seulement les siennes) — c'est le seul chemin qui gérait ce cas
+// jusqu'ici (le propriétaire lui-même, en self-service) ; sans ça, un admin
+// ne pouvait pas corriger les étagères de la personne qui a fait la demande,
+// seulement celles des comptes additionnels (voir extra-shelves ci-dessous).
 router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
   try {
     const { shelves } = req.body;
@@ -241,12 +254,21 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Liste d\'étagères manquante' });
     }
 
-    const [user, request] = await Promise.all([
-      User.findById(req.user.id).select('calibreWeb'),
-      BookRequest.findOne({ _id: req.params.id, user: req.user.id }),
-    ]);
+    const callingUser = await User.findById(req.user.id).select('role calibreWeb');
+    const isAdmin = callingUser?.role === 'admin';
+
+    const request = await BookRequest.findOne(
+      isAdmin ? { _id: req.params.id } : { _id: req.params.id, user: req.user.id }
+    );
     if (!request) return res.status(404).json({ error: 'Demande introuvable' });
-    const cfg = user?.calibreWeb;
+
+    // Admin agissant pour un autre utilisateur que lui-même : on pousse vers le
+    // compte Calibre-Web du PROPRIÉTAIRE de la demande, pas celui de l'admin.
+    const isActingForOther = isAdmin && request.user.toString() !== req.user.id;
+    const owner = isActingForOther
+      ? await User.findById(request.user).select('calibreWeb')
+      : callingUser;
+    const cfg = owner?.calibreWeb;
     if (!cfg?.enabled || !cfg?.url) {
       return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
     }
@@ -269,7 +291,29 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
 
     const calibreBookId = await resolveCalibreBookId(request, url, cfg.username, password);
     if (!calibreBookId) {
-      return res.status(404).json({ error: 'Livre introuvable côté Calibre-Web — relancez un envoi complet depuis les Réglages.' });
+      // Pas encore dans Calibre (ou plus : ID périmé) : upload complet au lieu
+      // d'échouer, étagères demandées appliquées dans la foulée (pushToCalibre
+      // fait les deux).
+      const { existsSync } = await import('fs');
+      const filePath = path.join(__dirname, '../../uploads', request.filePath);
+      if (!existsSync(filePath)) {
+        return res.status(404).json({ error: 'Fichier introuvable sur le serveur — impossible d\'envoyer vers Calibre.' });
+      }
+      const result = await pushToCalibre(owner, filePath, request.title, shelves);
+      if (!result?.calibreBookId) {
+        return res.status(500).json({ error: 'Échec de l\'envoi vers Calibre-Web.' });
+      }
+      request.selectedShelves = shelves;
+      request.calibrePush = {
+        status: result.shelfResult?.failed?.length ? 'partial' : 'success',
+        error: result.shelfResult?.failed?.length
+          ? `Étagère(s) en échec : ${result.shelfResult.failed.map(f => f.name).join(', ')}`
+          : null,
+        pushedAt: new Date(),
+        calibreBookId: result.calibreBookId,
+      };
+      await request.save();
+      return res.json({ success: true, uploaded: true, ...result.shelfResult, calibreBookId: result.calibreBookId });
     }
 
     // État réel juste avant d'agir, pas notre enregistrement potentiellement périmé —
@@ -306,24 +350,33 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
 // POST /api/users/calibre/sync — traite les demandes complétées non totalement
 // synchronisées : upload complet pour celles jamais envoyées ou en échec total,
 // et juste un retry d'étagère (sans ré-upload) pour celles en statut 'partial'.
+// (fix) Sur Calibre-Web-Automated (CWA), chaque upload attend ~8s le temps de
+// l'ingestion asynchrone, puis matchCalibreBookId peut retenter jusqu'à 4 fois
+// avec 8s d'écart si le titre ne matche pas du premier coup — jusqu'à ~40s par
+// livre dans le pire cas. Traité en boucle séquentielle, 3-4 livres suffisaient
+// à dépasser le timeout client (60s). La route répond donc immédiatement et le
+// traitement continue en tâche de fond ; le résultat arrive via socket.
 router.post('/calibre/sync', requireAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('calibreWeb');
-    if (!user?.calibreWeb?.enabled) {
-      return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
-    }
+  const userId = req.user.id;
+  const user = await User.findById(userId).select('calibreWeb');
+  if (!user?.calibreWeb?.enabled) {
+    return res.status(400).json({ error: 'Calibre-Web non configuré ou désactivé' });
+  }
 
-    const requests = await BookRequest.find({
-      user: req.user.id,
-      status: 'completed',
-      filePath: { $exists: true, $ne: '' },
-      'calibrePush.status': { $nin: ['success'] },
-    });
+  const requests = await BookRequest.find({
+    user: userId,
+    status: 'completed',
+    filePath: { $exists: true, $ne: '' },
+    'calibrePush.status': { $nin: ['success'] },
+  });
 
-    if (!requests.length) {
-      return res.json({ pushed: 0, failed: 0, skipped: 0, message: 'Aucun livre à synchroniser' });
-    }
+  if (!requests.length) {
+    return res.json({ started: false, total: 0, message: 'Aucun livre à synchroniser' });
+  }
 
+  res.json({ started: true, total: requests.length });
+
+  (async () => {
     let pushed = 0, failed = 0, skipped = 0;
     const { existsSync } = await import('fs');
     const url = user.calibreWeb.url.replace(/\/$/, '');
@@ -378,11 +431,11 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
     }
 
     const lastSync = pushed > 0 ? new Date() : null;
-    res.json({ pushed, failed, skipped, total: requests.length, lastSync });
-  } catch (err) {
-    console.error('[Calibre] sync error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+    emitToUser(userId, 'calibre:sync-done', { pushed, failed, skipped, total: requests.length, lastSync });
+  })().catch(err => {
+    console.error('[Calibre] sync (tâche de fond) erreur:', err.message);
+    emitToUser(userId, 'calibre:sync-done', { error: err.message });
+  });
 });
 
 // ── Valentine routes (credentials personnels user) ────────────────────────────

@@ -11,6 +11,7 @@ import hardcoverLogo from '../assets/icons/hardcover.png';
 import { startRegistration } from '@simplewebauthn/browser';
 
 import { getAvatarColor } from '../utils/avatarColor';
+import { useSocket } from '../hooks/useSocket';
 
 const THEME_OPTIONS = [
   {
@@ -515,16 +516,27 @@ const UserSettings = () => {
     setCalibreSyncResult(null);
     try {
       const res = await axiosAdmin.post('/api/users/calibre/sync');
-      setCalibreSyncResult(res.data);
-      if (res.data.lastSync) {
-        setCalibre(prev => ({ ...prev, lastSync: res.data.lastSync }));
+      if (!res.data.started) {
+        // Rien à synchroniser — pas de tâche de fond, réponse immédiate définitive.
+        setCalibreSyncResult(res.data);
+        setCalibreSyncing(false);
       }
+      // Sinon : la synchronisation continue en tâche de fond (peut prendre plusieurs
+      // dizaines de secondes par livre sur Calibre-Web-Automated) — le résultat
+      // arrive via l'événement socket 'calibre:sync-done' ci-dessous.
     } catch (err) {
       setCalibreSyncResult({ error: err.response?.data?.error || err.message });
-    } finally {
       setCalibreSyncing(false);
     }
   };
+
+  useSocket('calibre:sync-done', (data) => {
+    setCalibreSyncResult(data);
+    setCalibreSyncing(false);
+    if (data.lastSync) {
+      setCalibre(prev => ({ ...prev, lastSync: data.lastSync }));
+    }
+  });
 
   const handleHardcoverSave = async () => {
     setHardcoverSaving(true);
@@ -1708,11 +1720,18 @@ const UserSettings = () => {
                   {calibreSyncing ? 'Synchronisation…' : 'Synchroniser les livres existants'}
                 </button>
               </div>
+              {calibreSyncing && !calibreSyncResult && (
+                <p style={{ marginTop: '0.5rem', fontSize: '0.83rem', color: 'var(--color-text-secondary)' }}>
+                  En cours en arrière-plan — peut prendre un moment par livre, tu peux continuer à utiliser l'app.
+                </p>
+              )}
               {calibreSyncResult && (
                 <p style={{ marginTop: '0.5rem', fontSize: '0.83rem', color: calibreSyncResult.error ? 'var(--color-danger)' : 'var(--color-success)' }}>
                   {calibreSyncResult.error
                     ? `✗ ${calibreSyncResult.error}`
-                    : `✓ ${calibreSyncResult.pushed} envoyé(s)${calibreSyncResult.failed ? `, ${calibreSyncResult.failed} échoué(s)` : ''}${calibreSyncResult.skipped ? `, ${calibreSyncResult.skipped} ignoré(s) (fichier absent)` : ''} ${calibreSyncResult.message || ''}`}
+                    : calibreSyncResult.total === 0
+                      ? calibreSyncResult.message || 'Aucun livre à synchroniser'
+                      : `✓ ${calibreSyncResult.pushed} envoyé(s)${calibreSyncResult.failed ? `, ${calibreSyncResult.failed} échoué(s)` : ''}${calibreSyncResult.skipped ? `, ${calibreSyncResult.skipped} ignoré(s) (fichier absent)` : ''}`}
                 </p>
               )}
             </div>

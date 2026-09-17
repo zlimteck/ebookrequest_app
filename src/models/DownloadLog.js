@@ -11,6 +11,9 @@ const downloadLogSchema = new Schema({
   success:       { type: Boolean, required: true },
   error:         { type: String, default: null },
   triggeredBy:   { type: String, enum: ['auto', 'admin'], default: 'auto' },
+  // Distingue le chemin de recherche ayant mené au téléchargement — indépendant
+  // de triggeredBy (qui dit *qui* a déclenché, pas *par quelle recherche*).
+  searchMode:    { type: String, enum: ['detailed', 'direct-valentine', 'direct-fourtoutici', 'admin-manual'], default: 'detailed' },
 }, {
   timestamps: true,
 });

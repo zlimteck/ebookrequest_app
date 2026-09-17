@@ -27,7 +27,9 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
   const [selections, setSelections] = useState({}); // { [userId]: [shelfName, ...] }
   const [statuses, setStatuses] = useState({}); // { [userId]: { status, error } } — état après un envoi
   const [loading, setLoading] = useState(true);
+  const [checkingOwnerLive, setCheckingOwnerLive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingToCalibre, setSendingToCalibre] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -37,14 +39,21 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
         const res = await axiosAdmin.get('/api/requests/calibre/shelf-targets');
         if (cancelled) return;
         const all = Array.isArray(res.data) ? res.data : [];
-        // Exclut le propriétaire de la demande : son propre push est géré
-        // séparément (flux self-service classique), pas par cette modale.
-        const filtered = all.filter(u => u.username !== request.username);
-        setCandidates(filtered);
+        // Le propriétaire de la demande est inclus lui aussi désormais — son
+        // push suit un chemin différent (endpoint self-service, réconcilié
+        // depuis selectedShelves) car il n'est pas un « compte additionnel ».
+        setCandidates(all);
+        const owner = all.find(u => u.username === request.username);
 
         // Pré-coche les cibles déjà connues sur la demande.
         const previous = {};
         const prevStatuses = {};
+        if (owner) {
+          previous[owner._id] = request.selectedShelves || [];
+          if (request.calibrePush?.status) {
+            prevStatuses[owner._id] = { status: request.calibrePush.status, error: request.calibrePush.error };
+          }
+        }
         (request.extraShelfTargets || []).forEach(t => {
           const uid = typeof t.user === 'string' ? t.user : t.user?._id || t.user;
           if (!uid) return;
@@ -53,15 +62,34 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
         });
         setSelections(previous);
         setStatuses(prevStatuses);
+        setLoading(false);
+
+        // Vérification live pour le propriétaire, comme sur « Mes demandes » :
+        // sans ça, une étagère retirée directement dans Calibre-Web resterait
+        // cochée ici indéfiniment (on ne verrait jamais que l'état est stale).
+        // Non bloquant : la modale s'affiche avec le cache le temps de l'appel.
+        if (owner) {
+          setCheckingOwnerLive(true);
+          try {
+            const liveRes = await axiosAdmin.get(`/api/users/calibre/requests/${request._id}/shelves`);
+            if (!cancelled && Array.isArray(liveRes.data?.shelves)) {
+              setSelections(prev => ({ ...prev, [owner._id]: liveRes.data.shelves }));
+            }
+          } catch {
+            // Vérification impossible — on garde le cache plutôt que de bloquer.
+          } finally {
+            if (!cancelled) setCheckingOwnerLive(false);
+          }
+        }
+        return;
       } catch {
         if (!cancelled) setError('Impossible de charger la liste des comptes Calibre-Web.');
-      } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [request.username, request.extraShelfTargets]);
+  }, [request._id, request.username, request.extraShelfTargets, request.selectedShelves, request.calibrePush]);
 
   const toggleShelf = (userId, shelfName) => {
     setSelections(prev => {
@@ -73,17 +101,45 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
     });
   };
 
+  const handleSendOwnerToCalibre = async () => {
+    const owner = candidates.find(u => u.username === request.username);
+    if (!owner) return;
+    setSendingToCalibre(true);
+    setError('');
+    try {
+      const res = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, {
+        shelves: selections[owner._id] || [],
+      });
+      setStatuses(prev => ({
+        ...prev,
+        [owner._id]: { status: res.data?.failed?.length ? 'partial' : 'success', error: res.data?.failed?.length ? `Échec sur : ${res.data.failed.map(f => f.name).join(', ')}` : null },
+      }));
+      onUpdated?.();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors de l\'envoi vers Calibre.');
+    } finally {
+      setSendingToCalibre(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    const owner = candidates.find(u => u.username === request.username);
+    const others = candidates.filter(u => u !== owner);
+
     // On envoie une cible même à shelves vides si elle avait une sélection
     // précédente, pour que le backend puisse retirer via reconciliation.
-    const targets = candidates
+    const targets = others
       .map(u => ({ userId: u._id, shelves: selections[u._id] || [] }))
       .filter(t => t.shelves.length > 0 || (request.extraShelfTargets || []).some(e => {
         const uid = typeof e.user === 'string' ? e.user : e.user?._id || e.user;
         return uid === t.userId;
       }));
 
-    if (!targets.length) {
+    const ownerShelves = owner ? (selections[owner._id] || []) : [];
+    const ownerHadPrevious = (request.selectedShelves || []).length > 0;
+    const includeOwner = owner && (ownerShelves.length > 0 || ownerHadPrevious);
+
+    if (!targets.length && !includeOwner) {
       setError('Choisissez au moins une étagère pour au moins un utilisateur.');
       return;
     }
@@ -91,15 +147,36 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
     setSubmitting(true);
     setError('');
     try {
-      const res = await axiosAdmin.post(`/api/requests/${request._id}/extra-shelves`, { targets });
       const newStatuses = {};
-      (res.data?.results || []).forEach(r => {
-        newStatuses[r.userId] = { status: r.status, error: r.error || null };
-      });
-      setStatuses(newStatuses);
-      onUpdated?.(res.data);
+
+      // Le propriétaire n'est pas un « compte additionnel » : son push passe
+      // par l'endpoint self-service (réconciliation depuis selectedShelves,
+      // pas depuis extraShelfTargets), désormais utilisable par un admin.
+      if (includeOwner) {
+        try {
+          const ownerRes = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, { shelves: ownerShelves });
+          newStatuses[owner._id] = {
+            status: ownerRes.data?.failed?.length ? 'partial' : 'success',
+            error: ownerRes.data?.failed?.length
+              ? `Échec sur : ${ownerRes.data.failed.map(f => f.name).join(', ')}`
+              : null,
+          };
+        } catch (err) {
+          newStatuses[owner._id] = { status: 'failed', error: err.response?.data?.error || err.message };
+        }
+      }
+
+      if (targets.length) {
+        const res = await axiosAdmin.post(`/api/requests/${request._id}/extra-shelves`, { targets });
+        (res.data?.results || []).forEach(r => {
+          newStatuses[r.userId] = { status: r.status, error: r.error || null };
+        });
+      }
+
+      setStatuses(prev => ({ ...prev, ...newStatuses }));
+      onUpdated?.();
     } catch (err) {
-      setError(err.response?.data?.error || 'Erreur lors de l\'envoi vers les étagères additionnelles.');
+      setError(err.response?.data?.error || 'Erreur lors de l\'envoi vers les étagères.');
     } finally {
       setSubmitting(false);
     }
@@ -128,10 +205,13 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
           ) : (
             candidates.map(u => {
               const st = statuses[u._id];
+              const isOwner = u.username === request.username;
               return (
                 <div key={u._id} className={styles.userSection}>
                   <div className={styles.userHeader}>
                     <span className={styles.userName}>{u.username}</span>
+                    {isOwner && <span className={styles.statusBadge} title="A fait la demande">Propriétaire</span>}
+                    {isOwner && <span className={styles.emptyMsg} style={{ fontSize: '0.8em', visibility: checkingOwnerLive ? 'visible' : 'hidden' }}>Vérification…</span>}
                     {st?.status && (
                       <span
                         className={`${styles.statusBadge} ${
@@ -162,6 +242,19 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
                 </div>
               );
             })
+          )}
+          {!loading && candidates.some(u => u.username === request.username) && (
+            <div className={styles.userSection} style={{ borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem' }}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={handleSendOwnerToCalibre}
+                disabled={sendingToCalibre || submitting}
+                title="Envoie le livre vers Calibre-Web sans forcément choisir d'étagère"
+              >
+                {sendingToCalibre ? 'Envoi…' : 'Envoyer vers Calibre (sans étagère)'}
+              </button>
+            </div>
           )}
         </div>
 

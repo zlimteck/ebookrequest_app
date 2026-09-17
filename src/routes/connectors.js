@@ -187,12 +187,12 @@ router.post('/valentine/download-request', requireAuth, requireAdmin, async (req
   try {
     const result = await downloadFromValentineById(requestId, ebookId);
     const br = await BookRequest.findById(requestId).lean();
-    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: true, triggeredBy: 'admin' });
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: true, triggeredBy: 'admin', searchMode: 'admin-manual' });
     if (br?.status === 'completed') triggerKindleIfEnabled(br);
     res.json({ success: true, ...result });
   } catch (err) {
     const br = await BookRequest.findById(requestId).lean().catch(() => null);
-    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'valentine', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin', searchMode: 'admin-manual' }).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });
@@ -310,11 +310,13 @@ router.post('/fourtoutici/download', requireAuth, requireAdmin, async (req, res)
     const { downloadFromFourtoutici } = await import('../services/fourtouticiService.js');
     const result = await downloadFromFourtoutici(fileId, requestId);
     const br = await BookRequest.findById(requestId).lean();
+    // (fix) le succès n'était jamais loggé ici, contrairement à Valentine/Anna's Archive juste au-dessus.
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'fourtoutici', success: true, triggeredBy: 'admin', searchMode: 'admin-manual' });
     if (br?.status === 'completed') triggerKindleIfEnabled(br);
     res.json({ success: true, ...result });
   } catch (err) {
     const br = await BookRequest.findById(requestId).lean().catch(() => null);
-    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'fourtoutici', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'fourtoutici', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin', searchMode: 'admin-manual' }).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });
@@ -392,12 +394,12 @@ router.post('/annasarchive/download', requireAuth, requireAdmin, async (req, res
   try {
     const result = await downloadFromAnnas(md5, requestId, format || null);
     const br = await BookRequest.findById(requestId).lean();
-    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: true, triggeredBy: 'admin' });
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: true, triggeredBy: 'admin', searchMode: 'admin-manual' });
     if (result && br?.status === 'completed') triggerKindleIfEnabled(br);
     res.json({ success: true, ...result });
   } catch (err) {
     const br = await BookRequest.findById(requestId).lean().catch(() => null);
-    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin' }).catch(() => {});
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'annasarchive', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin', searchMode: 'admin-manual' }).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });

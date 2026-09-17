@@ -18,7 +18,7 @@ import { sendPushToUser } from './webPushService.js';
 import { emitToUser } from './socketService.js';
 import { decrypt } from './cryptoService.js';
 
-async function logDownload({ bookRequest, connector, success, error = null, triggeredBy = 'auto' }) {
+export async function logDownload({ bookRequest, connector, success, error = null, triggeredBy = 'auto', searchMode = 'detailed' }) {
   try {
     await DownloadLog.create({
       bookRequestId: bookRequest._id || bookRequest,
@@ -29,6 +29,7 @@ async function logDownload({ bookRequest, connector, success, error = null, trig
       success,
       error: error ? String(error).slice(0, 500) : null,
       triggeredBy,
+      searchMode,
     });
   } catch (e) {
     console.error('[DownloadLog] Erreur écriture log:', e.message);
@@ -80,9 +81,9 @@ function extractVolumeNumber(title) {
 /**
  * Envoie les notifications Apprise (admin global + user personnel) après une complétion automatique.
  */
-async function notifyCompletion(bookRequest) {
+export async function notifyCompletion(bookRequest, meta = {}) {
   try {
-    appriseService.notifyBookCompleted(bookRequest).catch(() => {});
+    appriseService.notifyBookCompleted(bookRequest, meta).catch(() => {});
 
     // Email aux admins — complétion (même gate que les autres chemins de complétion)
     ConnectorSettings.findOne({ service: 'email' }).lean().then(async emailDoc => {
@@ -251,7 +252,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
     if (afterValentine?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Valentine a complété "${title}"`);
       await logDownload({ bookRequest: bookRequest || afterValentine, connector: 'valentine', success: true });
-      await notifyCompletion(afterValentine);
+      await notifyCompletion(afterValentine, { connector: 'valentine', searchMode: 'detailed' });
       return;
     }
 
@@ -266,7 +267,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
         if (afterValentine?.status === 'completed') {
           console.log(`[Orchestrateur] ✓ Valentine (admin fallback) a complété "${title}"`);
           await logDownload({ bookRequest: bookRequest || afterValentine, connector: 'valentine', success: true });
-          await notifyCompletion(afterValentine);
+          await notifyCompletion(afterValentine, { connector: 'valentine', searchMode: 'detailed' });
           return;
         }
       }
@@ -379,7 +380,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
             if (afterFourtoutici?.status === 'completed') {
               console.log(`[Orchestrateur] ✓ Fourtoutici a complété "${title}"`);
               await logDownload({ bookRequest: bookRequest || afterFourtoutici, connector: 'fourtoutici', success: true });
-              await notifyCompletion(afterFourtoutici);
+              await notifyCompletion(afterFourtoutici, { connector: 'fourtoutici', searchMode: 'detailed' });
               return;
             }
           } catch (err) {
@@ -500,7 +501,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
     if (afterAnnas?.status === 'completed') {
       console.log(`[Orchestrateur] ✓ Anna's Archive a complété "${title}"`);
       await logDownload({ bookRequest: bookRequest || afterAnnas, connector: 'annasarchive', success: true });
-      await notifyCompletion(afterAnnas);
+      await notifyCompletion(afterAnnas, { connector: 'annasarchive', searchMode: 'detailed' });
     } else {
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Téléchargement Anna\'s Archive échoué' });
       await flagAutoDownloadFailed(bookRequest, 'Le téléchargement automatique a échoué.');
