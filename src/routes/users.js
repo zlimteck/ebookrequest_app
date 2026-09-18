@@ -107,7 +107,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays valentineDirectLimit valentineDirectLimitDays avatar isActive chatbotEnabled chatbotDailyLimit valentine.username'
+      'username email role emailVerified createdAt updatedAt lastLogin lastActivity requestLimit requestLimitDays valentineDirectLimit valentineDirectLimitDays emailSendLimit emailSendLimitDays avatar isActive chatbotEnabled chatbotDailyLimit valentine.username'
     ).sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {
@@ -200,6 +200,23 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'La fenêtre glissante Valentine doit être d\'au moins 1 jour.' });
       }
       updates.valentineDirectLimitDays = parsed;
+    }
+
+    const { emailSendLimit, emailSendLimitDays } = req.body;
+    if (emailSendLimit !== undefined) {
+      const parsed = parseInt(emailSendLimit, 10);
+      if (isNaN(parsed) || parsed < -1) {
+        return res.status(400).json({ error: 'La limite d\'envois par email doit être un entier positif, 0, ou -1 (illimité).' });
+      }
+      updates.emailSendLimit = parsed;
+    }
+
+    if (emailSendLimitDays !== undefined) {
+      const parsed = parseInt(emailSendLimitDays, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        return res.status(400).json({ error: 'La fenêtre glissante d\'envois par email doit être d\'au moins 1 jour.' });
+      }
+      updates.emailSendLimitDays = parsed;
     }
 
     const { chatbotDailyLimit } = req.body;

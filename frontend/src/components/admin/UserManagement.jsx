@@ -45,7 +45,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, chatbotDailyLimit: 10 });
+  const [formData, setFormData] = useState({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, emailSendLimit: 10, emailSendLimitDays: 7, unlimitedEmailSend: false, chatbotDailyLimit: 10 });
   const [errors, setErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,6 +140,8 @@ const UserManagement = () => {
       delete userData.unlimitedRequests;
       if (userData.unlimitedValentineDirect) userData.valentineDirectLimit = -1;
       delete userData.unlimitedValentineDirect;
+      if (userData.unlimitedEmailSend) userData.emailSendLimit = -1;
+      delete userData.unlimitedEmailSend;
       if (userData._id) {
         await axiosAdmin.put(`/api/admin/users/${userData._id}`, userData);
         toast.success('Utilisateur mis à jour');
@@ -155,7 +157,7 @@ const UserManagement = () => {
   };
 
   const resetForm = () => {
-    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, chatbotDailyLimit: 10 });
+    setFormData({ _id: '', username: '', email: '', password: '', role: 'user', requestLimit: 10, requestLimitDays: 30, unlimitedRequests: false, valentineDirectLimit: 5, valentineDirectLimitDays: 7, unlimitedValentineDirect: false, emailSendLimit: 10, emailSendLimitDays: 7, unlimitedEmailSend: false, chatbotDailyLimit: 10 });
     setErrors({});
     setShowModal(false);
   };
@@ -163,10 +165,12 @@ const UserManagement = () => {
   const handleEdit = (user) => {
     const unlimited = (user.requestLimit ?? 10) < 0;
     const unlimitedValentine = (user.valentineDirectLimit ?? -1) < 0;
+    const unlimitedEmailSend = (user.emailSendLimit ?? 10) < 0;
     setFormData({
       _id: user._id, username: user.username, email: user.email, password: '', role: user.role,
       requestLimit: unlimited ? 10 : (user.requestLimit ?? 10), requestLimitDays: user.requestLimitDays ?? 30, unlimitedRequests: unlimited,
       valentineDirectLimit: unlimitedValentine ? 5 : (user.valentineDirectLimit ?? 5), valentineDirectLimitDays: user.valentineDirectLimitDays ?? 7, unlimitedValentineDirect: unlimitedValentine,
+      emailSendLimit: unlimitedEmailSend ? 10 : (user.emailSendLimit ?? 10), emailSendLimitDays: user.emailSendLimitDays ?? 7, unlimitedEmailSend,
       chatbotDailyLimit: user.chatbotDailyLimit ?? 10,
     });
     setUserStats(null);
@@ -474,6 +478,38 @@ const UserManagement = () => {
                       onChange={handleInputChange} className={styles.formInput} min="1"
                       disabled={formData.unlimitedValentineDirect}
                       style={{ opacity: formData.unlimitedValentineDirect ? 0.4 : 1 }} />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Limite d'envois par email</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <input
+                        type="number" name="emailSendLimit" value={formData.emailSendLimit}
+                        onChange={handleInputChange} className={styles.formInput} min="1"
+                        disabled={formData.unlimitedEmailSend}
+                        style={{ flex: 1, opacity: formData.unlimitedEmailSend ? 0.4 : 1 }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.unlimitedEmailSend}
+                          onChange={e => setFormData(p => ({ ...p, unlimitedEmailSend: e.target.checked }))}
+                          style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }}
+                        />
+                        Illimité
+                      </label>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.3rem 0 0' }}>
+                      Nombre d'envois de livre par email (vers n'importe quelle adresse), tous types de demandes confondus — protège le serveur mail partagé contre un abus.
+                    </p>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Fenêtre glissante envois email (jours)</label>
+                    <input type="number" name="emailSendLimitDays" value={formData.emailSendLimitDays}
+                      onChange={handleInputChange} className={styles.formInput} min="1"
+                      disabled={formData.unlimitedEmailSend}
+                      style={{ opacity: formData.unlimitedEmailSend ? 0.4 : 1 }} />
                   </div>
                 </div>
 

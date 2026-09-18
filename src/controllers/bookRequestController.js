@@ -31,6 +31,7 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
   }
 };
 import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail, sendKindleDelivery, sendBookByEmail, MAX_EBOOK_ATTACHMENT_BYTES } from '../services/emailService.js';
+import EmailLog from '../models/EmailLog.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
@@ -1034,19 +1035,42 @@ export const sendEbookByEmail = async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
+    const sender = await User.findById(req.user.id).select('email emailSendLimit emailSendLimitDays');
+
     // "Mon adresse" : résolue côté serveur depuis le compte authentifié plutôt
     // que de faire confiance à une valeur fournie par le client.
     let targetEmail;
     if (useOwnEmail) {
-      const self = await User.findById(req.user.id).select('email');
-      if (!self?.email) {
+      if (!sender?.email) {
         return res.status(400).json({ error: 'Aucune adresse email associée à votre compte.' });
       }
-      targetEmail = self.email;
+      targetEmail = sender.email;
     } else {
       targetEmail = (email || '').trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
         return res.status(400).json({ error: 'Adresse email invalide.' });
+      }
+    }
+
+    // Quota d'envois par email, jamais appliqué aux admins — protège le
+    // serveur mail partagé de l'instance contre un abus (spam vers des
+    // adresses tierces, risque de flag du domaine expéditeur).
+    if (!isAdmin) {
+      const days = sender?.emailSendLimitDays ?? 7;
+      const limit = sender?.emailSendLimit ?? 10;
+      if (limit >= 0) {
+        const windowStart = new Date();
+        windowStart.setDate(windowStart.getDate() - days);
+        const recentCount = await EmailLog.countDocuments({
+          senderUserId: req.user.id,
+          type: 'book_email_send',
+          createdAt: { $gte: windowStart },
+        });
+        if (recentCount >= limit) {
+          return res.status(429).json({
+            error: `Vous avez atteint votre limite de ${limit} envoi(s) par email sur les ${days} derniers jours.`
+          });
+        }
       }
     }
 
@@ -1072,6 +1096,14 @@ export const sendEbookByEmail = async (req, res) => {
 
     const filename = path.basename(absolutePath);
     await sendBookByEmail(targetEmail, absolutePath, filename, { senderId: req.user.id, title: request.title, author: request.author });
+
+    // Aucun autre moyen de savoir que l'utilisateur a récupéré son livre une
+    // fois envoyé par email (pas de requête de téléchargement classique) —
+    // comptabilisé comme téléchargé dès l'envoi.
+    if (!request.downloadedAt) {
+      request.downloadedAt = new Date();
+      await request.save();
+    }
 
     res.json({ success: true });
   } catch (error) {

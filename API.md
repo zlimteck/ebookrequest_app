@@ -298,6 +298,21 @@ curl -OJ https://app.ndd.fr/api/requests/download/ID \
   -H "Authorization: Bearer <token>"
 ```
 
+### `POST /api/requests/:id/send-email`
+Envoie le fichier d'une demande complétée par email en pièce jointe (20 Mo max, sinon `413`), vers l'adresse du compte authentifié (`useOwnEmail: true`, résolue côté serveur) ou vers une adresse libre (`email`). Accessible au propriétaire de la demande pour ses propres demandes, et à un admin pour n'importe quelle demande. Limité par `emailSendLimit`/`emailSendLimitDays` (voir `PUT /api/admin/users/:id`), jamais pour un admin. Marque la demande comme téléchargée (`downloadedAt`), aucun autre moyen de le savoir une fois le fichier envoyé par email.
+```bash
+curl -X POST https://app.ndd.fr/api/requests/ID/send-email \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"useOwnEmail": true}'
+```
+```bash
+curl -X POST https://app.ndd.fr/api/requests/ID/send-email \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ami@exemple.fr"}'
+```
+
 ### `GET /api/requests/:id/convert-formats`
 ```bash
 curl https://app.ndd.fr/api/requests/ID/convert-formats \
@@ -670,12 +685,12 @@ curl -X POST https://app.ndd.fr/api/admin/users \
 ```
 
 ### `PUT /api/admin/users/:id` — Modifier un utilisateur
-`valentineDirectLimit`/`valentineDirectLimitDays` limitent la consommation de cet utilisateur sur le compte Valentine admin partagé (recherche directe), sans effet s'il a son propre compte Valentine. `-1` = illimité.
+`valentineDirectLimit`/`valentineDirectLimitDays` limitent la consommation de cet utilisateur sur le compte Valentine admin partagé (recherche directe), sans effet s'il a son propre compte Valentine. `emailSendLimit`/`emailSendLimitDays` limitent le nombre d'envois de livre par email (voir `POST /api/requests/:id/send-email`), jamais appliqué aux admins. `-1` = illimité dans les deux cas.
 ```bash
 curl -X PUT https://app.ndd.fr/api/admin/users/ID \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"role": "admin", "requestLimit": 10, "requestLimitDays": 30, "valentineDirectLimit": 5, "valentineDirectLimitDays": 7}'
+  -d '{"role": "admin", "requestLimit": 10, "requestLimitDays": 30, "valentineDirectLimit": 5, "valentineDirectLimitDays": 7, "emailSendLimit": 10, "emailSendLimitDays": 7}'
 ```
 
 ### `PATCH /api/admin/users/:id/toggle-active`

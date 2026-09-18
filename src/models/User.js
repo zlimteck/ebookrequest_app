@@ -99,6 +99,19 @@ const userSchema = new mongoose.Schema({
     default: 7,
     min: 1
   },
+  // Limite d'envois d'ebook par email (vers une adresse quelconque) — évite
+  // qu'un compte compromis ou malveillant fasse spammer le serveur mail
+  // partagé de l'instance. -1 = illimité, jamais appliqué aux admins.
+  emailSendLimit: {
+    type: Number,
+    default: 10,
+    min: -1
+  },
+  emailSendLimitDays: {
+    type: Number,
+    default: 7,
+    min: 1
+  },
   avatar: {
     type: String,
     default: null

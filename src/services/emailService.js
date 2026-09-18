@@ -81,7 +81,7 @@ const FOOTER = () => `
     </p>
   </div>`;
 
-function darkEmail({ gradient, title, subtitle, body }) {
+function darkEmail({ gradient, title, subtitle, body, footer }) {
   return `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;">
   <div style="background:${gradient};padding:2.5rem 2rem;text-align:center;">
@@ -90,9 +90,20 @@ function darkEmail({ gradient, title, subtitle, body }) {
     ${subtitle ? `<p style="color:rgba(255,255,255,0.75);margin:0;font-size:0.9rem;">${subtitle}</p>` : ''}
   </div>
   <div style="padding:2rem;">${body}</div>
-  ${FOOTER()}
+  ${footer !== undefined ? footer : FOOTER()}
 </div>`;
 }
+
+// Footer sans lien vers le site — pour les emails pouvant atteindre une
+// personne sans compte sur l'instance (ex. envoi d'un livre à une adresse
+// libre), où renvoyer vers le site n'a pas de sens.
+const FOOTER_NO_LINK = () => `
+  <div style="background:#0a0f1e;padding:1.25rem 2rem;text-align:center;border-top:1px solid #1e293b;">
+    <p style="color:#475569;font-size:0.78rem;margin:0;line-height:1.6;">
+      © EbookRequest<br>
+      Cet email a été envoyé automatiquement, merci de ne pas y répondre.
+    </p>
+  </div>`;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -498,7 +509,7 @@ export const MAX_EBOOK_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 Mo
  * de téléchargement généré : le fichier est directement joint, ce qui évite
  * toute surface d'attaque supplémentaire (aucun token/lien à protéger).
  */
-async function sendEbookAttachment(toEmail, filePath, filename, subject, text) {
+async function sendEbookAttachment(toEmail, filePath, filename, subject, text, html) {
   const { cfg, transporter, resendClient, from } = await getEmailContext();
 
   if (cfg.provider === 'resend' && resendClient) {
@@ -508,6 +519,7 @@ async function sendEbookAttachment(toEmail, filePath, filename, subject, text) {
       to: toEmail,
       subject,
       text,
+      ...(html && { html }),
       attachments: [{ filename, content: fileBuffer }],
     });
     if (error) throw new Error(error.message || 'Resend error');
@@ -520,6 +532,7 @@ async function sendEbookAttachment(toEmail, filePath, filename, subject, text) {
       to: toEmail,
       subject,
       text,
+      ...(html && { html }),
       attachments: [{ filename, path: filePath }],
     });
     return;
@@ -552,6 +565,18 @@ export const sendBookByEmail = async (toEmail, filePath, filename, { senderId, t
   const bodyText = author?.trim()
     ? `Le livre "${bookTitle}" de ${author.trim()} vous a été envoyé depuis EbookRequest.`
     : `Le livre "${bookTitle}" vous a été envoyé depuis EbookRequest.`;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#059669 0%,#0891b2 100%)',
+    title: '📚 Un livre vous a été envoyé',
+    subtitle: 'Le fichier est joint à cet email',
+    body: `
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">Le livre ci-dessous vous a été envoyé depuis EbookRequest, en pièce jointe.</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+        <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(bookTitle)}</p>
+        ${author?.trim() ? `<p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(author.trim())}</p>` : ''}
+      </div>`,
+    footer: FOOTER_NO_LINK(),
+  });
   const { cfg } = await getEmailContext();
 
   const log = await EmailLog.create({
@@ -560,11 +585,12 @@ export const sendBookByEmail = async (toEmail, filePath, filename, { senderId, t
     subject: bookTitle,
     type: 'book_email_send',
     status: 'sent',
-    events: [{ type: 'sent', timestamp: new Date(), data: senderId ? { senderId } : undefined }],
+    senderUserId: senderId || null,
+    events: [{ type: 'sent', timestamp: new Date() }],
   });
 
   try {
-    await sendEbookAttachment(toEmail, filePath, filename, bookTitle, bodyText);
+    await sendEbookAttachment(toEmail, filePath, filename, bookTitle, bodyText, html);
   } catch (err) {
     await EmailLog.updateOne({ _id: log._id }, {
       $set: { status: 'failed', error: err.message },

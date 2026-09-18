@@ -86,6 +86,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Envoi automatique du fichier vers Calibre-Web à la complétion d'une demande
 - Synchronisation automatique de l'étagère Kobo dans Calibre-Web (le livre apparaît directement sur la liseuse)
 - Envoi automatique du fichier sur l'adresse `@kindle.com` de l'utilisateur à chaque complétion (activable par l'utilisateur dans ses paramètres, requiert un email vérifié)
+- Envoi manuel d'un ebook déjà téléchargé par email (en pièce jointe), vers sa propre adresse ou une adresse libre, utile pour dépanner un proche sans lui créer de compte. Limité par utilisateur (configurable par un admin, illimité pour les admins) pour protéger le serveur mail partagé de l'instance contre un abus
 
 > [!WARNING]
 > **Anna's Archive est actuellement inutilisable en automatique.** Le site a toujours été derrière

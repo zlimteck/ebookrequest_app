@@ -19,6 +19,10 @@ const emailLogSchema = new mongoose.Schema({
   to: { type: String, required: true },
   subject: { type: String, required: true },
 
+  // Utilisateur à l'origine de l'envoi — uniquement renseigné pour
+  // 'book_email_send' (quota par utilisateur, voir emailSendLimit sur User).
+  senderUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
   // Catégorie de l'email
   type: {
     type: String,
@@ -50,6 +54,7 @@ const emailLogSchema = new mongoose.Schema({
 emailLogSchema.index({ sentAt: -1 });
 emailLogSchema.index({ status: 1, sentAt: -1 });
 emailLogSchema.index({ type: 1, sentAt: -1 });
+emailLogSchema.index({ senderUserId: 1, type: 1, createdAt: -1 });
 
 const EmailLog = mongoose.model('EmailLog', emailLogSchema);
 export default EmailLog;

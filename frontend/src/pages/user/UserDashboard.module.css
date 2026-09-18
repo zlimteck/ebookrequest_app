@@ -847,30 +847,41 @@
     gap: 0.65rem;
   }
 
-  /* Le bouton "Modifier" apparaît désormais aussi sur les demandes terminées
-     (pas seulement en attente) — jusqu'à 9 icônes possibles sur une carte
-     (lien, lire, télécharger, étagères, signaler, messages, note, métadonnées,
-     modifier), qui grignotaient l'espace de .requestDate à droite jusqu'à la
-     tronquer sur mobile. Icônes resserrées au maximum + icône secondaire de
-     complétion masquée (l'info reste dans le tooltip) pour garder tout sur
-     une seule ligne sans scroll ni renvoi à la ligne. */
+  /* Le nombre d'icônes d'action par carte a grandi au fil des fonctionnalités
+     (lien, lire, télécharger, étagères, envoi par email, signaler, messages,
+     note, métadonnées, modifier…) et continuera de grandir — les caser sur la
+     même ligne que .requestDate en les resserrant à chaque ajout est un
+     rafistolage qui casse dès la prochaine icône. À la place : les icônes
+     défilent horizontalement sur leur propre ligne (jamais de renvoi à la
+     ligne au milieu d'une icône), la date passe systématiquement en dessous,
+     jamais écrasée ni pincée. */
+  .actionStrip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+
   .actionIcons {
-    gap: 0.12rem;
+    gap: 0.3rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+  }
+
+  .actionIcons::-webkit-scrollbar {
+    display: none;
   }
 
   .iconBtn {
-    width: 23px;
-    height: 23px;
+    width: 28px;
+    height: 28px;
   }
 
   .requestDate {
     flex-shrink: 0;
     white-space: nowrap;
     font-size: 0.7rem;
-  }
-
-  .downloadedDate {
-    display: none;
   }
 }
 
