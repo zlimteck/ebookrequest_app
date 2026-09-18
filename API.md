@@ -536,13 +536,14 @@ curl -X POST https://app.ndd.fr/api/requests/64f.../extra-shelves \
 ```
 
 ### `GET /api/users/hardcover`
-Config personnelle de synchro bibliothèque (clé API, distincte de celle des Réglages admin).
+Config personnelle de synchro bibliothèque (clé API, distincte de celle des Réglages admin). `lastSync` reflète la date de la dernière entrée `ReadingList` synchronisée avec succès (`null` si aucune), même principe que `lastSync` sur `GET /api/users/calibre`.
 ```bash
 curl https://app.ndd.fr/api/users/hardcover \
   -H "Authorization: Bearer <token>"
 ```
 
 ### `PUT /api/users/hardcover`
+Renvoie `lastSync` au même titre que `GET /api/users/hardcover`.
 ```bash
 curl -X PUT https://app.ndd.fr/api/users/hardcover \
   -H "Authorization: Bearer <token>" \

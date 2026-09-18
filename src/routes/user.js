@@ -8,6 +8,7 @@ import { testCalibreConnection, pushToCalibre, getSessionCookie, listShelves, ad
 import { emitToUser } from '../services/socketService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import BookRequest from '../models/BookRequest.js';
+import ReadingList from '../models/ReadingList.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -574,13 +575,21 @@ router.post('/valentine/test', requireAuth, async (req, res) => {
 // GET /api/users/hardcover
 router.get('/hardcover', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('hardcover');
+    const [user, lastSyncDoc] = await Promise.all([
+      User.findById(req.user.id).select('hardcover'),
+      ReadingList.findOne(
+        { userId: req.user.id, 'hardcoverSync.status': 'synced' },
+        { 'hardcoverSync.syncedAt': 1 },
+        { sort: { 'hardcoverSync.syncedAt': -1 } }
+      ),
+    ]);
     if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
     res.json({
       enabled: user.hardcover?.enabled ?? false,
       apiKey: user.hardcover?.apiKey ? '••••••••' : '',
       _hasApiKey: !!user.hardcover?.apiKey,
       _keyUpdatedAt: user.hardcover?.apiKey ? user.hardcover?.apiKeySavedAt : null,
+      lastSync: lastSyncDoc?.hardcoverSync?.syncedAt || null,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -606,12 +615,20 @@ router.put('/hardcover', requireAuth, async (req, res) => {
       }
     }
 
-    const user = await User.findByIdAndUpdate(req.user.id, { $set: updates }, { new: true }).select('hardcover');
+    const [user, lastSyncDoc] = await Promise.all([
+      User.findByIdAndUpdate(req.user.id, { $set: updates }, { new: true }).select('hardcover'),
+      ReadingList.findOne(
+        { userId: req.user.id, 'hardcoverSync.status': 'synced' },
+        { 'hardcoverSync.syncedAt': 1 },
+        { sort: { 'hardcoverSync.syncedAt': -1 } }
+      ),
+    ]);
     res.json({
       enabled: user.hardcover?.enabled ?? false,
       apiKey: user.hardcover?.apiKey ? '••••••••' : '',
       _hasApiKey: !!user.hardcover?.apiKey,
       _keyUpdatedAt: user.hardcover?.apiKey ? user.hardcover?.apiKeySavedAt : null,
+      lastSync: lastSyncDoc?.hardcoverSync?.syncedAt || null,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
