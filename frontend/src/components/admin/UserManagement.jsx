@@ -421,6 +421,8 @@ const UserManagement = () => {
                     {errors.role && <span className={styles.errorText}>{errors.role}</span>}
                   </div>
 
+                  <p className={styles.formSectionTitle}>Quota de demandes</p>
+
                   <div className={styles.formGroup}>
                     <label>Limite de demandes</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -447,6 +449,8 @@ const UserManagement = () => {
                     <input type="number" name="requestLimitDays" value={formData.requestLimitDays}
                       onChange={handleInputChange} className={styles.formInput} min="1" />
                   </div>
+
+                  <p className={styles.formSectionTitle}>Quota Valentine (compte partagé)</p>
 
                   <div className={styles.formGroup}>
                     <label>Limite Valentine (compte partagé)</label>
@@ -479,6 +483,8 @@ const UserManagement = () => {
                       disabled={formData.unlimitedValentineDirect}
                       style={{ opacity: formData.unlimitedValentineDirect ? 0.4 : 1 }} />
                   </div>
+
+                  <p className={styles.formSectionTitle}>Quota d'envois par email</p>
 
                   <div className={styles.formGroup}>
                     <label>Limite d'envois par email</label>
@@ -516,8 +522,8 @@ const UserManagement = () => {
                 {formData._id && (() => {
                   const editedUser = users.find(u => u._id === formData._id);
                   return (
-                    <div className={styles.formGroup} style={{ marginTop: '1rem' }}>
-                      <label>EbookRequest AI</label>
+                    <div className={styles.formGroup}>
+                      <p className={styles.formSectionTitle} style={{ margin: '0.5rem 0 0.4rem' }}>EbookRequest AI</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <input
                           type="number"

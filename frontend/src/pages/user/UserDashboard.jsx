@@ -36,6 +36,57 @@ const isReadable = (filePath) => {
 };
 
 
+// Défilement horizontal des icônes d'action, avec des points de pagination
+// (style carrousel) affichés uniquement quand le contenu déborde réellement —
+// remplace la barre de scroll native sur mobile, où le nombre d'icônes par
+// carte grandit au fil des fonctionnalités.
+const ActionIconsScroll = ({ children, className }) => {
+  const scrollRef = useRef(null);
+  const [pageCount, setPageCount] = useState(1);
+  const [activePage, setActivePage] = useState(0);
+
+  const recompute = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 4) {
+      setPageCount(1);
+      setActivePage(0);
+      return;
+    }
+    const pages = Math.max(2, Math.ceil(el.scrollWidth / el.clientWidth));
+    setPageCount(pages);
+    setActivePage(Math.round((el.scrollLeft / maxScroll) * (pages - 1)));
+  }, []);
+
+  useEffect(() => {
+    recompute();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const onScroll = () => recompute();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, [recompute, children]);
+
+  return (
+    <div className={styles.actionIconsWrap}>
+      <div className={className} ref={scrollRef}>{children}</div>
+      {pageCount > 1 && (
+        <div className={styles.actionDots}>
+          {Array.from({ length: pageCount }).map((_, i) => (
+            <span key={i} className={`${styles.actionDot} ${i === activePage ? styles.actionDotActive : ''}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const UserDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1209,7 +1260,7 @@ const UserDashboard = () => {
                 )}
                 {/* Action strip */}
                 <div className={styles.actionStrip}>
-                  <div className={styles.actionIcons}>
+                  <ActionIconsScroll className={styles.actionIcons}>
                     {request.link && (
                       <a href={request.link} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title="Voir plus d'informations">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1314,7 +1365,7 @@ const UserDashboard = () => {
                         </svg>
                       </button>
                     )}
-                  </div>
+                  </ActionIconsScroll>
 
                   <span className={styles.requestDate}>
                     {new Date(request.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}

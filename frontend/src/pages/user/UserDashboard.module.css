@@ -861,16 +861,41 @@
     gap: 0.4rem;
   }
 
+  .actionIconsWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
   .actionIcons {
     gap: 0.3rem;
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    padding-bottom: 2px;
   }
 
   .actionIcons::-webkit-scrollbar {
     display: none;
+  }
+
+  .actionDots {
+    display: flex;
+    justify-content: center;
+    gap: 0.3rem;
+  }
+
+  .actionDot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-border);
+    transition: background 0.15s, transform 0.15s;
+  }
+
+  .actionDotActive {
+    background: var(--color-text-muted);
+    transform: scale(1.4);
   }
 
   .iconBtn {
