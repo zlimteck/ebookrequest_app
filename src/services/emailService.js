@@ -482,24 +482,32 @@ export const sendNewLoginAlertEmail = async (user, { ip, location, browser, os, 
   return sendEmail({ to: user.email, subject: 'Nouvelle connexion détectée — EbookRequest', html, type: 'login_alert' });
 };
 
-// ─── Kindle delivery ──────────────────────────────────────────────────────────
+// ─── Envoi de fichier en pièce jointe (partagé Kindle + envoi manuel) ─────────
 
 /**
- * Envoie un ebook directement sur une adresse Kindle via email avec pièce jointe.
- * L'expéditeur (EMAIL_FROM_ADDRESS) doit être dans les expéditeurs approuvés Amazon.
+ * Taille max d'une pièce jointe ebook, en octets. Au-delà, beaucoup de
+ * providers SMTP/Resend rejettent ou tronquent silencieusement l'envoi — on
+ * préfère un refus explicite côté app.
  */
-export const sendKindleDelivery = async (kindleEmail, filePath, filename) => {
-  const bookTitle = path.basename(filename, path.extname(filename));
-  const subject = bookTitle;
+export const MAX_EBOOK_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 Mo
+
+/**
+ * Envoie un fichier ebook en pièce jointe à une adresse email, via SMTP ou
+ * Resend. Fonction interne partagée par sendKindleDelivery et sendBookByEmail
+ * — pas de log EmailLog ici (log fait par l'appelant si besoin), pas de lien
+ * de téléchargement généré : le fichier est directement joint, ce qui évite
+ * toute surface d'attaque supplémentaire (aucun token/lien à protéger).
+ */
+async function sendEbookAttachment(toEmail, filePath, filename, subject, text) {
   const { cfg, transporter, resendClient, from } = await getEmailContext();
 
   if (cfg.provider === 'resend' && resendClient) {
     const fileBuffer = fs.readFileSync(filePath);
     const { data, error } = await resendClient.emails.send({
       from,
-      to: kindleEmail,
+      to: toEmail,
       subject,
-      text: `Votre livre "${bookTitle}" est joint à cet email.`,
+      text,
       attachments: [{ filename, content: fileBuffer }],
     });
     if (error) throw new Error(error.message || 'Resend error');
@@ -509,13 +517,61 @@ export const sendKindleDelivery = async (kindleEmail, filePath, filename) => {
   if (transporter) {
     await transporter.sendMail({
       from,
-      to: kindleEmail,
+      to: toEmail,
       subject,
-      text: `Votre livre "${bookTitle}" est joint à cet email.`,
+      text,
       attachments: [{ filename, path: filePath }],
     });
     return;
   }
 
   throw new Error('Aucun provider email configuré.');
+}
+
+/**
+ * Envoie un ebook directement sur une adresse Kindle via email avec pièce jointe.
+ * L'expéditeur (EMAIL_FROM_ADDRESS) doit être dans les expéditeurs approuvés Amazon.
+ */
+export const sendKindleDelivery = async (kindleEmail, filePath, filename) => {
+  const bookTitle = path.basename(filename, path.extname(filename));
+  return sendEbookAttachment(kindleEmail, filePath, filename, bookTitle, `Votre livre "${bookTitle}" est joint à cet email.`);
+};
+
+/**
+ * Envoie un ebook déjà téléchargé par l'app à une adresse email arbitraire
+ * (envoi manuel déclenché par un user pour sa propre demande, ou par un
+ * admin pour n'importe quelle demande complétée). Journalisé dans EmailLog
+ * (contrairement à sendKindleDelivery) : n'importe quel user pouvant cibler
+ * n'importe quelle adresse, une trace est utile en cas d'abus signalé.
+ * title/author viennent de la demande (BookRequest) plutôt que du nom de
+ * fichier sur disque, qui peut être un slug de la source (Valentine, Fourtoutici…)
+ * sans rapport avec le titre réel — fallback sur le nom de fichier si absents.
+ */
+export const sendBookByEmail = async (toEmail, filePath, filename, { senderId, title, author } = {}) => {
+  const bookTitle = title?.trim() || path.basename(filename, path.extname(filename));
+  const bodyText = author?.trim()
+    ? `Le livre "${bookTitle}" de ${author.trim()} vous a été envoyé depuis EbookRequest.`
+    : `Le livre "${bookTitle}" vous a été envoyé depuis EbookRequest.`;
+  const { cfg } = await getEmailContext();
+
+  const log = await EmailLog.create({
+    provider: cfg.provider,
+    to: toEmail,
+    subject: bookTitle,
+    type: 'book_email_send',
+    status: 'sent',
+    events: [{ type: 'sent', timestamp: new Date(), data: senderId ? { senderId } : undefined }],
+  });
+
+  try {
+    await sendEbookAttachment(toEmail, filePath, filename, bookTitle, bodyText);
+  } catch (err) {
+    await EmailLog.updateOne({ _id: log._id }, {
+      $set: { status: 'failed', error: err.message },
+      $push: { events: { type: 'failed', timestamp: new Date(), data: { message: err.message } } },
+    });
+    throw err;
+  }
+
+  return log;
 };

@@ -30,7 +30,7 @@ const logAdminAction = async (adminId, adminUsername, action, request, details =
     console.error('Erreur log admin:', e.message);
   }
 };
-import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail, sendKindleDelivery } from '../services/emailService.js';
+import { sendBookCompletedEmail, sendRequestCanceledEmail, sendNewRequestToAdminsEmail, sendAdminCommentEmail, sendBookCompletedToAdminsEmail, sendRequestCanceledToAdminsEmail, sendUserCommentToAdminsEmail, sendReportToAdminsEmail, sendKindleDelivery, sendBookByEmail, MAX_EBOOK_ATTACHMENT_BYTES } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
 
@@ -1011,6 +1011,72 @@ export const downloadEbook = async (req, res) => {
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
+  }
+};
+
+// Envoie le fichier ebook d'une demande complétée par email, en pièce jointe
+// (pas de lien de téléchargement généré : rien à exploiter au-delà du livre
+// lui-même). Accessible au propriétaire de la demande pour ses propres
+// demandes, et aux admins pour n'importe quelle demande.
+export const sendEbookByEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, useOwnEmail } = req.body;
+
+    const request = await BookRequest.findById(id);
+    if (!request) {
+      return res.status(404).json({ error: 'Demande non trouvée' });
+    }
+
+    const isOwner = request.user?.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    // "Mon adresse" : résolue côté serveur depuis le compte authentifié plutôt
+    // que de faire confiance à une valeur fournie par le client.
+    let targetEmail;
+    if (useOwnEmail) {
+      const self = await User.findById(req.user.id).select('email');
+      if (!self?.email) {
+        return res.status(400).json({ error: 'Aucune adresse email associée à votre compte.' });
+      }
+      targetEmail = self.email;
+    } else {
+      targetEmail = (email || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+        return res.status(400).json({ error: 'Adresse email invalide.' });
+      }
+    }
+
+    if (!request.filePath) {
+      return res.status(400).json({ error: 'Aucun fichier disponible pour cette demande.' });
+    }
+
+    const uploadsDir = path.resolve(__dirname, '../../uploads');
+    const absolutePath = path.resolve(uploadsDir, request.filePath);
+    if (!absolutePath.startsWith(uploadsDir + path.sep)) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: 'Fichier introuvable sur le serveur.' });
+    }
+
+    const { size } = fs.statSync(absolutePath);
+    if (size > MAX_EBOOK_ATTACHMENT_BYTES) {
+      return res.status(413).json({
+        error: `Le fichier dépasse la taille maximale autorisée par email (${Math.round(MAX_EBOOK_ATTACHMENT_BYTES / (1024 * 1024))} Mo). Utilisez le téléchargement classique.`,
+      });
+    }
+
+    const filename = path.basename(absolutePath);
+    await sendBookByEmail(targetEmail, absolutePath, filename, { senderId: req.user.id, title: request.title, author: request.author });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[sendEbookByEmail]', error.message);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email.' });
   }
 };
 

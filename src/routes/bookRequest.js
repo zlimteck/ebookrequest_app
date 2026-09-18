@@ -18,6 +18,7 @@ import {
   directDownloadRequest,
   getMetadataCandidates,
   applyMetadataCandidate,
+  sendEbookByEmail,
 } from '../controllers/bookRequestController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
@@ -253,6 +254,10 @@ router.patch('/:id/download-link',
 
 // Télécharger un fichier ebook
 router.get('/download/:id', requireAuth, downloadEbook);
+
+// Envoyer un fichier ebook par email (pièce jointe) — propriétaire de la
+// demande ou admin uniquement ; le contrôle fin se fait dans le contrôleur.
+router.post('/:id/send-email', requireAuth, sendEbookByEmail);
 
 // Marquer comme téléchargé
 router.put('/:id/mark-downloaded', requireAuth, markAsDownloaded);
