@@ -9,7 +9,7 @@ const adminLogSchema = new mongoose.Schema({
   adminUsername: { type: String, required: true },
   action: {
     type: String,
-    enum: ['cancel', 'complete', 'delete', 'comment', 'status_change', 'upload', 'resolve_report', 'settings_change'],
+    enum: ['cancel', 'complete', 'delete', 'comment', 'status_change', 'upload', 'resolve_report', 'settings_change', 'account_deleted'],
     required: true
   },
   requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'BookRequest' },

@@ -40,6 +40,157 @@
   font-weight: 600;
 }
 
+.alertDanger {
+  background: rgba(239,68,68,0.08);
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.25);
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+.alertDanger svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.dangerZoneCard {
+  border-color: rgba(239,68,68,0.3) !important;
+}
+
+.deleteAccountBtn {
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(239,68,68,0.4);
+  background: none;
+  color: #ef4444;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 0.75rem;
+}
+
+.deleteAccountBtn:hover:not(:disabled) {
+  background: rgba(239,68,68,0.1);
+}
+
+.deleteAccountBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Modale de confirmation de suppression de compte ── */
+.dangerModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.dangerModal {
+  background: var(--color-bg2);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.dangerModalHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  color: #ef4444;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.dangerModalBody {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dangerModalBody p {
+  font-size: 0.87rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.dangerModalInput {
+  width: 100%;
+  height: 38px;
+  padding: 0 0.75rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.dangerModalInput:focus {
+  outline: none;
+  border-color: #ef4444;
+}
+
+.dangerModalFooter {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.dangerModalCancelBtn {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.dangerModalCancelBtn:hover:not(:disabled) {
+  background: var(--color-bg3);
+  color: var(--color-text);
+}
+
+.dangerModalConfirmBtn {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  border: 1px solid #ef4444;
+  background: none;
+  color: #ef4444;
+}
+
+.dangerModalConfirmBtn:hover:not(:disabled) {
+  background: #ef4444;
+  color: #fff;
+}
+
+.dangerModalConfirmBtn:disabled,
+.dangerModalCancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Page layout ── */
 .pageWrapper {
   max-width: 1400px;

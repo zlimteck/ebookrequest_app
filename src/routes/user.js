@@ -10,6 +10,8 @@ import { sendPushToUser } from '../services/webPushService.js';
 import BookRequest from '../models/BookRequest.js';
 import ReadingList from '../models/ReadingList.js';
 import Session from '../models/Session.js';
+import DeviceToken from '../models/DeviceToken.js';
+import AdminLog from '../models/AdminLog.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +65,54 @@ router.get('/me/export', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[me/export] Erreur:', err.message);
     res.status(500).json({ error: 'Erreur lors de la génération de l\'export' });
+  }
+});
+
+const DELETE_CONFIRMATION_WORDS = ['confirme', 'confirmé', 'confirmer'];
+
+// DELETE /api/users/me — auto-suppression du compte par l'utilisateur.
+// Confirmation obligatoire (tapée par l'utilisateur, pas juste un clic) : le
+// mot "confirme" (ou variantes "confirmé"/"confirmer"), insensible à la casse
+// et aux accents. Réservé aux comptes non-admin : un admin qui se supprime
+// lui-même pourrait laisser une instance sans administrateur, à faire par un
+// autre admin via l'interface d'administration si nécessaire.
+router.delete('/me', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('username role');
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    if (user.role === 'admin') {
+      return res.status(403).json({ error: 'Un compte administrateur ne peut pas s\'auto-supprimer. Demandez à un autre administrateur de le faire depuis la gestion des utilisateurs.' });
+    }
+
+    const stripAccents = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const confirmation = stripAccents((req.body.confirmation || '').trim().toLowerCase());
+    if (!DELETE_CONFIRMATION_WORDS.some(w => stripAccents(w) === confirmation)) {
+      return res.status(400).json({ error: 'Confirmation invalide. Tapez "confirme" pour valider.' });
+    }
+
+    // Ne supprime que les enregistrements en base, pas les fichiers ebook déjà
+    // téléchargés sur le disque (uploads/) — pas de lien direct garanti entre
+    // un fichier et un seul propriétaire (partagé via étagères additionnelles).
+    await Promise.all([
+      BookRequest.deleteMany({ user: req.user.id }),
+      ReadingList.deleteMany({ userId: req.user.id }),
+      DeviceToken.deleteMany({ user: req.user.id }),
+      Session.deleteMany({ userId: req.user.id }),
+    ]);
+    await User.findByIdAndDelete(req.user.id);
+
+    AdminLog.create({
+      admin: req.user.id,
+      adminUsername: user.username,
+      action: 'account_deleted',
+      details: 'Compte supprimé par l\'utilisateur lui-même (auto-suppression)',
+    }).catch(e => console.error('[AdminLog] Erreur:', e.message));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[users/me DELETE] Erreur:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression du compte' });
   }
 });
 

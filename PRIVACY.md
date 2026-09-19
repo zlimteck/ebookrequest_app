@@ -56,7 +56,7 @@ Les seuls flux sortants vers des tiers sont ceux explicitement nécessaires aux 
 - Les sessions expirent automatiquement après 30 jours d'inactivité (suppression automatique en base).
 - Un utilisateur peut révoquer individuellement chacune de ses sessions actives (y compris les applications tierces utilisant son jeton d'accès) depuis ses paramètres.
 - Un utilisateur peut télécharger un export de ses données personnelles (compte, demandes, bibliothèque de lecture, sessions actives) depuis ses paramètres, à tout moment.
-- La suppression d'un compte relève de l'administrateur de l'instance concernée — contactez-le directement.
+- Un utilisateur peut supprimer lui-même son compte depuis ses paramètres (suppression immédiate et irréversible du compte, des demandes, de la bibliothèque de lecture et des sessions). Les comptes administrateurs ne peuvent pas s'auto-supprimer, pour éviter qu'une instance se retrouve sans administrateur ; un autre administrateur peut le faire depuis la gestion des utilisateurs. Les fichiers ebook déjà téléchargés restent sur le serveur (ils peuvent être partagés avec d'autres comptes) et relèvent de l'administrateur pour un nettoyage manuel si nécessaire.
 
 ## Application iOS
 

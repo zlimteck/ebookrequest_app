@@ -113,6 +113,15 @@ curl -OJ https://app.ndd.fr/api/users/me/export \
   -H "Authorization: Bearer <token>"
 ```
 
+### `DELETE /api/users/me`
+Auto-suppression du compte connecté (compte, demandes, bibliothèque de lecture, jetons de notification push, sessions actives). Les fichiers ebook déjà téléchargés sur le disque ne sont pas supprimés. Confirmation obligatoire dans le corps de la requête : le mot `confirme` (variantes `confirmé`/`confirmer` acceptées), insensible à la casse et aux accents. Refusé pour un compte administrateur (`403`).
+```bash
+curl -X DELETE https://app.ndd.fr/api/users/me \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"confirmation": "confirme"}'
+```
+
 ### `PUT /api/users/profile`
 ```bash
 curl -X PUT https://app.ndd.fr/api/users/profile \

@@ -12,6 +12,7 @@ import { startRegistration } from '@simplewebauthn/browser';
 
 import { getAvatarColor } from '../utils/avatarColor';
 import { useSocket } from '../hooks/useSocket';
+import { logout } from '../services/authService';
 
 const THEME_OPTIONS = [
   {
@@ -39,6 +40,10 @@ const UserSettings = () => {
     }
   });
   const [exportingData, setExportingData] = useState(false);
+  const [deleteAccountModal, setDeleteAccountModal] = useState(false);
+  const [deleteAccountConfirmInput, setDeleteAccountConfirmInput] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [passkeys, setPasskeys] = useState([]);
   const [passkeyRegistering, setPasskeyRegistering] = useState(false);
@@ -846,6 +851,18 @@ const UserSettings = () => {
       toast.error('Erreur lors de l\'export de vos données.');
     } finally {
       setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteAccountError('');
+    setDeletingAccount(true);
+    try {
+      await axiosAdmin.delete('/api/users/me', { data: { confirmation: deleteAccountConfirmInput } });
+      await logout();
+    } catch (err) {
+      setDeleteAccountError(err.response?.data?.error || 'Erreur lors de la suppression du compte.');
+      setDeletingAccount(false);
     }
   };
 
@@ -2308,6 +2325,72 @@ const UserSettings = () => {
               )}
           </button>
         </div>
+
+        {/* ── Zone dangereuse ── */}
+        {user.role !== 'admin' && (
+          <div className={`${styles.settingsCard} ${styles.dangerZoneCard}`}>
+            <h2 className={styles.sectionTitle}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Zone dangereuse
+            </h2>
+            <p style={{ margin: '0 0 0.25rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              Supprimer définitivement votre compte, vos demandes, votre bibliothèque de lecture et vos sessions actives. Cette action est irréversible.
+            </p>
+            <button
+              type="button"
+              className={styles.deleteAccountBtn}
+              onClick={() => { setDeleteAccountModal(true); setDeleteAccountConfirmInput(''); setDeleteAccountError(''); }}
+            >
+              Supprimer mon compte
+            </button>
+          </div>
+        )}
+
+        {deleteAccountModal && (
+          <div className={styles.dangerModalOverlay} onClick={() => !deletingAccount && setDeleteAccountModal(false)}>
+            <div className={styles.dangerModal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Supprimer mon compte">
+              <div className={styles.dangerModalHeader}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                Supprimer mon compte
+              </div>
+              <div className={styles.dangerModalBody}>
+                <p>Cette action est irréversible. Toutes vos demandes, votre bibliothèque de lecture et vos sessions seront définitivement supprimées.</p>
+                <p>Pour confirmer, tapez <strong style={{ color: 'var(--color-text)' }}>confirme</strong> ci-dessous.</p>
+                <input
+                  type="text"
+                  className={styles.dangerModalInput}
+                  value={deleteAccountConfirmInput}
+                  onChange={e => setDeleteAccountConfirmInput(e.target.value)}
+                  placeholder="confirme"
+                  disabled={deletingAccount}
+                  autoFocus
+                />
+                {deleteAccountError && (
+                  <div className={`${styles.alert} ${styles.alertDanger}`}>{deleteAccountError}</div>
+                )}
+              </div>
+              <div className={styles.dangerModalFooter}>
+                <button type="button" className={styles.dangerModalCancelBtn} onClick={() => setDeleteAccountModal(false)} disabled={deletingAccount}>
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className={styles.dangerModalConfirmBtn}
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount || !deleteAccountConfirmInput.trim()}
+                >
+                  {deletingAccount ? 'Suppression…' : 'Supprimer définitivement'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 };
