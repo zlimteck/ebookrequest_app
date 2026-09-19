@@ -106,6 +106,13 @@ curl https://app.ndd.fr/api/users/me/stats \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/users/me/export`
+Export de toutes les données personnelles de l'utilisateur connecté au format JSON (portabilité RGPD) : compte (sans secrets ni mots de passe), demandes de livres, bibliothèque de lecture, sessions actives (IP et user-agent déchiffrés).
+```bash
+curl -OJ https://app.ndd.fr/api/users/me/export \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `PUT /api/users/profile`
 ```bash
 curl -X PUT https://app.ndd.fr/api/users/profile \

@@ -38,6 +38,7 @@ const UserSettings = () => {
       push: { enabled: true }
     }
   });
+  const [exportingData, setExportingData] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [passkeys, setPasskeys] = useState([]);
   const [passkeyRegistering, setPasskeyRegistering] = useState(false);
@@ -826,6 +827,25 @@ const UserSettings = () => {
       toast.error('Impossible de révoquer les sessions.');
     } finally {
       setSessionRevoking(null);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const response = await axiosAdmin.get('/api/users/me/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ebookrequest-export-${user.username}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Erreur lors de l\'export de vos données.');
+    } finally {
+      setExportingData(false);
     }
   };
 
@@ -2269,6 +2289,24 @@ const UserSettings = () => {
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </Link>
+          <button type="button" className={styles.toggleRowButton} onClick={handleExportData} disabled={exportingData}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Télécharger mes données</p>
+                <p className={styles.toggleDesc}>Export JSON de votre compte, demandes et bibliothèque de lecture</p>
+              </div>
+            </div>
+            {exportingData
+              ? <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', flexShrink: 0 }}>Export…</span>
+              : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              )}
+          </button>
         </div>
     </div>
   );

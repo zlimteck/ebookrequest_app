@@ -9,6 +9,7 @@ import { emitToUser } from '../services/socketService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import BookRequest from '../models/BookRequest.js';
 import ReadingList from '../models/ReadingList.js';
+import Session from '../models/Session.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +22,49 @@ router.get('/me', requireAuth, getCurrentUser);
 
 // Stats du profil
 router.get('/me/stats', requireAuth, getUserStats);
+
+// GET /api/users/me/export — export de toutes les données personnelles de
+// l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
+// Exclut délibérément les secrets (mots de passe, clés API, tokens) même si
+// c'est l'utilisateur qui les a fournis : la valeur en elle-même n'apporte
+// rien à un export de "mes données" et rester chiffrée en base est le point.
+router.get('/me/export', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [user, requests, readingList, sessions] = await Promise.all([
+      User.findById(userId).select('-password -previousPasswords -twoFactor.secret -twoFactor.recoveryCodes -resetPasswordToken -resetPasswordExpires -emailVerificationToken -emailVerificationExpires -calibreWeb.password -valentine.password -hardcover.apiKey -opdsToken'),
+      BookRequest.find({ user: userId }).lean(),
+      ReadingList.find({ userId }).lean(),
+      Session.find({ userId, expiresAt: { $gt: new Date() } }).lean(),
+    ]);
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    const account = user.toObject();
+    delete account.passkeys; // clé publique WebAuthn, sans intérêt pour l'utilisateur dans un export
+    delete account.avatar;   // base64, illisible et volumineux dans un export ; l'image reste consultable dans l'app
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      account,
+      bookRequests: requests,
+      readingList,
+      sessions: sessions.map(s => ({
+        ip: decrypt(s.ip) || s.ip,
+        userAgent: decrypt(s.userAgent) || s.userAgent,
+        loginMethod: s.loginMethod,
+        lastActivity: s.lastActivity,
+        createdAt: s.createdAt,
+      })),
+    };
+
+    res.setHeader('Content-Disposition', `attachment; filename="ebookrequest-export-${user.username}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (err) {
+    console.error('[me/export] Erreur:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la génération de l\'export' });
+  }
+});
 
 // Mettre à jour le profil utilisateur
 router.put('/profile', requireAuth, updateUserProfile);

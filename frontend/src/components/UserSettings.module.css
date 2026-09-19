@@ -266,6 +266,32 @@
   padding-top: 0;
 }
 
+.toggleRowButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  color: inherit;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.toggleRowButton:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.toggleRowButton:disabled {
+  cursor: default;
+}
+
 .toggleInfo {
   display: flex;
   align-items: center;

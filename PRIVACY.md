@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-**Dernière mise à jour : 12 septembre 2026**
+**Dernière mise à jour : 19 septembre 2026**
 
 ## Un logiciel auto-hébergé, pas un service centralisé
 
@@ -55,6 +55,7 @@ Les seuls flux sortants vers des tiers sont ceux explicitement nécessaires aux 
 
 - Les sessions expirent automatiquement après 30 jours d'inactivité (suppression automatique en base).
 - Un utilisateur peut révoquer individuellement chacune de ses sessions actives (y compris les applications tierces utilisant son jeton d'accès) depuis ses paramètres.
+- Un utilisateur peut télécharger un export de ses données personnelles (compte, demandes, bibliothèque de lecture, sessions actives) depuis ses paramètres, à tout moment.
 - La suppression d'un compte relève de l'administrateur de l'instance concernée — contactez-le directement.
 
 ## Application iOS
