@@ -2255,6 +2255,20 @@ const UserSettings = () => {
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </Link>
+          <Link to="/terms" className={styles.toggleRow} style={{ textDecoration: 'none' }}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M9 12h6"/><path d="M9 16h6"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Conditions générales d'utilisation</p>
+                <p className={styles.toggleDesc}>Cadre d'usage du logiciel</p>
+              </div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}>
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </Link>
         </div>
     </div>
   );

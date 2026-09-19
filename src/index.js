@@ -203,6 +203,16 @@ app.get('/api/legal/privacy', (req, res) => {
   }
 });
 
+// Conditions générales d'utilisation — même principe que /api/legal/privacy.
+app.get('/api/legal/terms', (req, res) => {
+  try {
+    const content = fs.readFileSync(path.join(__dirname, '../TERMS.md'), 'utf8');
+    res.json({ content });
+  } catch {
+    res.status(404).json({ error: 'Document introuvable.' });
+  }
+});
+
 // Servir le build React (production)
 const frontendBuild = path.join(__dirname, '../frontend/build');
 

@@ -992,6 +992,22 @@ curl -X POST https://app.ndd.fr/api/connectors/proxy/test \
 
 ---
 
+## Légal
+
+Routes publiques (pas d'authentification requise), servent le contenu brut de `PRIVACY.md`/`TERMS.md` (racine du repo), lu à chaque requête.
+
+### `GET /api/legal/privacy`
+```bash
+curl https://app.ndd.fr/api/legal/privacy
+```
+
+### `GET /api/legal/terms`
+```bash
+curl https://app.ndd.fr/api/legal/terms
+```
+
+---
+
 ## OPDS
 
 Le catalogue OPDS est accessible via le token d'accès intégré dans l'URL :
