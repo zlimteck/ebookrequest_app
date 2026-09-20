@@ -1,6 +1,6 @@
 {
   "name": "ebook-frontend",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "private": true,
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
