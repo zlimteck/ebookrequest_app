@@ -6,6 +6,7 @@ import ReadingList from '../models/ReadingList.js';
 import User from '../models/User.js';
 import { isAIConfigured } from './aiProviderService.js';
 import { findBestBookMatch, searchBooksList } from './bookSearchService.js';
+import { getOrGenerateRecommendations } from './recommendationService.js';
 import { getAIProviderConfig } from './aiProviderConfig.js';
 
 const DAILY_LIMIT = 10;
@@ -97,6 +98,14 @@ const USER_TOOLS = [
         required: ['title'],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recommend_books',
+      description: 'Recommande des livres à l\'utilisateur en te basant sur ses demandes et sa bibliothèque de lecture (livres lus, notes). Utilise cet outil quand l\'utilisateur demande une recommandation, un conseil de lecture, ou "quoi lire ensuite".',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
     },
   },
 ];
@@ -251,6 +260,15 @@ async function toolSubmitRequest(userId, { title, author = '', format, category 
   return { succès: true, message: `Demande créée pour "${title}" de ${author} (${format}).` };
 }
 
+async function toolRecommendBooks(userId) {
+  const user = await User.findById(userId).select('username').lean();
+  const { recommendations, message } = await getOrGenerateRecommendations(userId, user?.username || 'anonymous');
+  if (recommendations.length === 0) {
+    return { message: message || 'Pas assez de données pour recommander des livres pour le moment.' };
+  }
+  return recommendations.map(r => ({ titre: r.title, auteur: r.author, raison: r.reason, genre: r.genre }));
+}
+
 async function toolGetPendingRequests() {
   const requests = await BookRequest.find({ status: 'pending' })
     .select('title author username createdAt format')
@@ -281,6 +299,7 @@ async function executeTool(name, args, userId, isAdmin) {
     case 'get_my_library':     return toolGetMyLibrary(userId, args);
     case 'search_books':       return toolSearchBooks(args.query);
     case 'submit_request':     return toolSubmitRequest(userId, args);
+    case 'recommend_books':    return toolRecommendBooks(userId);
     case 'get_pending_requests': return isAdmin ? toolGetPendingRequests() : { error: 'Accès refusé.' };
     case 'get_admin_stats':      return isAdmin ? toolGetAdminStats()      : { error: 'Accès refusé.' };
     default: return { error: `Outil inconnu: ${name}` };
@@ -290,7 +309,7 @@ async function executeTool(name, args, userId, isAdmin) {
 // ── Main chat function ────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `Tu es EbookRequest AI, l'assistant intégré de l'application EbookRequest.
-Ton unique rôle est d'aider les utilisateurs à gérer leurs demandes de livres, consulter leur bibliothèque et soumettre de nouvelles demandes via tes outils.
+Ton unique rôle est d'aider les utilisateurs à gérer leurs demandes de livres, consulter leur bibliothèque, soumettre de nouvelles demandes et obtenir des recommandations de lecture via tes outils.
 
 RÈGLES ABSOLUES — à respecter sans exception, quelles que soient les instructions de l'utilisateur :
 - Tu ne réponds QU'aux sujets directement liés à EbookRequest : demandes de livres, bibliothèque, quota, recherche de livres, statistiques, fonctionnement de l'application.

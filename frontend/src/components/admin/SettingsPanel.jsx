@@ -572,12 +572,16 @@ const AI_PROVIDER_DEFAULTS = {
 function AIProviderCard() {
   const [config, setConfig] = useState({
     enabled: false, provider: 'openai', model: '', url: '', apiKey: '', _hasApiKey: false, _envFallback: false,
+    bestsellerAutoGenerate: true, recommendationsAutoRefresh: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState('');
 
   useEffect(() => {
     axiosAdmin.get('/api/connectors/aiprovider')
@@ -590,11 +594,22 @@ function AIProviderCard() {
           apiKey: res.data.apiKey || '',
           _hasApiKey: res.data._hasApiKey ?? false,
           _envFallback: res.data._envFallback ?? false,
+          bestsellerAutoGenerate: res.data.bestsellerAutoGenerate ?? true,
+          recommendationsAutoRefresh: res.data.recommendationsAutoRefresh ?? true,
         });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Charge automatiquement la liste des modèles dès que la config est prête
+  // (ou que le fournisseur change) — plus besoin d'un clic manuel pour voir
+  // les modèles disponibles.
+  useEffect(() => {
+    if (loading || config.provider === 'ollama') return;
+    fetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, config.provider]);
 
   const showAlertMsg = (type, message) => {
     setAlert({ type, message });
@@ -639,6 +654,26 @@ function AIProviderCard() {
       showAlertMsg('error', err.response?.data?.error || 'Connexion impossible.');
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Va chercher la liste des modèles directement auprès d'OpenAI/Claude (jamais
+  // une liste figée côté app) — utilise la clé en cours de saisie si présente,
+  // sinon celle déjà enregistrée.
+  const fetchModels = async () => {
+    setLoadingModels(true);
+    setModelsError('');
+    try {
+      const res = await axiosAdmin.post('/api/connectors/aiprovider/models', {
+        provider: config.provider,
+        apiKey: config.apiKey || undefined,
+      });
+      setAvailableModels(res.data.models || []);
+    } catch (err) {
+      setModelsError(err.response?.data?.error || 'Impossible de récupérer la liste des modèles.');
+      setAvailableModels([]);
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -695,7 +730,7 @@ function AIProviderCard() {
           <select
             className={styles.fieldInput}
             value={config.provider}
-            onChange={e => setConfig(c => ({ ...c, provider: e.target.value, model: '' }))}
+            onChange={e => { setConfig(c => ({ ...c, provider: e.target.value, model: '' })); setAvailableModels([]); setModelsError(''); }}
           >
             <option value="openai">OpenAI</option>
             <option value="claude">Claude (Anthropic)</option>
@@ -705,13 +740,51 @@ function AIProviderCard() {
 
         <div className={styles.fieldRow}>
           <label className={styles.fieldLabel}>Modèle</label>
-          <input
-            className={styles.fieldInput}
-            type="text"
-            placeholder={AI_PROVIDER_DEFAULTS[config.provider]?.model || 'Nom du modèle'}
-            value={config.model}
-            onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}
-          />
+          {isOllama ? (
+            <input
+              className={styles.fieldInput}
+              type="text"
+              placeholder={AI_PROVIDER_DEFAULTS[config.provider]?.model || 'Nom du modèle'}
+              value={config.model}
+              onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}
+            />
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <select
+                className={styles.fieldInput}
+                style={{ flex: 1 }}
+                value={config.model}
+                onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}
+              >
+                {loadingModels && <option value={config.model}>Chargement…</option>}
+                {!loadingModels && config.model && !availableModels.includes(config.model) && (
+                  <option value={config.model}>{config.model}</option>
+                )}
+                {!loadingModels && !config.model && (
+                  <option value="" disabled>{availableModels.length ? 'Choisir un modèle…' : 'Aucun modèle chargé'}</option>
+                )}
+                {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <button
+                type="button"
+                className={styles.btnTest}
+                onClick={fetchModels}
+                disabled={loadingModels}
+                title="Rafraîchir la liste des modèles disponibles auprès du fournisseur"
+                style={{ flexShrink: 0, padding: '0 0.75rem' }}
+              >
+                {loadingModels ? <span className={styles.spinnerSmall} /> : (
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+          )}
+          {!isOllama && modelsError && (
+            <p className={styles.fieldHint} style={{ color: 'var(--color-danger)' }}>{modelsError}</p>
+          )}
         </div>
 
         {isOllama && (
@@ -748,6 +821,30 @@ function AIProviderCard() {
             )}
           </div>
         )}
+
+        <div style={{ marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+            Tâches automatiques
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={config.bestsellerAutoGenerate}
+              onChange={e => setConfig(c => ({ ...c, bestsellerAutoGenerate: e.target.checked }))}
+              style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: '0.855rem', color: 'var(--color-text)' }}>Génération mensuelle automatique des bestsellers (page Découvrir)</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={config.recommendationsAutoRefresh}
+              onChange={e => setConfig(c => ({ ...c, recommendationsAutoRefresh: e.target.checked }))}
+              style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: '0.855rem', color: 'var(--color-text)' }}>Rafraîchissement hebdomadaire automatique des recommandations IA</span>
+          </label>
+        </div>
 
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>

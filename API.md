@@ -490,6 +490,8 @@ curl "https://app.ndd.fr/api/books/search?q=Dune&author=Frank+Herbert" \
 
 ## Recommandations IA
 
+Basées sur les demandes de livres et la bibliothèque de lecture (livres au statut `read`, notes) de l'utilisateur. Un cron rafraîchit automatiquement les recommandations une fois par semaine en tâche de fond, sans consommer le quota de régénération manuelle ci-dessous. Le chatbot IA (outil `recommend_books`) réutilise le même cache.
+
 ### `GET /api/recommendations`
 ```bash
 curl https://app.ndd.fr/api/recommendations \
@@ -919,11 +921,12 @@ curl https://app.ndd.fr/api/connectors/aiprovider \
 ```
 
 ### `PUT /api/connectors/aiprovider`
+`bestsellerAutoGenerate` (génération mensuelle automatique des bestsellers) et `recommendationsAutoRefresh` (rafraîchissement hebdomadaire automatique des recommandations) sont activés par défaut, désactivables indépendamment pour ne garder que la génération manuelle.
 ```bash
 curl -X PUT https://app.ndd.fr/api/connectors/aiprovider \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"enabled": true, "provider": "openai", "model": "gpt-4o-mini", "apiKey": "sk-..."}'
+  -d '{"enabled": true, "provider": "openai", "model": "gpt-4o-mini", "apiKey": "sk-...", "bestsellerAutoGenerate": false}'
 ```
 
 ### `POST /api/connectors/aiprovider/test`
@@ -932,6 +935,15 @@ curl -X POST https://app.ndd.fr/api/connectors/aiprovider/test \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"provider": "openai", "model": "gpt-4o-mini", "apiKey": "sk-..."}'
+```
+
+### `POST /api/connectors/aiprovider/models`
+Liste les modèles réellement disponibles auprès du fournisseur (OpenAI ou Claude uniquement), en interrogeant directement leur API — jamais une liste figée côté app, pour rester à jour sans mise à jour du code à chaque nouveau modèle. Utilise la clé fournie, ou celle déjà enregistrée si absente/masquée.
+```bash
+curl -X POST https://app.ndd.fr/api/connectors/aiprovider/models \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "openai", "apiKey": "sk-..."}'
 ```
 
 ### `GET /api/connectors/emailprovider`

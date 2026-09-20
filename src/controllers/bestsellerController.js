@@ -1,6 +1,6 @@
 import Bestseller from '../models/Bestseller.js';
 import { clearTrendingBooksCache } from '../services/trendingBooksService.js';
-import { generateBestsellers } from '../services/bestsellerGeneratorService.js';
+import { generateBestsellers, saveBestsellers } from '../services/bestsellerGeneratorService.js';
 
 // Récupérer tous les bestsellers (avec filtre optionnel par catégorie)
 export const getBestsellers = async (req, res) => {
@@ -189,47 +189,8 @@ export const generateBestsellersWithAI = async (req, res) => {
     let savedCount = 0;
     if (autoSave && result.bestsellers) {
       try {
-        // Pour chaque catégorie de bestsellers
-        for (const [category, books] of Object.entries(result.bestsellers)) {
-          console.log(`Enregistrement de ${books.length} livres pour la catégorie "${category}"`);
-
-          // Enregistrer chaque livre
-          for (const book of books) {
-            // Vérifier si le livre existe déjà (même titre, auteur, catégorie)
-            const existing = await Bestseller.findOne({
-              title: book.title,
-              author: book.author,
-              category: category
-            });
-
-            if (!existing) {
-              // Créer un nouveau bestseller
-              await Bestseller.create({
-                title: book.title,
-                author: book.author,
-                category: category,
-                order: book.order || 0,
-                reason: book.reason,
-                thumbnail: book.thumbnail || null,
-                description: book.description || book.reason,
-                link: book.link || null,
-                googleBooksId: book.googleBooksId || null,
-                pageCount: book.pageCount || 0,
-                publishedDate: book.publishedDate || null,
-                active: true,
-                addedBy: req.user.id
-              });
-              savedCount++;
-            } else {
-              console.log(`Livre déjà existant: ${book.title} par ${book.author}`);
-            }
-          }
-        }
-
+        savedCount = await saveBestsellers(result.bestsellers, req.user.id);
         console.log(`${savedCount} bestsellers enregistrés avec succès`);
-
-        // Vider le cache pour forcer le rafraîchissement
-        clearTrendingBooksCache();
       } catch (saveError) {
         console.error('Erreur lors de l\'enregistrement des bestsellers:', saveError);
         // Ne pas échouer la requête, juste logger l'erreur

@@ -1,36 +1,89 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import AIRequestLog from '../models/AIRequestLog.js';
+import BookRequest from '../models/BookRequest.js';
+import ReadingList from '../models/ReadingList.js';
+import Recommendation from '../models/Recommendation.js';
 import { generateCompletion } from './aiProviderService.js';
 import { findBestBookMatch } from './bookSearchService.js';
 import { getAIProviderConfig } from './aiProviderConfig.js';
 
 dotenv.config();
 
-// Génère des recommandations de livres basées sur l'historique des demandes
-export const generateRecommendations = async (bookRequests, limit = 5, userId = null, username = 'anonymous') => {
+export async function getUserBookRequests(userId) {
+  return BookRequest.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .select('title author description pageCount')
+    .lean();
+}
+
+// Livres lus, notes en premier (meilleur signal de goût) — limité pour ne pas
+// gonfler le prompt inutilement sur une grosse bibliothèque.
+export async function getUserLibraryBooks(userId) {
+  return ReadingList.find({ userId, status: 'read' })
+    .sort({ rating: -1, updatedAt: -1 })
+    .select('title author rating')
+    .limit(30)
+    .lean();
+}
+
+// Retourne les recommandations en cache pour un utilisateur, ou les génère
+// gratuitement (sans consommer son quota de régénération) si aucun cache
+// n'existe encore — même logique que GET /api/recommendations, réutilisée par
+// le chatbot pour ne pas dupliquer la génération/le cache.
+export async function getOrGenerateRecommendations(userId, username, limit = 5) {
+  const cached = await Recommendation.findOne({ user: userId });
+  if (cached && cached.recommendations.length > 0) {
+    return { recommendations: cached.recommendations, cached: true };
+  }
+
+  const [bookRequests, libraryBooks] = await Promise.all([
+    getUserBookRequests(userId),
+    getUserLibraryBooks(userId),
+  ]);
+  const result = await generateRecommendations(bookRequests, limit, userId, username, libraryBooks);
+
+  await Recommendation.findOneAndUpdate(
+    { user: userId },
+    { recommendations: result.recommendations, generatedAt: new Date(), regenerationCount: 0, windowStart: new Date() },
+    { upsert: true }
+  );
+
+  return { recommendations: result.recommendations, cached: false, message: result.message };
+}
+
+// Génère des recommandations de livres basées sur l'historique des demandes et,
+// si fournie, la bibliothèque de lecture (livres marqués lus, notes) — un
+// signal plus direct des goûts réels que la seule liste de demandes.
+export const generateRecommendations = async (bookRequests, limit = 5, userId = null, username = 'anonymous', libraryBooks = []) => {
   const startTime = Date.now();
   let logEntry = null;
 
   try {
-    // Vérifier qu'il y a des demandes de livres
-    if (!bookRequests || bookRequests.length === 0) {
+    // Vérifier qu'il y a au moins une source de signal (demandes ou bibliothèque)
+    if ((!bookRequests || bookRequests.length === 0) && (!libraryBooks || libraryBooks.length === 0)) {
       return {
         recommendations: [],
-        message: "Vous n'avez pas encore de demandes de livres. Commencez par demander quelques livres pour obtenir des recommandations personnalisées !"
+        message: "Vous n'avez pas encore de demandes de livres ni de bibliothèque de lecture. Commencez par demander ou ajouter quelques livres pour obtenir des recommandations personnalisées !"
       };
     }
 
     // Préparer les données pour l'IA
-    const booksData = bookRequests.map(req => ({
+    const booksData = (bookRequests || []).map(req => ({
       title: req.title,
       author: req.author,
       description: req.description || '',
       pageCount: req.pageCount || 0
     }));
 
+    const libraryData = (libraryBooks || []).map(b => ({
+      title: b.title,
+      author: b.author,
+      rating: b.rating || 0,
+    }));
+
     // Créer le prompt pour l'IA
-    const prompt = buildRecommendationPrompt(booksData, limit);
+    const prompt = buildRecommendationPrompt(booksData, limit, libraryData);
 
     console.log('Sending request to AI provider...');
 
@@ -114,16 +167,25 @@ export const generateRecommendations = async (bookRequests, limit = 5, userId = 
 };
 
 // Construit le prompt pour Ollama
-function buildRecommendationPrompt(books, limit) {
+function buildRecommendationPrompt(books, limit, libraryBooks = []) {
   const booksList = books.map((book, index) =>
     `${index + 1}. "${book.title}" par ${book.author}${book.description ? ` - ${book.description.substring(0, 200)}` : ''}`
   ).join('\n');
 
-  return `Tu es un expert en littérature qui recommande des livres. Voici l'historique de lecture d'un utilisateur :
+  const libraryList = libraryBooks.map((book, index) =>
+    `${index + 1}. "${book.title}" par ${book.author}${book.rating ? ` (noté ${book.rating}/5)` : ''}`
+  ).join('\n');
 
-${booksList}
+  const sections = [
+    booksList && `Livres demandés sur l'application :\n${booksList}`,
+    libraryList && `Bibliothèque de lecture personnelle (livres lus, avec note quand disponible) :\n${libraryList}`,
+  ].filter(Boolean).join('\n\n');
 
-Basé sur cet historique, recommande exactement ${limit} livres différents qui pourraient intéresser cet utilisateur. Pour chaque recommandation, fournis les informations au format JSON suivant :
+  return `Tu es un expert en littérature qui recommande des livres. Voici les données de lecture d'un utilisateur :
+
+${sections}
+
+Basé sur ces données (privilégie les livres les mieux notés dans la bibliothèque personnelle comme signal de goût), recommande exactement ${limit} livres différents qui pourraient intéresser cet utilisateur. Pour chaque recommandation, fournis les informations au format JSON suivant :
 
 {
   "title": "Titre du livre",
@@ -221,11 +283,14 @@ function generateRecommendationId(title, author) {
   return str.substring(0, 50);
 }
 
-// Enrichit les recommandations avec les couvertures de Google Books
+// Enrichit les recommandations avec les couvertures de Google Books.
+// Écarte les recommandations qu'aucune source (Google Books/Hardcover/Open
+// Library) ne confirme — évite d'afficher un titre inventé ou mal orthographié
+// par l'IA sans aucun moyen pour l'utilisateur de vérifier qu'il existe.
 async function enrichWithGoogleBooksCovers(recommendations) {
   if (recommendations.length === 0) return recommendations;
 
-  return Promise.all(
+  const results = await Promise.all(
     recommendations.map(async (rec) => {
       try {
         const match = await findBestBookMatch({ title: rec.title, author: rec.author });
@@ -240,9 +305,10 @@ async function enrichWithGoogleBooksCovers(recommendations) {
       } catch (error) {
         console.error(`Erreur lors de la récupération de la couverture pour "${rec.title}":`, error.message);
       }
-      return rec;
+      return null;
     })
   );
+  return results.filter(Boolean);
 }
 
 // Test de connectivité avec le provider AI configuré

@@ -1,15 +1,16 @@
 import mongoose from 'mongoose';
 
 const adminLogSchema = new mongoose.Schema({
+  // Optionnel : absent pour les entrées générées par une tâche de fond (cron),
+  // qui n'a pas d'utilisateur associé — adminUsername vaut alors "Système".
   admin: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
   },
   adminUsername: { type: String, required: true },
   action: {
     type: String,
-    enum: ['cancel', 'complete', 'delete', 'comment', 'status_change', 'upload', 'resolve_report', 'settings_change', 'account_deleted'],
+    enum: ['cancel', 'complete', 'delete', 'comment', 'status_change', 'upload', 'resolve_report', 'settings_change', 'account_deleted', 'cron_run'],
     required: true
   },
   requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'BookRequest' },

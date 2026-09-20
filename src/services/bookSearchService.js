@@ -160,11 +160,22 @@ export async function findBestBookMatch({ title, author = '' }) {
   if (!t) return null;
   const a = (author || '').trim();
 
+  // Une source peut confirmer qu'un livre existe sans avoir de couverture pour
+  // autant (fréquent sur Google Books selon l'édition) — on garde ce premier
+  // résultat en repli, mais on continue d'interroger les sources suivantes
+  // tant qu'aucune couverture n'a été trouvée, plutôt que de s'arrêter au
+  // premier match sans image.
+  let fallback = null;
+
   if (await isGoogleBooksSearchEnabled()) {
     try {
       const query = a ? `intitle:"${t}" inauthor:"${a}"` : `intitle:"${t}"`;
       const items = await fetchFromGoogle(query, 1);
-      if (items[0]) return normalizeMatch(items[0].volumeInfo, items[0].id, 'google');
+      if (items[0]) {
+        const match = normalizeMatch(items[0].volumeInfo, items[0].id, 'google');
+        if (match.thumbnail) return match;
+        fallback = fallback || match;
+      }
     } catch (err) {
       console.warn(`[BookSearch] Google Books échoué pour "${t}":`, err.message);
     }
@@ -172,19 +183,27 @@ export async function findBestBookMatch({ title, author = '' }) {
 
   try {
     const hc = await fetchFromHardcoverSearch(a ? `${t} ${a}` : t, 1);
-    if (hc[0]) return normalizeMatch(hc[0].volumeInfo, hc[0].id, 'hardcover');
+    if (hc[0]) {
+      const match = normalizeMatch(hc[0].volumeInfo, hc[0].id, 'hardcover');
+      if (match.thumbnail) return match;
+      fallback = fallback || match;
+    }
   } catch (err) {
     console.warn(`[BookSearch] Hardcover échoué pour "${t}":`, err.message);
   }
 
   try {
     const ol = await fetchFromOpenLibrarySearch(a ? `${t} ${a}` : t, 1);
-    if (ol[0]) return normalizeMatch(ol[0].volumeInfo, ol[0].id, 'openlibrary');
+    if (ol[0]) {
+      const match = normalizeMatch(ol[0].volumeInfo, ol[0].id, 'openlibrary');
+      if (match.thumbnail) return match;
+      fallback = fallback || match;
+    }
   } catch (err) {
     console.warn(`[BookSearch] Open Library échoué pour "${t}":`, err.message);
   }
 
-  return null;
+  return fallback;
 }
 
 /**

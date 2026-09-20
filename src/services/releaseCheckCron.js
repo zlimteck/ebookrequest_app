@@ -1,5 +1,6 @@
 import BookRequest from '../models/BookRequest.js';
 import User from '../models/User.js';
+import AdminLog from '../models/AdminLog.js';
 import appriseService from './appriseService.js';
 import { sendBookReleasedEmail } from './emailService.js';
 
@@ -60,8 +61,18 @@ async function runReleaseCheckCron() {
     }
 
     console.log(`[ReleaseCheckCron] ${due.length} demande(s) notifiée(s) (date de sortie atteinte)`);
+    AdminLog.create({
+      adminUsername: 'Système',
+      action: 'cron_run',
+      details: `Date de sortie atteinte : ${due.length} demande(s) notifiée(s).`,
+    }).catch(() => {});
   } catch (e) {
     console.error('[ReleaseCheckCron] Erreur:', e.message);
+    AdminLog.create({
+      adminUsername: 'Système',
+      action: 'cron_run',
+      details: `Date de sortie atteinte : échec de la vérification automatique (${e.message}).`,
+    }).catch(() => {});
   }
 }
 

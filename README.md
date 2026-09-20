@@ -140,10 +140,12 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - Les fichiers convertis sont automatiquement supprimés après 24h
 
 **Découverte & IA**
-- Page Découverte (tendances, bestsellers, recommandations IA)
+- Page Découverte (tendances, bestsellers, recommandations IA) : les bestsellers sont générés automatiquement une fois par mois en tâche de fond (en plus de la génération manuelle par un admin), avec désactivation automatique de la liste du mois précédent générée par le cron (les bestsellers ajoutés manuellement par un admin ne sont jamais touchés) ; chaque livre proposé par l'IA est vérifié auprès de Google Books/Hardcover/Open Library avant d'être affiché (les titres qu'aucune source ne confirme sont écartés, pas de "faux livre" inventé affiché à l'utilisateur)
+- Recommandations IA basées sur l'historique des demandes et la bibliothèque de lecture (livres lus, notes), avec cache et rafraîchissement hebdomadaire automatique en tâche de fond (widget sur la page de demande, régénération manuelle limitée à 3 fois par semaine) ; comme pour les bestsellers, un titre non confirmé par Google Books/Hardcover/Open Library n'est jamais affiché
 - **EbookRequest AI :** chatbot intégré (icône flottante bas-droite) avec function calling :
   - Consulter ses demandes, sa bibliothèque et ses statistiques de quota
   - Rechercher un livre (Google Books, avec repli Hardcover/Open Library) et soumettre une demande directement
+  - Recommander des livres à la demande, en se basant sur les mêmes données que le widget de recommandations
   - Outils admin : demandes en attente et statistiques globales
   - Accès activé par utilisateur depuis le panel admin, quota journalier configurable par utilisateur (défaut : 10 messages/jour)
   - Compatible OpenAI, Claude (Anthropic) et Ollama, utilise le même fournisseur IA que le reste de l'application
@@ -285,7 +287,7 @@ Dans les deux cas, la couverture est identique : tout utilisateur de l'instance 
 
 #### Intelligence artificielle
 
-> **Optionnel depuis la 1.5.2 :** configurable directement dans le panel admin (**Réglages → Fournisseur IA**), avec migration automatique des variables `.env` existantes au premier accès, comme pour l'email.
+> **Optionnel depuis la 1.5.2 :** configurable directement dans le panel admin (**Réglages → Fournisseur IA**), avec migration automatique des variables `.env` existantes au premier accès, comme pour l'email. Pour OpenAI et Claude, le champ modèle est une liste déroulante chargée automatiquement en direct auprès du fournisseur (jamais une liste figée dans l'app, donc toujours à jour avec les modèles disponibles).
 
 | Variable | Description |
 |---|---|
