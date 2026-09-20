@@ -1,5 +1,6 @@
 import express from 'express';
 import ReadingList from '../models/ReadingList.js';
+import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 
@@ -18,6 +19,48 @@ router.get('/', requireAuth, async (req, res) => {
     res.json(books);
   } catch (error) {
     console.error('Erreur lecture liste:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Échappe une valeur pour l'insérer dans un champ CSV (RFC 4180) : entoure de
+// guillemets et double les guillemets internes dès qu'un caractère spécial
+// (virgule, guillemet, retour à la ligne) est présent.
+function csvField(value) {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+// GET /export — export CSV de la bibliothèque de lecture de l'utilisateur.
+// Pas de dépendance externe : le format reste simple (une ligne par livre,
+// colonnes fixes), un générateur maison suffit.
+router.get('/export', requireAuth, async (req, res) => {
+  try {
+    const [user, books] = await Promise.all([
+      User.findById(req.user.id).select('username'),
+      ReadingList.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    const columns = ['Titre', 'Auteur', 'Statut', 'Note', 'Date de lecture', 'Notes personnelles', 'Origine', 'Ajouté le'];
+    const rows = books.map(b => [
+      b.title,
+      b.author,
+      b.status === 'read' ? 'Lu' : 'Non lu',
+      b.rating || '',
+      b.readAt ? new Date(b.readAt).toISOString().slice(0, 10) : '',
+      b.notes || '',
+      b.importedFrom === 'hardcover' ? 'Hardcover' : (b.source === 'request' ? 'Demande' : 'Manuel'),
+      new Date(b.createdAt).toISOString().slice(0, 10),
+    ]);
+
+    const csv = [columns, ...rows].map(row => row.map(csvField).join(',')).join('\r\n');
+
+    res.setHeader('Content-Disposition', `attachment; filename="ebookrequest-bibliotheque-${user?.username || req.user.id}.csv"`);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.send('﻿' + csv); // BOM pour un affichage correct des accents dans Excel
+  } catch (error) {
+    console.error('Erreur export bibliothèque:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

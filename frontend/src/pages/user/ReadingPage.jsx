@@ -88,6 +88,7 @@ export default function ReadingPage() {
   const [hardcoverAlert, setHardcoverAlert] = useState(null);
   const hardcoverAlertTimeoutRef = useRef(null);
   const [filterFormat, setFilterFormat] = useState('all');
+  const [exportingCsv, setExportingCsv] = useState(false);
   const filterBarRef = useRef(null);
 
   // Auto-vider le message d'erreur après 5s
@@ -193,6 +194,25 @@ export default function ReadingPage() {
       setBooks(prev => prev.filter(b => b._id !== id));
       toast.success('Livre retiré de la liste');
     } catch { toast.error('Erreur lors de la suppression'); }
+  };
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const response = await axiosAdmin.get('/api/reading/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'ebookrequest-bibliotheque.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Erreur lors de l\'export de la bibliothèque.');
+    } finally {
+      setExportingCsv(false);
+    }
   };
 
   const toggleSort = (key) => {
@@ -328,6 +348,12 @@ export default function ReadingPage() {
             </span>
             <input className={styles.searchInput} placeholder="Filtrer..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+
+          <button className={styles.addBtn} onClick={handleExportCsv} disabled={exportingCsv} title="Exporter en CSV">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
 
           <button className={styles.addBtn} onClick={() => { setShowSearch(s => !s); setAddError(''); }} title="Ajouter un livre">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

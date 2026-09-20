@@ -352,6 +352,13 @@ curl "https://app.ndd.fr/api/reading?status=reading" \
 ```
 Paramètre optionnel : `status` (`to_read`, `reading`, `read`)
 
+### `GET /api/reading/export`
+Export CSV de la bibliothèque de lecture de l'utilisateur (titre, auteur, statut, note, date de lecture, notes personnelles, origine, date d'ajout).
+```bash
+curl -OJ https://app.ndd.fr/api/reading/export \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `POST /api/reading`
 ```bash
 curl -X POST https://app.ndd.fr/api/reading \
