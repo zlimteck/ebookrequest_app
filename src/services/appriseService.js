@@ -198,6 +198,14 @@ class AppriseService {
     );
   }
 
+  async notifyUserBookReleased(user, bookRequest) {
+    if (user.notificationPreferences?.apprise?.notifyOnRelease === false) return;
+    await this.sendUserNotification(user,
+      '📅 Date de sortie atteinte',
+      `"${bookRequest.title}" devrait maintenant être trouvable, la recherche automatique va s'en occuper.`
+    );
+  }
+
   async notifyUserBookCanceled(user, bookRequest, reason) {
     if (user.notificationPreferences?.apprise?.notifyOnCancel === false) return;
     await this.sendUserNotification(user,

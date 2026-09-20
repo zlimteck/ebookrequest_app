@@ -118,6 +118,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Notifications multi-services via Apprise (Pushover, Discord, Telegram, Slack, Gotify, Ntfy…)
   - Côté admin : notifications globales configurables par événement (nouvelle demande, complétion, annulation, commentaire, signalement, nouvel utilisateur)
   - Côté utilisateur : chaque utilisateur peut configurer ses propres URLs Apprise dans ses paramètres pour recevoir ses notifications personnelles (livre disponible, annulation, commentaire admin)
+- Notification automatique (email + Apprise personnel) quand la date de sortie prévue d'un livre demandé est atteinte, avant que la recherche automatique ne le trouve
 - Diffusion admin (email HTML + push vers tous les utilisateurs)
 
 **Bibliothèque & lecture**

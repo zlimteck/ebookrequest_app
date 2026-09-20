@@ -51,6 +51,7 @@ import { startValentineCron } from './services/valentineCron.js';
 import { initializeTrendingBooksCache, isTrendingPreloadEnabled } from './services/trendingBooksService.js';
 import { startHardcoverSyncCron } from './services/hardcoverSyncCron.js';
 import { startProviderHealthCron } from './services/providerHealthCron.js';
+import { startReleaseCheckCron } from './services/releaseCheckCron.js';
 import { initSocket } from './services/socketService.js';
 import { createServer } from 'http';
 
@@ -284,6 +285,10 @@ mongoose.connect(process.env.MONGODB_URI, {
     // Cron d'alerte proactive : Google Books/Hardcover activés mais en échec, ou clé
     // Hardcover proche de l'expiration — notifie les admins (email + Apprise)
     startProviderHealthCron();
+
+    // Cron de notification "date de sortie atteinte" : prévient l'utilisateur
+    // quand publishedDate est dépassée sur une demande encore en attente
+    startReleaseCheckCron();
 
     // Nettoyage horaire des fichiers convertis (uploads/convert/) > 24h
     import('./services/calibreConvertService.js').then(({ CONVERT_DIR }) => {

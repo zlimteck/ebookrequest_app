@@ -398,6 +398,8 @@ curl -X POST https://app.ndd.fr/api/availability/check \
 
 ## Notifications
 
+Notification automatique "date de sortie atteinte" : quand `publishedDate` d'une demande encore en attente est dépassée, l'utilisateur est notifié par email (`notificationPreferences.email.bookReleased`) et/ou Apprise personnel (`notificationPreferences.apprise.notifyOnRelease`), configurables via `PUT /api/users/profile`. Une seule notification par demande (`BookRequest.releaseNotifiedAt`), vérifiée toutes les 12h.
+
 ### `GET /api/notifications/history`
 ```bash
 curl https://app.ndd.fr/api/notifications/history \

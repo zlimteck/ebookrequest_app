@@ -209,6 +209,24 @@ export const sendBookCompletedEmail = async (user, bookRequest) => {
   return sendEmail({ to: user.email, subject: `📚 Votre livre est disponible : ${bookRequest.title}`, html, type: 'book_completed' });
 };
 
+export const sendBookReleasedEmail = async (user, bookRequest) => {
+  if (!user.notificationPreferences?.email?.enabled || !user.notificationPreferences?.email?.bookReleased) return;
+  const html = darkEmail({
+    gradient: 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)',
+    title: '📅 Date de sortie atteinte',
+    subtitle: 'Votre demande va être recherchée',
+    body: `
+      <p style="color:#cbd5e1;font-size:0.95rem;line-height:1.7;margin:0 0 1rem;">Bonjour <strong style="color:#e2e8f0;">${escapeHtml(user.username)}</strong>,</p>
+      <p style="color:#94a3b8;font-size:0.9rem;line-height:1.7;margin:0 0 1.5rem;">La date de sortie prévue du livre ci-dessous est atteinte. La recherche automatique va maintenant pouvoir le trouver.</p>
+      <div style="background:#1e293b;border-radius:10px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+        <p style="color:#e2e8f0;font-size:1rem;font-weight:700;margin:0 0 0.25rem;">${escapeHtml(bookRequest.title)}</p>
+        <p style="color:#94a3b8;font-size:0.87rem;margin:0;">par ${escapeHtml(bookRequest.author)}</p>
+      </div>
+      <p style="color:#64748b;font-size:0.82rem;line-height:1.6;margin:0;">Vous recevrez une nouvelle notification dès que le livre sera téléchargé.</p>`,
+  });
+  return sendEmail({ to: user.email, subject: `📅 Date de sortie atteinte : ${bookRequest.title}`, html, type: 'book_released' });
+};
+
 export const sendRequestCanceledEmail = async (user, bookRequest) => {
   if (!user?.email || !bookRequest) throw new Error('Paramètres manquants');
   const html = darkEmail({

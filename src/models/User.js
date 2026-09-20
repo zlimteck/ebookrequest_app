@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema({
       enabled:      { type: Boolean, default: false },
       bookCompleted:{ type: Boolean, default: true },
       bookCanceled: { type: Boolean, default: true },
+      bookReleased: { type: Boolean, default: true },
       adminComment: { type: Boolean, default: true },
       loginAlert:   { type: Boolean, default: true },
     },
@@ -53,6 +54,7 @@ const userSchema = new mongoose.Schema({
       urls:                { type: String,  default: '' },
       notifyOnComplete:    { type: Boolean, default: true },
       notifyOnCancel:      { type: Boolean, default: true },
+      notifyOnRelease:     { type: Boolean, default: true },
       notifyOnAdminComment:{ type: Boolean, default: true },
     },
     kindle: {

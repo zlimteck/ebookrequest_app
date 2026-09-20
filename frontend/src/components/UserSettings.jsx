@@ -35,7 +35,7 @@ const UserSettings = () => {
     email: '',
     username: '',
     notificationPreferences: {
-      email: { enabled: false, bookCompleted: true, bookCanceled: true, adminComment: true, loginAlert: true },
+      email: { enabled: false, bookCompleted: true, bookReleased: true, bookCanceled: true, adminComment: true, loginAlert: true },
       push: { enabled: true }
     }
   });
@@ -97,6 +97,7 @@ const UserSettings = () => {
     enabled: false,
     urls: '',
     notifyOnComplete: true,
+    notifyOnRelease: true,
     notifyOnCancel: true,
     notifyOnAdminComment: true,
   });
@@ -143,6 +144,7 @@ const UserSettings = () => {
               email: {
                 enabled:       u.notificationPreferences?.email?.enabled || false,
                 bookCompleted: u.notificationPreferences?.email?.bookCompleted !== false,
+                bookReleased:  u.notificationPreferences?.email?.bookReleased  !== false,
                 bookCanceled:  u.notificationPreferences?.email?.bookCanceled  !== false,
                 adminComment:  u.notificationPreferences?.email?.adminComment  !== false,
                 loginAlert:    u.notificationPreferences?.email?.loginAlert    !== false,
@@ -1004,6 +1006,7 @@ const UserSettings = () => {
                 <div style={{ marginTop: '0.65rem', paddingLeft: '1.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   {[
                     { name: 'notificationPreferences.email.bookCompleted', label: 'Livre disponible au téléchargement' },
+                    { name: 'notificationPreferences.email.bookReleased',  label: 'Date de sortie atteinte' },
                     { name: 'notificationPreferences.email.bookCanceled',  label: 'Demande annulée' },
                     { name: 'notificationPreferences.email.adminComment',  label: 'Commentaire d\'un administrateur' },
                     { name: 'notificationPreferences.email.loginAlert',    label: 'Connexion depuis un nouvel endroit' },
@@ -1139,6 +1142,7 @@ const UserSettings = () => {
               </p>
               {[
                 { key: 'notifyOnComplete',     label: 'Livre disponible au téléchargement' },
+                { key: 'notifyOnRelease',       label: 'Date de sortie atteinte' },
                 { key: 'notifyOnCancel',        label: 'Demande annulée' },
                 { key: 'notifyOnAdminComment',  label: 'Commentaire d\'un administrateur' },
               ].map(ev => (

@@ -43,6 +43,13 @@ const bookRequestSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // Date à laquelle l'utilisateur a été notifié que la date de sortie était
+  // atteinte (releaseCheckCron) — évite de le notifier à nouveau à chaque
+  // passage du cron une fois que c'est fait.
+  releaseNotifiedAt: {
+    type: Date,
+    default: null
+  },
   seriesName: {
     type: String,
     default: ''
