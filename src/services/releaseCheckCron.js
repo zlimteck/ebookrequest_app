@@ -58,7 +58,7 @@ async function runReleaseCheckCron() {
           sendPushToUser(user._id, {
             title: '📅 Date de sortie atteinte',
             body: `« ${request.title} » est censé être sorti, la recherche du fichier continue.`,
-            url: '/dashboard',
+            url: `/dashboard?request=${request._id}`,
           }),
         ]);
       }

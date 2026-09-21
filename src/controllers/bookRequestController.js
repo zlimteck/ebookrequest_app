@@ -246,7 +246,7 @@ export const createBookRequest = async (req, res) => {
         await sendPushToUser(user._id, {
           title: '📖 Livre disponible !',
           body: `"${title}" de ${author} est déjà disponible. Vous pouvez le télécharger maintenant.`,
-          url: '/dashboard'
+          url: `/dashboard?request=${newRequest._id}`
         });
       } catch (e) {
         console.error('Erreur push auto-completion:', e.message);
@@ -829,7 +829,7 @@ export const updateRequestStatus = async (req, res) => {
       sendPushToUser(currentRequest.user, {
         title: '❌ Demande annulée',
         body: `Votre demande "${currentRequest.title}" a été annulée.`,
-        url: '/dashboard'
+        url: `/dashboard?request=${currentRequest._id}`
       }).catch(() => {});
       appriseService.notifyBookCanceled(currentRequest, reason).catch(() => {});
       // Notif Apprise personnelle de l'user
@@ -867,7 +867,7 @@ export const updateRequestStatus = async (req, res) => {
         sendPushToUser(currentRequest.user, {
           title: '✔️ Signalement résolu',
           body: `Votre signalement sur "${currentRequest.title}" a été examiné et résolu.`,
-          url: '/dashboard'
+          url: `/dashboard?request=${currentRequest._id}`
         }).catch(() => {});
       } else {
         updateFields['notifications.completed.seen'] = false;
@@ -876,7 +876,7 @@ export const updateRequestStatus = async (req, res) => {
         sendPushToUser(currentRequest.user, {
           title: '✅ Livre disponible !',
           body: `"${currentRequest.title}" est prêt au téléchargement.`,
-          url: '/dashboard'
+          url: `/dashboard?request=${currentRequest._id}`
         }).catch(() => {});
         appriseService.notifyBookCompleted(currentRequest, { searchMode: 'admin-manual' }).catch(() => {});
         // Notif Apprise personnelle + livraison Kindle
@@ -1192,7 +1192,7 @@ export const addDownloadLink = async (req, res) => {
       sendPushToUser(request.user, {
         title: '✅ Livre disponible !',
         body: `"${request.title}" est prêt au téléchargement.`,
-        url: '/dashboard'
+        url: `/dashboard?request=${request._id}`
       }).catch(() => {});
 
       // Apprise personnel de l'user
