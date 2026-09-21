@@ -10,6 +10,13 @@ import { getAIProviderConfig } from './aiProviderConfig.js';
 
 dotenv.config();
 
+// Clé normalisée titre+auteur pour comparer deux livres sans être sensible à
+// la casse, aux espaces superflus ou à un article de tête ("Le", "The"...).
+function normalizeBookKey(title, author) {
+  const clean = s => (s || '').toLowerCase().trim().replace(/^(le |la |les |l'|the |a |an )/i, '').replace(/\s+/g, ' ');
+  return `${clean(title)}|${clean(author)}`;
+}
+
 export async function getUserBookRequests(userId) {
   return BookRequest.find({ user: userId })
     .sort({ createdAt: -1 })
@@ -102,6 +109,16 @@ export const generateRecommendations = async (bookRequests, limit = 5, userId = 
     // Parser la réponse
     let recommendations = parseRecommendations(result.text);
 
+    // Garde-fou en plus de l'instruction du prompt : l'IA "boucle" parfois sur
+    // ses propres données d'entrée (surtout depuis l'ajout de la bibliothèque
+    // de lecture) et re-suggère un livre déjà demandé ou déjà lu — filtré ici
+    // au cas où l'instruction du prompt n'a pas suffi.
+    const known = new Set([
+      ...(bookRequests || []),
+      ...(libraryBooks || []),
+    ].map(b => normalizeBookKey(b.title, b.author)));
+    recommendations = recommendations.filter(r => !known.has(normalizeBookKey(r.title, r.author)));
+
     // Enrichir avec les couvertures de Google Books
     recommendations = await enrichWithGoogleBooksCovers(recommendations);
 
@@ -185,7 +202,11 @@ function buildRecommendationPrompt(books, limit, libraryBooks = []) {
 
 ${sections}
 
-Basé sur ces données (privilégie les livres les mieux notés dans la bibliothèque personnelle comme signal de goût), recommande exactement ${limit} livres différents qui pourraient intéresser cet utilisateur. Pour chaque recommandation, fournis les informations au format JSON suivant :
+Basé sur ces données (privilégie les livres les mieux notés dans la bibliothèque personnelle comme signal de goût), recommande exactement ${limit} livres qui pourraient intéresser cet utilisateur.
+
+RÈGLE IMPORTANTE : ne recommande JAMAIS un livre qui apparaît déjà dans l'une des deux listes ci-dessus (demandes ou bibliothèque personnelle), même sous un titre légèrement différent ou une autre édition — l'utilisateur les connaît déjà. Recommande uniquement des livres qu'il n'a ni demandés ni lus.
+
+Pour chaque recommandation, fournis les informations au format JSON suivant :
 
 {
   "title": "Titre du livre",
