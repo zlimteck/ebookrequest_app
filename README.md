@@ -285,6 +285,8 @@ npx web-push generate-vapid-keys
 
 Dans les deux cas, la couverture est identique : tout utilisateur de l'instance ayant enregistré l'app iOS et accepté les notifications reçoit les pushs, seul le transport diffère.
 
+Le mode **Relais** existe pour les instances qui n'ont pas de compte Apple Developer : elles s'appuient sur un serveur intermédiaire qui détient les identifiants Apple et relaie les envois pour toutes les instances qui lui sont rattachées. Le code de ce relais est un projet séparé : [ebookrequest-apns-relay](https://github.com/zlimteck/ebookrequest-apns-relay). Une instance doit d'abord s'enregistrer auprès du relais (self-registration), puis être approuvée manuellement par l'administrateur du relais — cette approbation se fait depuis **Admin → Relais push** (URL du relais + `ADMIN_SECRET`, stockés uniquement dans le navigateur de l'admin), qui liste les demandes en attente et les instances déjà actives.
+
 #### Intelligence artificielle
 
 > **Optionnel depuis la 1.5.2 :** configurable directement dans le panel admin (**Réglages → Fournisseur IA**), avec migration automatique des variables `.env` existantes au premier accès, comme pour l'email. Pour OpenAI et Claude, le champ modèle est une liste déroulante chargée automatiquement en direct auprès du fournisseur (jamais une liste figée dans l'app, donc toujours à jour avec les modèles disponibles).
