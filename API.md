@@ -604,6 +604,8 @@ curl -X POST https://app.ndd.fr/api/users/hardcover/import \
 
 ## Apprise
 
+Configuration globale, réservée aux admins.
+
 ### `GET /api/apprise/config`
 ```bash
 curl https://app.ndd.fr/api/apprise/config \
