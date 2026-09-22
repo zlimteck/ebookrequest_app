@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import appriseService from '../services/appriseService.js';
 
 const router = express.Router();
@@ -16,7 +16,7 @@ router.get('/status', requireAuth, async (req, res) => {
 });
 
 // Récupérer la configuration Apprise
-router.get('/config', requireAuth, async (req, res) => {
+router.get('/config', requireAuth, requireAdmin, async (req, res) => {
   try {
     const config = await appriseService.getConfig();
     res.json(config || {
@@ -32,7 +32,7 @@ router.get('/config', requireAuth, async (req, res) => {
 });
 
 // Mettre à jour la configuration Apprise
-router.put('/config', requireAuth, async (req, res) => {
+router.put('/config', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, appriseUrls, notifyOnNewRequest, notifyOnComplete, notifyOnCancel, notifyOnComment, notifyOnReport, notifyOnNewUser, notifyOnDownloadFailed, notifyOnProviderIssue } = req.body;
 
@@ -65,7 +65,7 @@ router.put('/config', requireAuth, async (req, res) => {
 });
 
 // Tester la configuration Apprise
-router.post('/test', requireAuth, async (req, res) => {
+router.post('/test', requireAuth, requireAdmin, async (req, res) => {
   try {
     const config = await appriseService.getConfig();
 
