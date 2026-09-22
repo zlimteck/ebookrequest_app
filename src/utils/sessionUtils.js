@@ -3,6 +3,7 @@ import Session from '../models/Session.js';
 import User from '../models/User.js';
 import { encrypt, decrypt } from '../services/cryptoService.js';
 import { sendNewLoginAlertEmail } from '../services/emailService.js';
+import { sendPushToUser } from '../services/webPushService.js';
 
 function parseUserAgent(ua) {
   if (!ua) return { browser: 'Inconnu', os: 'Inconnu' };
@@ -33,7 +34,7 @@ async function checkAndSendLoginAlert(userId, newSessionId, { ip, userAgent, log
   try {
     const user = await User.findById(userId)
       .select('email emailVerified notificationPreferences username').lean();
-    if (!user?.email || !user?.emailVerified || !user?.notificationPreferences?.email?.enabled || user?.notificationPreferences?.email?.loginAlert === false) return;
+    if (!user) return;
 
     const newGeo = ip ? geoip.lookup(ip) : null;
     const newCountry = newGeo?.country || null;
@@ -56,7 +57,15 @@ async function checkAndSendLoginAlert(userId, newSessionId, { ip, userAgent, log
     const { browser, os } = parseUserAgent(userAgent);
     const location = newGeo ? [newGeo.city, newGeo.country].filter(Boolean).join(', ') : null;
 
-    await sendNewLoginAlertEmail(user, { ip, location, browser, os, loginMethod });
+    if (user.email && user.emailVerified && user.notificationPreferences?.email?.enabled && user.notificationPreferences?.email?.loginAlert !== false) {
+      await sendNewLoginAlertEmail(user, { ip, location, browser, os, loginMethod });
+    }
+
+    sendPushToUser(userId, {
+      title: 'Nouvelle connexion détectée',
+      body: `Connexion depuis ${location || 'un lieu inconnu'} (${browser || 'navigateur inconnu'}).`,
+      url: '/settings',
+    }).catch(() => {});
   } catch {}
 }
 

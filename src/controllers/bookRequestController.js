@@ -244,7 +244,7 @@ export const createBookRequest = async (req, res) => {
       }
       try {
         await sendPushToUser(user._id, {
-          title: '📖 Livre disponible !',
+          title: 'Livre disponible !',
           body: `"${title}" de ${author} est déjà disponible. Vous pouvez le télécharger maintenant.`,
           url: `/dashboard?request=${newRequest._id}`
         });
@@ -321,7 +321,7 @@ export const createBookRequest = async (req, res) => {
         await Promise.allSettled(
           admins.map(admin =>
             sendPushToUser(admin._id, {
-              title: '📚 Nouvelle demande',
+              title: 'Nouvelle demande',
               body: `${user.username} demande "${title}" de ${author}.`,
               url: '/admin'
             })
@@ -827,7 +827,7 @@ export const updateRequestStatus = async (req, res) => {
       emitToUser(currentRequest.user, 'request:updated', { id: currentRequest._id, status: 'cancelled' });
       // Push notification annulation
       sendPushToUser(currentRequest.user, {
-        title: '❌ Demande annulée',
+        title: 'Demande annulée',
         body: `Votre demande "${currentRequest.title}" a été annulée.`,
         url: `/dashboard?request=${currentRequest._id}`
       }).catch(() => {});
@@ -836,12 +836,20 @@ export const updateRequestStatus = async (req, res) => {
       User.findById(currentRequest.user).select('username notificationPreferences').then(u => {
         if (u) appriseService.notifyUserBookCanceled(u, currentRequest, reason).catch(() => {});
       }).catch(() => {});
-      // Email aux admins — annulation
-      getAdminEmailPrefs().then(async prefs => {
-        if (!prefs.enabled || !prefs.notifyOnCancel) return;
-        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-          sendRequestCanceledToAdminsEmail(admin, currentRequest, reason).catch(() => {}));
+      // Email + push aux admins — annulation
+      User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+        getAdminEmailPrefs().then(prefs => {
+          if (!prefs.enabled || !prefs.notifyOnCancel) return;
+          admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+            sendRequestCanceledToAdminsEmail(admin, currentRequest, reason).catch(() => {}));
+        }).catch(() => {});
+
+        admins.forEach(admin =>
+          sendPushToUser(admin._id, {
+            title: 'Demande annulée',
+            body: `${currentRequest.username} a annulé sa demande "${currentRequest.title}".`,
+            url: `/admin?request=${currentRequest._id}`,
+          }).catch(() => {}));
       }).catch(() => {});
     } else {
       updateFields.cancelReason = undefined;
@@ -865,7 +873,7 @@ export const updateRequestStatus = async (req, res) => {
         emitToUser(currentRequest.user, 'request:updated', { id: currentRequest._id, status: 'completed' });
         // Push notification résolution signalement
         sendPushToUser(currentRequest.user, {
-          title: '✔️ Signalement résolu',
+          title: 'Signalement résolu',
           body: `Votre signalement sur "${currentRequest.title}" a été examiné et résolu.`,
           url: `/dashboard?request=${currentRequest._id}`
         }).catch(() => {});
@@ -874,7 +882,7 @@ export const updateRequestStatus = async (req, res) => {
         emitToUser(currentRequest.user, 'request:updated', { id: currentRequest._id, status: 'completed' });
         // Push notification livre disponible
         sendPushToUser(currentRequest.user, {
-          title: '✅ Livre disponible !',
+          title: 'Livre disponible !',
           body: `"${currentRequest.title}" est prêt au téléchargement.`,
           url: `/dashboard?request=${currentRequest._id}`
         }).catch(() => {});
@@ -1190,7 +1198,7 @@ export const addDownloadLink = async (req, res) => {
       emitToUser(request.user, 'request:updated', { id: request._id, status: 'completed' });
       // Web push — livre disponible
       sendPushToUser(request.user, {
-        title: '✅ Livre disponible !',
+        title: 'Livre disponible !',
         body: `"${request.title}" est prêt au téléchargement.`,
         url: `/dashboard?request=${request._id}`
       }).catch(() => {});
@@ -1294,7 +1302,7 @@ export const deleteRequest = async (req, res) => {
       }
       // Push notification suppression
       sendPushToUser(request.user, {
-        title: '🗑️ Demande supprimée',
+        title: 'Demande supprimée',
         body: `Votre demande "${request.title}" a été supprimée par un administrateur.`,
         url: '/dashboard'
       }).catch(() => {});
@@ -1371,7 +1379,7 @@ export const updateAdminComment = async (req, res) => {
     // Push notification commentaire admin
     if (comment?.trim()) {
       sendPushToUser(request.user, {
-        title: '💬 Nouveau commentaire',
+        title: 'Nouveau commentaire',
         body: `Un admin a commenté votre demande "${request.title}".`,
         url: '/dashboard'
       }).catch(() => {});
@@ -1421,12 +1429,20 @@ export const updateUserComment = async (req, res) => {
 
     if (comment?.trim()) {
       appriseService.notifyUserComment(request, comment).catch(() => {});
-      // Email aux admins — commentaire utilisateur
-      getAdminEmailPrefs().then(async prefs => {
-        if (!prefs.enabled || !prefs.notifyOnComment) return;
-        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-          sendUserCommentToAdminsEmail(admin, request, comment).catch(() => {}));
+      // Email + push aux admins — commentaire utilisateur
+      User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+        getAdminEmailPrefs().then(prefs => {
+          if (!prefs.enabled || !prefs.notifyOnComment) return;
+          admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+            sendUserCommentToAdminsEmail(admin, request, comment).catch(() => {}));
+        }).catch(() => {});
+
+        admins.forEach(admin =>
+          sendPushToUser(admin._id, {
+            title: 'Nouveau commentaire',
+            body: `${request.username} a commenté sa demande "${request.title}".`,
+            url: `/admin?request=${request._id}`,
+          }).catch(() => {}));
       }).catch(() => {});
     }
 
@@ -1553,12 +1569,20 @@ export const reportRequest = async (req, res) => {
     await request.save();
 
     appriseService.notifyReport(request, reason).catch(() => {});
-    // Email aux admins — signalement
-    getAdminEmailPrefs().then(async prefs => {
-      if (!prefs.enabled || !prefs.notifyOnReport) return;
-      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-        sendReportToAdminsEmail(admin, request, reason).catch(() => {}));
+    // Email + push aux admins — signalement
+    User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+      getAdminEmailPrefs().then(prefs => {
+        if (!prefs.enabled || !prefs.notifyOnReport) return;
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendReportToAdminsEmail(admin, request, reason).catch(() => {}));
+      }).catch(() => {});
+
+      admins.forEach(admin =>
+        sendPushToUser(admin._id, {
+          title: 'Signalement reçu',
+          body: `Signalement sur "${request.title}" : ${reason || 'sans raison précisée'}.`,
+          url: `/admin?request=${request._id}`,
+        }).catch(() => {}));
     }).catch(() => {});
 
     res.json({
@@ -1617,7 +1641,7 @@ export const addComment = async (req, res) => {
     if (isAdmin) {
       // Notifier l'utilisateur
       sendPushToUser(request.user, {
-        title: '💬 Nouveau message',
+        title: 'Nouveau message',
         body: `Un admin a répondu sur votre demande "${request.title}".`,
         url: '/dashboard'
       }).catch(() => {});
@@ -1635,11 +1659,19 @@ export const addComment = async (req, res) => {
     } else {
       // Notifier les admins
       appriseService.notifyUserComment(request, text.trim()).catch(() => {});
-      getAdminEmailPrefs().then(async prefs => {
-        if (!prefs.enabled || !prefs.notifyOnComment) return;
-        const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-          sendUserCommentToAdminsEmail(admin, request, text.trim()).catch(() => {}));
+      User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+        getAdminEmailPrefs().then(prefs => {
+          if (!prefs.enabled || !prefs.notifyOnComment) return;
+          admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+            sendUserCommentToAdminsEmail(admin, request, text.trim()).catch(() => {}));
+        }).catch(() => {});
+
+        admins.forEach(admin =>
+          sendPushToUser(admin._id, {
+            title: 'Nouveau commentaire',
+            body: `${request.username} a commenté sa demande "${request.title}".`,
+            url: `/admin?request=${request._id}`,
+          }).catch(() => {}));
       }).catch(() => {});
     }
 

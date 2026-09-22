@@ -1004,7 +1004,7 @@ export async function downloadFromValentine(title, author, requestId, category =
 
     try {
       await sendPushToUser(user._id, {
-        title: '📖 Livre disponible !',
+        title: 'Livre disponible !',
         body: `"${title}" de ${author} a été téléchargé automatiquement.`,
         url: '/dashboard',
       });
@@ -1176,7 +1176,7 @@ export function downloadFromValentineById(requestId, ebookId, userId) {
     const user = await User.findById(request.user);
     if (user) {
       try { if (user.emailVerified && user.email) await sendBookCompletedEmail(user, request); } catch {}
-      try { await sendPushToUser(user._id, { title: '📖 Livre disponible !', body: `"${request.title}" est maintenant disponible.`, url: '/dashboard' }); } catch {}
+      try { await sendPushToUser(user._id, { title: 'Livre disponible !', body: `"${request.title}" est maintenant disponible.`, url: '/dashboard' }); } catch {}
       try { await Notification.create({ user: user._id, type: 'request_completed', title: request.title, author: request.author, message: `"${request.title}" a été téléchargé.` }); } catch {}
     }
 

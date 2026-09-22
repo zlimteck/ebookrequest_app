@@ -404,7 +404,7 @@ export async function downloadFromFourtoutici(fileId, requestId) {
 
   try {
     await sendPushToUser(user._id, {
-      title: '📖 Livre disponible !',
+      title: 'Livre disponible !',
       body: `"${request.title}" a été téléchargé automatiquement.`,
       url: '/dashboard',
     });

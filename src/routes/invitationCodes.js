@@ -7,6 +7,7 @@ import User from '../models/User.js';
 import { sendVerificationEmail, sendNewUserToAdminsEmail } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
+import { sendPushToUser } from '../services/webPushService.js';
 
 import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
@@ -176,14 +177,22 @@ router.post('/register', async (req, res) => {
 
     console.log(`[InvitationCode] ${user.username} inscrit via le code ${invCode.code}`);
     appriseService.notifyNewUser(user.username, normalizedEmail).catch(() => {});
-    // Email aux admins — nouvel utilisateur
-    ConnectorSettings.findOne({ service: 'email' }).lean().then(async doc => {
-      const enabled = doc?.emailEnabled ?? true;
-      const notify  = doc?.notifyOnNewUser ?? true;
-      if (!enabled || !notify) return;
-      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-        sendNewUserToAdminsEmail(admin, user.username, normalizedEmail).catch(() => {}));
+    // Email + push aux admins — nouvel utilisateur
+    User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+      ConnectorSettings.findOne({ service: 'email' }).lean().then(doc => {
+        const enabled = doc?.emailEnabled ?? true;
+        const notify  = doc?.notifyOnNewUser ?? true;
+        if (!enabled || !notify) return;
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendNewUserToAdminsEmail(admin, user.username, normalizedEmail).catch(() => {}));
+      }).catch(() => {});
+
+      admins.forEach(admin =>
+        sendPushToUser(admin._id, {
+          title: 'Nouvel utilisateur',
+          body: `${user.username} vient de s'inscrire.`,
+          url: '/admin',
+        }).catch(() => {}));
     }).catch(() => {});
 
     const sid = await createSession(user._id, {

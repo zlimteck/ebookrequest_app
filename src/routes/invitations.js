@@ -7,6 +7,7 @@ import User from '../models/User.js';
 import { sendInvitationEmail, sendNewUserToAdminsEmail } from '../services/emailService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from '../services/appriseService.js';
+import { sendPushToUser } from '../services/webPushService.js';
 
 import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
@@ -161,11 +162,19 @@ router.post('/register', async (req, res) => {
 
     // Notifications admins — nouvel utilisateur
     appriseService.notifyNewUser(user.username, invitation.email).catch(() => {});
-    ConnectorSettings.findOne({ service: 'email' }).lean().then(async doc => {
-      if (!(doc?.emailEnabled ?? true) || !(doc?.notifyOnNewUser ?? true)) return;
-      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
-      admins.filter(a => a.emailVerified && a.email).forEach(admin =>
-        sendNewUserToAdminsEmail(admin, user.username, invitation.email).catch(() => {}));
+    User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
+      ConnectorSettings.findOne({ service: 'email' }).lean().then(doc => {
+        if (!(doc?.emailEnabled ?? true) || !(doc?.notifyOnNewUser ?? true)) return;
+        admins.filter(a => a.emailVerified && a.email).forEach(admin =>
+          sendNewUserToAdminsEmail(admin, user.username, invitation.email).catch(() => {}));
+      }).catch(() => {});
+
+      admins.forEach(admin =>
+        sendPushToUser(admin._id, {
+          title: 'Nouvel utilisateur',
+          body: `${user.username} vient de s'inscrire.`,
+          url: '/admin',
+        }).catch(() => {}));
     }).catch(() => {});
 
     const sid = await createSession(user._id, {

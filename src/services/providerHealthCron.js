@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import appriseService from './appriseService.js';
 import { sendProviderIssueToAdminsEmail } from './emailService.js';
+import { sendPushToUser } from './webPushService.js';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from './googleBooksConfig.js';
 import { getHardcoverApiKey } from './hardcoverConfig.js';
 import axios from 'axios';
@@ -22,11 +23,18 @@ async function notifyAdminsProviderIssue(serviceName, message) {
     const notifyOn = emailDoc?.notifyOnProviderIssue !== false;
 
     const tasks = [];
+    const admins = await User.find({ role: 'admin' }).select('email username emailVerified _id');
     if (emailEnabled && notifyOn) {
-      const admins = await User.find({ role: 'admin' }).select('email username emailVerified');
       for (const admin of admins) {
         tasks.push(sendProviderIssueToAdminsEmail(admin, serviceName, message));
       }
+    }
+    for (const admin of admins) {
+      tasks.push(sendPushToUser(admin._id, {
+        title: 'Problème fournisseur',
+        body: `${serviceName} : ${message}`,
+        url: '/admin',
+      }));
     }
     tasks.push(appriseService.notifyProviderIssue(serviceName, message).catch(() => {}));
     await Promise.allSettled(tasks);

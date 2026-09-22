@@ -56,7 +56,7 @@ async function runReleaseCheckCron() {
           sendBookReleasedEmail(user, request),
           appriseService.notifyUserBookReleased(user, request),
           sendPushToUser(user._id, {
-            title: '📅 Date de sortie atteinte',
+            title: 'Date de sortie atteinte',
             body: `« ${request.title} » est censé être sorti, la recherche du fichier continue.`,
             url: `/dashboard?request=${request._id}`,
           }),
