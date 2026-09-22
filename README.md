@@ -37,6 +37,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 
 - [Stack](#stack)
 - [Fonctionnalités](#fonctionnalités)
+- [App iOS](#app-ios)
 - [API](#api)
 - [Déploiement Docker](#déploiement-docker)
   - [Prérequis](#prérequis)
@@ -167,6 +168,16 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Compatible avec tous les clients MCP : [ChatMCP](https://apps.apple.com/fr/app/chatmcp/id6745196560) (iOS/iPadOS), Claude Desktop (Mac/Windows), Claude Web
 - Deux modes de déploiement : **HTTP** (hébergé sur VPS, accessible depuis n'importe où) ou **stdio** (local, pour Claude Desktop)
 - Voir [`mcp/README.md`](mcp/README.md) pour la configuration
+
+## App iOS
+
+Une app iOS native existe pour EbookRequest, distribuée en IPA non signée via une source [AltStore](https://altstore.io) dédiée.
+
+[<img src="screenshots/altstore-badge-dark.png" alt="Download on AltStore" width="180" />](https://altstore.io/source/repository.ebookrequest.fr)
+
+Installation nécessaire :
+- Une app de sideloading compatible AltStore (AltStore Classic, AltStore PAL, SideStore...).
+- Un compte Apple Developer payant (99 $/an) **ou** un certificat de signature `.p12` valide, pour signer et installer l'IPA — une IPA non signée ne s'installe pas telle quelle sur iOS.
 
 ## API
 
