@@ -625,11 +625,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   };
 
   const handleCancelRequest = (id) => {
-    if (cancelReason.trim() === '') {
-      toast.error('Veuillez indiquer une raison d\'annulation');
-      return;
-    }
-    handleUpdateStatus(id, 'canceled', cancelReason);
+    // Raison facultative : on l'envoie si renseignée, sinon le backend annule sans raison.
+    handleUpdateStatus(id, 'canceled', cancelReason.trim() || undefined);
   };
 
   const handleDeleteRequest = async (id) => {
@@ -1277,7 +1274,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                     type="text"
                                     value={cancelReason}
                                     onChange={(e) => setCancelReason(e.target.value)}
-                                    placeholder="Raison de l'annulation"
+                                    placeholder="Raison de l'annulation (facultatif)"
                                     className={styles.cancelInput}
                                     autoFocus
                                   />
@@ -1640,7 +1637,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                           type="text"
                           value={cancelReason}
                           onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Raison de l'annulation"
+                          placeholder="Raison de l'annulation (facultatif)"
                           className={styles.cancelInput}
                           autoFocus
                         />
