@@ -20,7 +20,7 @@ import { encrypt, decrypt } from '../services/cryptoService.js';
 import { invalidateGoogleBooksKeyCache, getGoogleBooksApiKey } from '../services/googleBooksConfig.js';
 import { invalidateHardcoverKeyCache } from '../services/hardcoverConfig.js';
 import { invalidateAIProviderConfigCache } from '../services/aiProviderConfig.js';
-import { testAIProviderConnection } from '../services/aiProviderService.js';
+import { testAIProviderConnection, listAvailableModels } from '../services/aiProviderService.js';
 import { invalidateRSSUrlCache } from '../services/rssConfig.js';
 import { invalidateProxyConfigCache, getProxyAgent } from '../services/proxyConfig.js';
 import { invalidateEmailConfigCache } from '../services/emailConfig.js';
@@ -728,6 +728,8 @@ router.get('/aiprovider', requireAuth, requireAdmin, async (req, res) => {
       url: doc?.url || '',
       apiKey: doc?.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc?.apiKey,
+      bestsellerAutoGenerate: doc?.bestsellerAutoGenerate !== false,
+      recommendationsAutoRefresh: doc?.recommendationsAutoRefresh !== false,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -737,7 +739,7 @@ router.get('/aiprovider', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/aiprovider ────────────────────────────────────────────
 router.put('/aiprovider', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, provider, model, url, apiKey, _hasApiKey } = req.body;
+    const { enabled, provider, model, url, apiKey, _hasApiKey, bestsellerAutoGenerate, recommendationsAutoRefresh } = req.body;
     if (!['openai', 'ollama', 'claude'].includes(provider)) {
       return res.status(400).json({ error: 'Provider invalide' });
     }
@@ -747,6 +749,8 @@ router.put('/aiprovider', requireAuth, requireAdmin, async (req, res) => {
       model: model?.trim() || '',
       url: url?.trim() || '',
       ...(enabled !== undefined && { enabled: !!enabled }),
+      ...(bestsellerAutoGenerate !== undefined && { bestsellerAutoGenerate: !!bestsellerAutoGenerate }),
+      ...(recommendationsAutoRefresh !== undefined && { recommendationsAutoRefresh: !!recommendationsAutoRefresh }),
     };
 
     if (apiKey && apiKey !== '••••••••') {
@@ -771,6 +775,8 @@ router.put('/aiprovider', requireAuth, requireAdmin, async (req, res) => {
       url: doc.url || '',
       apiKey: doc.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc.apiKey,
+      bestsellerAutoGenerate: doc.bestsellerAutoGenerate !== false,
+      recommendationsAutoRefresh: doc.recommendationsAutoRefresh !== false,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
@@ -808,6 +814,34 @@ router.post('/aiprovider/test', requireAuth, requireAdmin, async (req, res) => {
     res.json({ success: true, message: `Connexion réussie — ${provider}`, model: result.model });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Test impossible' });
+  }
+});
+
+// ── POST /api/connectors/aiprovider/models ────────────────────────────────────
+// Liste les modèles réellement disponibles auprès du fournisseur (OpenAI/Claude),
+// jamais une liste figée côté app qui deviendrait vite obsolète. En POST (pas
+// GET) pour ne jamais faire transiter une clé API en cours de saisie dans une
+// URL/des logs d'accès.
+router.post('/aiprovider/models', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { provider, apiKey } = req.body;
+    if (!['openai', 'claude'].includes(provider)) {
+      return res.status(400).json({ error: 'Liste de modèles disponible uniquement pour OpenAI et Claude.' });
+    }
+
+    let realKey = apiKey;
+    if (!apiKey || apiKey === '••••••••') {
+      const doc = await ConnectorSettings.findOne({ service: 'aiProvider' }).lean();
+      realKey = decrypt(doc?.apiKey || '') ?? doc?.apiKey ?? '';
+    }
+    if (!realKey) {
+      return res.status(400).json({ error: 'Aucune clé API disponible (enregistrez-la d\'abord).' });
+    }
+
+    const models = await listAvailableModels(provider, realKey);
+    res.json({ models });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Impossible de récupérer la liste des modèles.' });
   }
 });
 

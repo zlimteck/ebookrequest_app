@@ -17,6 +17,41 @@ export const isAIConfigured = async () => {
   return false;
 };
 
+// Modèles à exclure de la liste OpenAI (pas des modèles de chat) : embeddings,
+// audio, image, modération... Tout le reste (gpt-*, o1/o3/o4-*, chatgpt-*) est
+// gardé, sans liste figée de noms exacts, pour rester à jour automatiquement
+// dès qu'OpenAI sort un nouveau modèle sans qu'on ait besoin de mettre à jour
+// le code.
+const OPENAI_NON_CHAT_PATTERN = /embedding|whisper|tts|dall-e|moderation|davinci|babbage|ada|curie/i;
+
+/**
+ * Liste les modèles de chat disponibles pour le provider donné, en interrogeant
+ * directement l'API du fournisseur (jamais une liste codée en dur côté app,
+ * qui deviendrait obsolète à chaque nouveau modèle sorti par OpenAI/Anthropic).
+ */
+export const listAvailableModels = async (provider, apiKey) => {
+  if (!apiKey) throw new Error('Clé API requise.');
+
+  if (provider === 'openai') {
+    const client = new OpenAI({ apiKey });
+    const res = await client.models.list();
+    return res.data
+      .filter(m => !OPENAI_NON_CHAT_PATTERN.test(m.id))
+      .sort((a, b) => (b.created || 0) - (a.created || 0))
+      .map(m => m.id);
+  }
+
+  if (provider === 'claude') {
+    const client = new Anthropic({ apiKey });
+    const res = await client.models.list({ limit: 100 });
+    return res.data
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(m => m.id);
+  }
+
+  throw new Error(`Liste de modèles non disponible pour le provider "${provider}".`);
+};
+
 /**
  * Unified interface for AI text generation
  * @param {string} prompt - The prompt to send to the AI

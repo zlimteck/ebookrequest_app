@@ -1,20 +1,10 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import BookRequest from '../models/BookRequest.js';
 import Recommendation from '../models/Recommendation.js';
-import { generateRecommendations } from '../services/recommendationService.js';
+import { generateRecommendations, getUserBookRequests, getUserLibraryBooks } from '../services/recommendationService.js';
 import { testAIProviderConnection, isAIConfigured } from '../services/aiProviderService.js';
 
 const router = express.Router();
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function getUserBookRequests(userId) {
-  return BookRequest.find({ user: userId })
-    .sort({ createdAt: -1 })
-    .select('title author description pageCount')
-    .lean();
-}
 
 // ── GET /api/recommendations ──────────────────────────────────────────────────
 // Retourne le cache si disponible, génère la première fois (gratuit, sans quota)
@@ -48,8 +38,11 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     // Première génération — ne compte pas dans le quota
-    const bookRequests = await getUserBookRequests(userId);
-    const result = await generateRecommendations(bookRequests, limit, userId, req.user.username);
+    const [bookRequests, libraryBooks] = await Promise.all([
+      getUserBookRequests(userId),
+      getUserLibraryBooks(userId),
+    ]);
+    const result = await generateRecommendations(bookRequests, limit, userId, req.user.username, libraryBooks);
 
     const doc = await Recommendation.findOneAndUpdate(
       { user: userId },
@@ -120,8 +113,11 @@ router.post('/regenerate', requireAuth, async (req, res) => {
     }
 
     // Générer
-    const bookRequests = await getUserBookRequests(userId);
-    const result = await generateRecommendations(bookRequests, limit, userId, req.user.username);
+    const [bookRequests, libraryBooks] = await Promise.all([
+      getUserBookRequests(userId),
+      getUserLibraryBooks(userId),
+    ]);
+    const result = await generateRecommendations(bookRequests, limit, userId, req.user.username, libraryBooks);
 
     // Incrémenter le compteur (fenêtre déjà réinitialisée si expirée dans canRegenerate)
     doc.recommendations = result.recommendations;

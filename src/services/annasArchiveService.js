@@ -720,7 +720,7 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
 
     try {
       await sendPushToUser(user._id, {
-        title: '📖 Livre disponible !',
+        title: 'Livre disponible !',
         body: `"${request.title}" a été téléchargé automatiquement.`,
         url: '/dashboard',
       });

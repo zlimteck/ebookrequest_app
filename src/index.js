@@ -52,6 +52,8 @@ import { initializeTrendingBooksCache, isTrendingPreloadEnabled } from './servic
 import { startHardcoverSyncCron } from './services/hardcoverSyncCron.js';
 import { startProviderHealthCron } from './services/providerHealthCron.js';
 import { startReleaseCheckCron } from './services/releaseCheckCron.js';
+import { startRecommendationsCron } from './services/recommendationsCron.js';
+import { startBestsellerCron } from './services/bestsellerCron.js';
 import { initSocket } from './services/socketService.js';
 import { createServer } from 'http';
 
@@ -289,6 +291,12 @@ mongoose.connect(process.env.MONGODB_URI, {
     // Cron de notification "date de sortie atteinte" : prévient l'utilisateur
     // quand publishedDate est dépassée sur une demande encore en attente
     startReleaseCheckCron();
+
+    // Cron de rafraîchissement hebdomadaire des recommandations IA (widget dashboard)
+    startRecommendationsCron();
+
+    // Cron de génération mensuelle automatique des bestsellers (page Découvrir)
+    startBestsellerCron();
 
     // Nettoyage horaire des fichiers convertis (uploads/convert/) > 24h
     import('./services/calibreConvertService.js').then(({ CONVERT_DIR }) => {

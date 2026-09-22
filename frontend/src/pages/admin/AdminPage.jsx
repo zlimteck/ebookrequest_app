@@ -28,6 +28,7 @@ import OPDSPanel from '../../components/admin/OPDSPanel';
 import InvitationsPanel from '../../components/admin/InvitationsPanel';
 import ConnectorsPanel from '../../components/admin/ConnectorsPanel';
 import SettingsPanel from '../../components/admin/SettingsPanel';
+import RelayPushPanel from '../../components/admin/RelayPushPanel';
 import ServicesHealth from '../../components/admin/ServicesHealth';
 import DownloadLogs from '../../components/admin/DownloadLogs';
 import BookPreviewModal from '../../components/BookPreviewModal';
@@ -671,6 +672,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     resolve_report: { label: 'Signalement résolu', color: '#10b981' },
     settings_change: { label: 'Réglages modifiés', color: '#8b5cf6' },
     account_deleted: { label: 'Compte auto-supprimé', color: '#ef4444' },
+    cron_run: { label: 'Tâche automatique', color: '#8b5cf6' },
   };
 
   const renderTabContent = () => {
@@ -691,6 +693,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         return <ConnectorsPanel />;
       case 'settings':
         return <SettingsPanel />;
+      case 'relayPush':
+        return <RelayPushPanel />;
       case 'health':
         return <ServicesHealth />;
 
@@ -1776,6 +1780,15 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      )
+    },
+    {
+      id: 'relayPush',
+      label: 'Relais push',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
         </svg>
       )
     },

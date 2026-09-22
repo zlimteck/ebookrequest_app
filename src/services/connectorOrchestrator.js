@@ -195,7 +195,7 @@ async function notifyAdminsDownloadFailed(bookRequest, annaUrl) {
     if (emailEnabled && notifyOnFailed) {
       for (const admin of admins) {
         tasks.push(sendPushToUser(admin._id, {
-          title: '⚠️ Téléchargement échoué',
+          title: 'Téléchargement échoué',
           body:  `"${bookRequest.title}" nécessite un téléchargement manuel.`,
           url:   '/admin',
         }));

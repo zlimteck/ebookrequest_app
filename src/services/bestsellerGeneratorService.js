@@ -1,11 +1,72 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import AIRequestLog from '../models/AIRequestLog.js';
+import Bestseller from '../models/Bestseller.js';
 import { generateCompletion } from './aiProviderService.js';
 import { findBestBookMatch } from './bookSearchService.js';
 import { getAIProviderConfig } from './aiProviderConfig.js';
+import { clearTrendingBooksCache } from './trendingBooksService.js';
 
 dotenv.config();
+
+// Catégories valides de Bestseller.category (enum) et leur libellé humain
+// utilisé dans le prompt IA — doit rester synchronisé avec le tableau
+// `categories` de frontend/src/components/admin/BestsellerManagement.jsx.
+export const CATEGORY_LABELS = {
+  thriller: 'Thriller & Policier',
+  romance:  'Romance',
+  sf:       'Science-Fiction',
+  bd:       'BD & Manga',
+  fantasy:  'Fantasy',
+  literary: 'Littéraire',
+};
+
+function categoryIdForLabel(label) {
+  return Object.entries(CATEGORY_LABELS).find(([, l]) => l === label)?.[0] || null;
+}
+
+// Enregistre les bestsellers générés en base (dédoublonnage par titre+auteur+
+// catégorie, n'écrase jamais les entrées déjà présentes) — partagé entre la
+// génération manuelle (admin) et la génération automatique mensuelle. Chaque
+// livre est inséré indépendamment (une catégorie ou un livre en erreur ne
+// bloque pas les suivants), et le libellé renvoyé par l'IA (ex. "Thriller &
+// Policier") est traduit vers l'identifiant valide de l'enum (ex. "thriller").
+export async function saveBestsellers(bestsellers, addedBy) {
+  let savedCount = 0;
+  for (const [categoryLabel, books] of Object.entries(bestsellers)) {
+    const category = categoryIdForLabel(categoryLabel);
+    if (!category) {
+      console.warn(`[Bestsellers] Catégorie inconnue ignorée: "${categoryLabel}"`);
+      continue;
+    }
+    for (const book of books) {
+      try {
+        const existing = await Bestseller.findOne({ title: book.title, author: book.author, category });
+        if (existing) continue;
+        await Bestseller.create({
+          title: book.title,
+          author: book.author,
+          category,
+          order: book.order || 0,
+          reason: book.reason,
+          thumbnail: book.thumbnail || null,
+          description: book.description || book.reason,
+          link: book.link || null,
+          googleBooksId: book.googleBooksId || null,
+          pageCount: book.pageCount || 0,
+          publishedDate: book.publishedDate || null,
+          active: true,
+          addedBy,
+        });
+        savedCount++;
+      } catch (err) {
+        console.error(`[Bestsellers] Échec enregistrement "${book.title}":`, err.message);
+      }
+    }
+  }
+  if (savedCount > 0) clearTrendingBooksCache();
+  return savedCount;
+}
 
 // Génère les bestsellers du mois pour les catégories spécifiées
 export const generateBestsellers = async (categories = [], userId = null, username = 'admin') => {
@@ -13,7 +74,7 @@ export const generateBestsellers = async (categories = [], userId = null, userna
 
   try {
     if (!categories || categories.length === 0) {
-      categories = ['Roman', 'Science-Fiction', 'Thriller', 'Fantasy', 'Romance'];
+      categories = Object.values(CATEGORY_LABELS);
     }
 
     const currentMonth = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -189,12 +250,17 @@ function parseBestsellers(response, categories) {
   }
 }
 
-// Enrichit les bestsellers avec les données Google Books / Hardcover / Open Library
+// Enrichit les bestsellers avec les données Google Books / Hardcover / Open
+// Library, et écarte les livres qu'aucune des 3 sources ne confirme — l'IA
+// invente parfois des titres plausibles mais inexistants (ou des variantes
+// erronées d'un vrai livre) ; sans confirmation externe, mieux vaut ne pas
+// l'afficher plutôt que de montrer une entrée sans couverture ni lien, non
+// vérifiable par l'utilisateur.
 async function enrichBestsellersWithGoogleBooks(bestsellers) {
   const enriched = {};
 
   for (const [category, books] of Object.entries(bestsellers)) {
-    enriched[category] = await Promise.all(
+    const results = await Promise.all(
       books.map(async (book) => {
         try {
           const match = await findBestBookMatch({ title: book.title, author: book.author });
@@ -212,10 +278,11 @@ async function enrichBestsellersWithGoogleBooks(bestsellers) {
         } catch (error) {
           console.error(`Erreur recherche livre pour "${book.title}":`, error.message);
         }
-
-        return book;
+        return null;
       })
     );
+    const confirmed = results.filter(Boolean);
+    if (confirmed.length > 0) enriched[category] = confirmed;
   }
 
   return enriched;

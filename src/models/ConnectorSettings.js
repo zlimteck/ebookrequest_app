@@ -11,6 +11,11 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // Provider IA (service: 'aiProvider') — 'openai' | 'ollama' | 'claude'
   provider: { type: String, default: '' },
   model:    { type: String, default: '' },
+  // Génération/rafraîchissement automatiques en tâche de fond (crons) — activés
+  // par défaut pour ne rien changer au comportement existant, désactivables
+  // individuellement par un admin qui préfère tout déclencher manuellement.
+  bestsellerAutoGenerate:     { type: Boolean, default: true },
+  recommendationsAutoRefresh: { type: Boolean, default: true },
   // Provider Email (service: 'emailProvider') — 'smtp' | 'resend'
   smtpHost:   { type: String, default: '' },
   smtpPort:   { type: Number, default: 0 },
