@@ -140,20 +140,40 @@ export async function notifyCompletion(bookRequest, meta = {}) {
 // Marque la demande comme non téléchargeable automatiquement : l'UI utilisateur affiche
 // alors un bandeau « traitement manuel » plutôt que de laisser la demande en attente sans
 // explication. Best-effort : ne doit jamais faire échouer le flux de téléchargement.
+// Retourne true uniquement au PREMIER échec (flag absent avant l'appel) : les relances
+// du cron sur une demande déjà marquée ne doivent pas renotifier les admins.
 async function flagAutoDownloadFailed(bookRequest, reason) {
-  if (!bookRequest?._id) return;
+  if (!bookRequest?._id) return false;
   try {
-    const res = await BookRequest.updateOne(
+    // findOneAndUpdate renvoie le document AVANT modification (comportement par défaut)
+    const prev = await BookRequest.findOneAndUpdate(
       { _id: bookRequest._id, status: 'pending' },
       { $set: { autoDownloadFailed: { at: new Date(), reason: String(reason || '').slice(0, 300) } } }
-    );
+    ).select('autoDownloadFailed user').lean();
+    if (!prev) return false;
+    const isFirstFailure = !prev.autoDownloadFailed?.at;
     // Pousse la mise à jour au dashboard de l'utilisateur (qui écoute déjà `request:updated`)
-    // pour que le bandeau apparaisse sans rechargement. Seulement si le flag a bien été posé.
-    if (res.modifiedCount && bookRequest.user) {
-      emitToUser(bookRequest.user, 'request:updated', { id: bookRequest._id, status: 'pending' });
+    // pour que le bandeau apparaisse sans rechargement.
+    if (isFirstFailure && prev.user) {
+      emitToUser(prev.user, 'request:updated', { id: bookRequest._id, status: 'pending' });
     }
+    return isFirstFailure;
   } catch (e) {
     console.error('[Orchestrateur] Erreur marquage autoDownloadFailed:', e.message);
+    return false;
+  }
+}
+
+// Marque l'échec et ne notifie les admins qu'au premier échec de la demande.
+// Les relances suivantes restent silencieuses ; la réussite éventuelle est signalée
+// par la notification de complétion habituelle.
+async function handleAutoDownloadFailure(bookRequest, reason, annaUrl) {
+  if (!bookRequest) return;
+  const isFirstFailure = await flagAutoDownloadFailed(bookRequest, reason);
+  if (isFirstFailure) {
+    await notifyAdminsDownloadFailed(bookRequest, annaUrl);
+  } else {
+    console.log(`[Orchestrateur] Échec déjà signalé pour "${bookRequest.title}" — pas de nouvelle notification`);
   }
 }
 
@@ -454,8 +474,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
       const reason = lastErr ? `Sources indisponibles : ${lastErr.message}` : 'Aucun résultat trouvé';
       console.log(`[Orchestrateur] ${lastErr ? reason : `Aucun résultat (Anna's Archive / LibGen) pour "${title}"`}`);
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: reason });
-      await flagAutoDownloadFailed(bookRequest, lastErr ? 'Sources de téléchargement momentanément inaccessibles.' : 'Livre introuvable sur les sources automatiques.');
-      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
+      await handleAutoDownloadFailure(bookRequest, lastErr ? 'Sources de téléchargement momentanément inaccessibles.' : 'Livre introuvable sur les sources automatiques.', notificationAnnaUrl);
       return;
     }
 
@@ -484,8 +503,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
     if (!scored.length) {
       console.log(`[Orchestrateur] Anna's Archive : aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Aucun résultat avec auteur compatible' });
-      await flagAutoDownloadFailed(bookRequest, 'Aucune correspondance fiable trouvée sur les sources automatiques.');
-      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
+      await handleAutoDownloadFailure(bookRequest, 'Aucune correspondance fiable trouvée sur les sources automatiques.', notificationAnnaUrl);
       return;
     }
 
@@ -504,16 +522,13 @@ export async function downloadWithFallback(title, author, requestId, category = 
       await notifyCompletion(afterAnnas, { connector: 'annasarchive', searchMode: 'detailed' });
     } else {
       await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Téléchargement Anna\'s Archive échoué' });
-      await flagAutoDownloadFailed(bookRequest, 'Le téléchargement automatique a échoué.');
-      if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl);
+      await handleAutoDownloadFailure(bookRequest, 'Le téléchargement automatique a échoué.', notificationAnnaUrl);
     }
 
   } catch (err) {
     console.error(`[Orchestrateur] Erreur non bloquante pour "${title}":`, err.message);
     await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'valentine', success: false, error: err.message }).catch(() => {});
-    await flagAutoDownloadFailed(bookRequest, 'Le téléchargement automatique a rencontré une erreur.').catch(() => {});
-    // notificationAnnaUrl est défini avant le try, donc accessible ici (et mis à jour si un md5 a été trouvé)
-    if (bookRequest) await notifyAdminsDownloadFailed(bookRequest, notificationAnnaUrl).catch(() => {});
+    await handleAutoDownloadFailure(bookRequest, 'Le téléchargement automatique a rencontré une erreur.', notificationAnnaUrl).catch(() => {});
   } finally {
     if (connectorsTried.length) {
       try {
