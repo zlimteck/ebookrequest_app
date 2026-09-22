@@ -808,6 +808,11 @@ export const updateRequestStatus = async (req, res) => {
     const previousStatus = currentRequest.status;
 
     const updateFields = { status };
+    // Changement de statut manuel : on repart d'un état propre pour que, si la demande
+    // revient en attente puis échoue à nouveau, les admins soient de nouveau notifiés.
+    if (status !== previousStatus) {
+      updateFields.autoDownloadFailed = { at: null, reason: '' };
+    }
     if (status === 'canceled') {
       updateFields['notifications.canceled.seen'] = false;
       if (reason) {
