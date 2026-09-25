@@ -245,10 +245,37 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendBuild, 'index.html'));
 });
 
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+// Connexion MongoDB avec nouvelles tentatives. Au redémarrage du démon Docker,
+// les conteneurs sont relancés en parallèle (depends_on ignoré) : Mongo peut ne
+// pas encore être joignable, ni même résolu par le DNS interne (ENOTFOUND).
+// Sans retry, l'erreur était seulement loguée : le serveur HTTP ne démarrait
+// jamais, mais le processus restait vivant (setInterval de module), donc le
+// conteneur restait « running » + « unhealthy » sans jamais être relancé.
+// En dernier recours, on quitte avec un code d'erreur pour laisser la politique
+// restart de Docker prendre le relais.
+const MONGO_MAX_ATTEMPTS = parseInt(process.env.MONGO_CONNECT_MAX_ATTEMPTS, 10) || 10;
+const MONGO_MAX_DELAY_MS = 30000;
+
+async function connectMongoWithRetry() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 5000,
+      });
+      if (attempt > 1) console.log(`[MongoDB] Connecté après ${attempt} tentatives`);
+      return;
+    } catch (error) {
+      if (attempt >= MONGO_MAX_ATTEMPTS) throw error;
+      const delay = Math.min(2000 * 2 ** (attempt - 1), MONGO_MAX_DELAY_MS);
+      console.error(`[MongoDB] Tentative ${attempt}/${MONGO_MAX_ATTEMPTS} échouée (${error.message}) — nouvel essai dans ${delay / 1000}s`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+connectMongoWithRetry()
 .then(() => {
   initSocket(httpServer);
   httpServer.listen(PORT, () => {
@@ -321,4 +348,7 @@ mongoose.connect(process.env.MONGODB_URI, {
     }).catch(() => {});
   });
 })
-.catch((error) => console.error('Erreur de connexion MongoDB:', error));
+.catch((error) => {
+  console.error(`[MongoDB] Connexion impossible après ${MONGO_MAX_ATTEMPTS} tentatives, arrêt du processus:`, error);
+  process.exit(1);
+});
