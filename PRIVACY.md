@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-**Dernière mise à jour : 19 septembre 2026**
+**Dernière mise à jour : 26 septembre 2026**
 
 ## Un logiciel auto-hébergé, pas un service centralisé
 
@@ -27,6 +27,7 @@ Si vous utilisez EbookRequest (via le web, l'application iOS ou un client OPDS/M
 - Messages échangés avec les administrateurs sur une demande
 - Historique d'accès au catalogue OPDS (livre consulté/téléchargé, IP, client utilisé)
 - Journal d'envoi des emails (destinataire, statut de livraison)
+- Compteurs d'activité pour les succès/badges du profil (nombre de demandes, de livres lus, de messages envoyés au chatbot IA, connecteurs de téléchargement déjà utilisés…)
 
 ### Notifications
 - Abonnement push navigateur (endpoint, clés de chiffrement, standard Web Push), sans donnée personnelle transmise au navigateur ou à son fournisseur au-delà de ce qui est nécessaire pour router la notification

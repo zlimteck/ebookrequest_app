@@ -113,6 +113,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Réinitialisation de mot de passe par email
 - Gestion des utilisateurs (rôles, quotas, activation/désactivation)
 - Catalogue OPDS pour accès depuis les liseuses (Calibre, KOReader…)
+- Succès/badges sur le profil (requêtes, lecture, discussions IA, ancienneté, connecteurs utilisés…), notification à chaque déblocage
 
 **Notifications**
 - Notifications email et push (web VAPID + natif iOS via APNs) par événement

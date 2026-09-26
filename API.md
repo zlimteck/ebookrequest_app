@@ -107,7 +107,7 @@ curl https://app.ndd.fr/api/users/me/stats \
 ```
 
 ### `GET /api/users/me/achievements`
-Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit, app iOS, easter egg), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Recommandation IA/best-seller et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès). Notification cloche + push envoyée automatiquement à chaque nouveau succès détecté par cet appel.
+Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, discussions avec l'IA, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit, page 404, app iOS, easter egg), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Chaque catégorie progressive monte jusqu'à 9 paliers (`bronze/silver/gold/platinum/diamond/diamondBlue/diamondRed/diamondBlack/legend`). Recommandation IA/best-seller, discussions IA et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès). Notification cloche + push envoyée automatiquement à chaque nouveau succès détecté par cet appel.
 ```bash
 curl https://app.ndd.fr/api/users/me/achievements \
   -H "Authorization: Bearer <token>"
@@ -117,6 +117,13 @@ curl https://app.ndd.fr/api/users/me/achievements \
 Signale le déblocage du succès "Easter egg" (déclenché depuis l'app iOS). Idempotent, ne fait que passer le flag à `true` — la notification est envoyée au prochain appel de `GET /api/users/me/achievements`.
 ```bash
 curl -X POST https://app.ndd.fr/api/users/me/achievements/easter-egg \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/users/me/achievements/found-404`
+Signale le déblocage du succès "Ta vu elle est belle ma 404" (page 404, web uniquement). Idempotent, même principe que l'easter egg.
+```bash
+curl -X POST https://app.ndd.fr/api/users/me/achievements/found-404 \
   -H "Authorization: Bearer <token>"
 ```
 
