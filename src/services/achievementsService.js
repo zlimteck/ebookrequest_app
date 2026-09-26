@@ -217,7 +217,7 @@ export async function getUserAchievements(userId) {
         unlocked += 1;
         const key = `${cat.id}-${tier.threshold}`;
         currentKeys.push(key);
-        labelByKey[key] = `${cat.label} — ${tierName(cat.id, tier.threshold)}`;
+        labelByKey[key] = `${cat.label} : ${tierName(cat.id, tier.threshold)}`;
       }
     } else {
       total += 1;
