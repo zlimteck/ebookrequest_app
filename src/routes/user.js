@@ -37,6 +37,18 @@ router.get('/me/achievements', requireAuth, async (req, res) => {
   }
 });
 
+// Succès "Easter egg" (déclenché depuis l'app iOS, voir issue #41) — idempotent,
+// se contente de passer le flag à true, la notification/push est envoyée au
+// prochain calcul des succès (GET /me/achievements) qui détecte le nouveau déblocage.
+router.post('/me/achievements/easter-egg', requireAuth, async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.id }, { easterEggUnlocked: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement du succès' });
+  }
+});
+
 // GET /api/users/me/export — export de toutes les données personnelles de
 // l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
 // Exclut délibérément les secrets (mots de passe, clés API, tokens) même si

@@ -107,9 +107,16 @@ curl https://app.ndd.fr/api/users/me/stats \
 ```
 
 ### `GET /api/users/me/achievements`
-Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Recommandation IA/best-seller et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès).
+Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit, app iOS, easter egg), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Recommandation IA/best-seller et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès). Notification cloche + push envoyée automatiquement à chaque nouveau succès détecté par cet appel.
 ```bash
 curl https://app.ndd.fr/api/users/me/achievements \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/users/me/achievements/easter-egg`
+Signale le déblocage du succès "Easter egg" (déclenché depuis l'app iOS). Idempotent, ne fait que passer le flag à `true` — la notification est envoyée au prochain appel de `GET /api/users/me/achievements`.
+```bash
+curl -X POST https://app.ndd.fr/api/users/me/achievements/easter-egg \
   -H "Authorization: Bearer <token>"
 ```
 
