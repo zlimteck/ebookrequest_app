@@ -178,6 +178,12 @@ const userSchema = new mongoose.Schema({
     default: 10,
     min: 1,
   },
+  // Compteur permanent (le quota journalier est géré en mémoire, non persistant) —
+  // pour le succès "Discussions avec l'IA". Non rétroactif, voir issue #41.
+  chatbotMessagesSent: {
+    type: Number,
+    default: 0,
+  },
   // Dénormalisé pour éviter de recalculer les succès à chaque fois qu'un autre
   // endroit de l'app a besoin du total (ex. liste admin des utilisateurs) —
   // recalculé et réécrit à chaque appel de GET /api/users/me/achievements.

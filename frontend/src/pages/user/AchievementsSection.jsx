@@ -31,6 +31,10 @@ const TIER_CLASS = {
   gold: styles.tierGold,
   platinum: styles.tierPlatinum,
   diamond: styles.tierDiamond,
+  diamondBlue: styles.tierDiamondBlue,
+  diamondRed: styles.tierDiamondRed,
+  diamondBlack: styles.tierDiamondBlack,
+  legend: styles.tierLegend,
 };
 
 const TIER_LABELS = {
@@ -39,6 +43,10 @@ const TIER_LABELS = {
   gold: 'Or',
   platinum: 'Platine',
   diamond: 'Diamant',
+  diamondBlue: 'Diamant bleu',
+  diamondRed: 'Diamant rouge',
+  diamondBlack: 'Diamant noir',
+  legend: 'Légende',
 };
 
 const LayersIcon = () => (
@@ -71,6 +79,9 @@ const ReaderIcon = () => (
 const PlugIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M9 2v4M15 2v4M6 8h12l-1 6a5 5 0 0 1-10 0Z" /><path d="M10 20h4M12 16v4" /></svg>
 );
+const ChatIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></svg>
+);
 const FlaskIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /><path d="M7.5 15h9" /></svg>
 );
@@ -88,6 +99,7 @@ const ICONS = {
   twoFactor: ShieldIcon,
   emailVerified: EnvelopeIcon,
   tenure: CalendarIcon,
+  chatbot: ChatIcon,
   calibreSync: ShelfIcon,
   connectors: PlugIcon,
   kindle: ReaderIcon,
@@ -99,6 +111,7 @@ function tierName(categoryId, threshold) {
     case 'requests': return `${threshold} requêtes`;
     case 'reading': return `${threshold} livres lus`;
     case 'aiBestseller': return `${threshold} fois`;
+    case 'chatbot': return `${threshold} messages`;
     case 'calibreSync':
     case 'hardcoverSync': return `${threshold} livres`;
     case 'tenure': {
@@ -153,7 +166,7 @@ export default function AchievementsSection({ achievements }) {
   if (!achievements) return null;
   const byId = Object.fromEntries(achievements.categories.map(c => [c.id, c]));
 
-  const progressiveIds = ['requests', 'reading', 'aiBestseller', 'tenure', 'calibreSync', 'hardcoverSync'];
+  const progressiveIds = ['requests', 'reading', 'aiBestseller', 'tenure', 'chatbot', 'calibreSync', 'hardcoverSync'];
 
   return (
     <>

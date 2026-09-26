@@ -355,6 +355,10 @@
 .hardcoverImg.tierGold     { filter: sepia(1) saturate(4) hue-rotate(8deg) brightness(1.05); }
 .hardcoverImg.tierPlatinum { filter: sepia(1) saturate(4) hue-rotate(150deg) brightness(1.05); }
 .hardcoverImg.tierDiamond  { filter: sepia(1) saturate(4) hue-rotate(213deg) brightness(1); }
+.hardcoverImg.tierDiamondBlue  { filter: sepia(1) saturate(4) hue-rotate(182deg) brightness(1); }
+.hardcoverImg.tierDiamondRed   { filter: sepia(1) saturate(4) hue-rotate(325deg) brightness(1); }
+.hardcoverImg.tierDiamondBlack { filter: grayscale(1) brightness(0.75); }
+.hardcoverImg.tierLegend       { filter: sepia(1) saturate(4) hue-rotate(253deg) brightness(1); }
 .hardcoverImg.tierAccent   { filter: sepia(1) saturate(4) hue-rotate(204deg) brightness(1); }
 
 .achievementCard.locked .hardcoverImg {
@@ -386,4 +390,8 @@
 .tierGold     { --tier-color: #e6b93d; --tier-glow: rgba(230,185,61,0.42); }
 .tierPlatinum { --tier-color: #5fd0d6; --tier-glow: rgba(95,208,214,0.42); }
 .tierDiamond  { --tier-color: #9b8cf2; --tier-glow: rgba(155,140,242,0.48); }
+.tierDiamondBlue  { --tier-color: #3b82f6; --tier-glow: rgba(59,130,246,0.48); }
+.tierDiamondRed   { --tier-color: #ef4444; --tier-glow: rgba(239,68,68,0.48); }
+.tierDiamondBlack { --tier-color: #52525b; --tier-glow: rgba(82,82,91,0.5); }
+.tierLegend       { --tier-color: #c026d3; --tier-glow: rgba(192,38,211,0.5); }
 .tierAccent   { --tier-color: var(--color-accent); --tier-glow: rgba(99,102,241,0.35); }

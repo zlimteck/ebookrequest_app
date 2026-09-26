@@ -50,6 +50,7 @@ router.post('/message', requireAuth, async (req, res) => {
     }
 
     incrementUsage(String(req.user.id));
+    User.updateOne({ _id: req.user.id }, { $inc: { chatbotMessagesSent: 1 } }).catch(() => {});
     const { remaining: updatedRemaining } = getRateLimitInfo(String(req.user.id), userLimit);
 
     const isAdmin = user.role === 'admin';

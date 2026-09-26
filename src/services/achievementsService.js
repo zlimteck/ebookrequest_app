@@ -1,9 +1,11 @@
 import mongoose from 'mongoose';
 
-// Paliers réutilisés par plusieurs catégories progressives (5 couleurs pour un nombre de
-// seuils parfois plus grand — au-delà de la 5e valeur, le palier visuel reste "diamond",
-// seul le seuil/le libellé change (voir issue #41).
-const TIER_COLORS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+// Paliers réutilisés par plusieurs catégories progressives — identifiants distincts
+// même au-delà de "diamond" (jusqu'à 8 seuils sur Ancienneté), pour que chaque palier
+// ait un tier unique côté API plutôt que de réutiliser "diamond" en boucle (voir
+// issue #41 — coordination avec la session iOS). "legend" prévu par anticipation,
+// aucune catégorie actuelle n'a assez de seuils pour l'atteindre.
+const TIER_COLORS = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'diamondBlue', 'diamondRed', 'diamondBlack', 'legend'];
 const tierForIndex = (i) => TIER_COLORS[Math.min(i, TIER_COLORS.length - 1)];
 
 function buildTiers(thresholds, count) {
@@ -14,12 +16,16 @@ function buildTiers(thresholds, count) {
   }));
 }
 
-const REQUEST_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000];
-const READING_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000];
-const AI_BESTSELLER_THRESHOLDS = [5, 10, 25, 50];
-const SYNC_THRESHOLDS = [10, 20, 50, 100, 200, 500, 1000];
-// Ancienneté exprimée en mois (3 mois, 6 mois, 1/2/4/6/8/10 ans)
-const TENURE_MONTHS_THRESHOLDS = [3, 6, 12, 24, 48, 72, 96, 120];
+// 9 seuils sur chaque catégorie progressive pour que toutes atteignent le palier
+// "legend" (9 paliers : bronze/silver/gold/platinum/diamond/diamondBlue/diamondRed/
+// diamondBlack/legend) — voir issue #41, coordination avec la session iOS.
+const REQUEST_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000, 2500, 5000];
+const READING_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000, 2500, 5000];
+const AI_BESTSELLER_THRESHOLDS = [5, 10, 25, 50, 100, 250, 500, 1000, 2000];
+const SYNC_THRESHOLDS = [10, 20, 50, 100, 200, 500, 1000, 2500, 5000];
+// Ancienneté exprimée en mois (3 mois, 6 mois, 1/2/4/6/8/10/15 ans)
+const TENURE_MONTHS_THRESHOLDS = [3, 6, 12, 24, 48, 72, 96, 120, 180];
+const CHATBOT_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000, 2500, 5000];
 
 // Connecteurs distincts nécessaires pour le succès "polyglotte" — LibGen est tracé
 // séparément d'Anna's Archive depuis l'ajout du champ dédié (voir issue #41).
@@ -37,6 +43,7 @@ function tierName(categoryId, threshold) {
     case 'requests': return `${threshold} requêtes`;
     case 'reading': return `${threshold} livres lus`;
     case 'aiBestseller': return `${threshold} fois`;
+    case 'chatbot': return `${threshold} messages`;
     case 'calibreSync':
     case 'hardcoverSync': return `${threshold} livres`;
     case 'tenure': {
@@ -63,7 +70,7 @@ export async function getUserAchievements(userId) {
   const Notification = mongoose.model('Notification');
   const { decrypt } = await import('./cryptoService.js');
 
-  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements');
+  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent');
   if (!user) return null;
 
   const [
@@ -152,6 +159,15 @@ export async function getUserAchievements(userId) {
         label: 'Ancienneté',
         count: tenureMonths,
         tiers: buildTiers(TENURE_MONTHS_THRESHOLDS, tenureMonths),
+      },
+      {
+        id: 'chatbot',
+        label: 'Discussions avec l\'IA',
+        count: user.chatbotMessagesSent || 0,
+        tiers: buildTiers(CHATBOT_THRESHOLDS, user.chatbotMessagesSent || 0),
+        // Non rétroactif : le quota chatbot était géré en mémoire (non persistant)
+        // avant l'ajout de User.chatbotMessagesSent — voir issue #41.
+        retroactive: false,
       },
       {
         id: 'calibreSync',
