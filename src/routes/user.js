@@ -25,6 +25,18 @@ router.get('/me', requireAuth, getCurrentUser);
 // Stats du profil
 router.get('/me/stats', requireAuth, getUserStats);
 
+// Succès / badges du profil (voir issue #41)
+router.get('/me/achievements', requireAuth, async (req, res) => {
+  try {
+    const { getUserAchievements } = await import('../services/achievementsService.js');
+    const data = await getUserAchievements(req.user.id);
+    if (!data) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du calcul des succès' });
+  }
+});
+
 // GET /api/users/me/export — export de toutes les données personnelles de
 // l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
 // Exclut délibérément les secrets (mots de passe, clés API, tokens) même si

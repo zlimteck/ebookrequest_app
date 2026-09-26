@@ -90,7 +90,7 @@ const BookRecommendations = ({ onSelectBook }) => {
           infoLink: rec.link || ''
         }
       };
-      onSelectBook(bookData);
+      onSelectBook(bookData, { origin: 'recommendation' });
       toast.success(`"${rec.title}" ajouté au formulaire`);
     }
   };

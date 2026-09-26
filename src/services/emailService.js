@@ -563,9 +563,24 @@ async function sendEbookAttachment(toEmail, filePath, filename, subject, text, h
  * Envoie un ebook directement sur une adresse Kindle via email avec pièce jointe.
  * L'expéditeur (EMAIL_FROM_ADDRESS) doit être dans les expéditeurs approuvés Amazon.
  */
-export const sendKindleDelivery = async (kindleEmail, filePath, filename) => {
+export const sendKindleDelivery = async (kindleEmail, filePath, filename, userId = null) => {
   const bookTitle = path.basename(filename, path.extname(filename));
-  return sendEbookAttachment(kindleEmail, filePath, filename, bookTitle, `Votre livre "${bookTitle}" est joint à cet email.`);
+  const result = await sendEbookAttachment(kindleEmail, filePath, filename, bookTitle, `Votre livre "${bookTitle}" est joint à cet email.`);
+  // Journalisé (contrairement à avant) pour le succès "Kindle" — voir issue #41,
+  // non rétroactif sur les envois faits avant l'ajout de ce log.
+  if (userId) {
+    const { cfg } = await getEmailContext();
+    EmailLog.create({
+      provider: cfg.provider,
+      to: kindleEmail,
+      subject: bookTitle,
+      type: 'kindle_delivery',
+      status: 'sent',
+      senderUserId: userId,
+      events: [{ type: 'sent', timestamp: new Date() }],
+    }).catch(() => {});
+  }
+  return result;
 };
 
 /**

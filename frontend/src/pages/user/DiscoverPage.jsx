@@ -53,7 +53,8 @@ const DiscoverPage = () => {
           link: book.link,
           thumbnail: book.thumbnail,
           description: book.description,
-          pageCount: book.pageCount
+          pageCount: book.pageCount,
+          origin: 'bestseller'
         }
       }
     });

@@ -7,7 +7,7 @@ const downloadLogSchema = new Schema({
   title:         { type: String, default: '' },
   author:        { type: String, default: '' },
   username:      { type: String, default: '' },
-  connector:     { type: String, enum: ['valentine', 'annasarchive', 'fourtoutici', 'manual'], required: true },
+  connector:     { type: String, enum: ['valentine', 'annasarchive', 'libgen', 'fourtoutici', 'manual'], required: true },
   success:       { type: Boolean, required: true },
   error:         { type: String, default: null },
   triggeredBy:   { type: String, enum: ['auto', 'admin'], default: 'auto' },

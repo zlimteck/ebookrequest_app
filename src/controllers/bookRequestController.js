@@ -67,7 +67,7 @@ const __dirname = path.dirname(__filename);
 // Création d'une nouvelle demande de livre
 export const createBookRequest = async (req, res) => {
   try {
-    const { author, title, link, thumbnail, description, pageCount, publishedDate, format, category, targetUserId, seriesName, seriesIndex, selectedShelves, extraShelfTargets } = req.body;
+    const { author, title, link, thumbnail, description, pageCount, publishedDate, format, category, targetUserId, seriesName, seriesIndex, selectedShelves, extraShelfTargets, origin } = req.body;
     
     // Validation des champs obligatoires
     if (!author || !title) {
@@ -196,6 +196,7 @@ export const createBookRequest = async (req, res) => {
       seriesIndex: (seriesIndex != null && !isNaN(Number(seriesIndex))) ? Number(seriesIndex) : null,
       format: format || '',
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
+      origin: ['recommendation', 'bestseller'].includes(origin) ? origin : '',
       ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),
       ...(resolvedExtraShelfTargets.length && { extraShelfTargets: resolvedExtraShelfTargets }),
       status: isAutoCompleted ? 'completed' : 'pending',
@@ -277,7 +278,7 @@ export const createBookRequest = async (req, res) => {
         const absolutePath = path.resolve(uploadsRoot, newRequest.filePath);
         if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
           const filename = path.basename(absolutePath);
-          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+          sendKindleDelivery(user.kindleEmail, absolutePath, filename, user._id)
             .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
             .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
         }
@@ -904,7 +905,7 @@ export const updateRequestStatus = async (req, res) => {
               const absolutePath = path.resolve(uploadsRoot, currentRequest.filePath);
               if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
                 const filename = path.basename(absolutePath);
-                sendKindleDelivery(u.kindleEmail, absolutePath, filename)
+                sendKindleDelivery(u.kindleEmail, absolutePath, filename, u._id)
                   .then(() => console.log(`[Kindle] Envoyé à ${u.kindleEmail} : ${filename}`))
                   .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
               }
@@ -1228,7 +1229,7 @@ export const addDownloadLink = async (req, res) => {
           console.error('[Kindle] Fichier introuvable:', absolutePath);
         } else {
           const filename = path.basename(absolutePath);
-          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+          sendKindleDelivery(user.kindleEmail, absolutePath, filename, user._id)
             .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
             .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
         }

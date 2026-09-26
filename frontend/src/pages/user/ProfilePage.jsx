@@ -2,18 +2,21 @@ import React, { useEffect, useState } from 'react';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './ProfilePage.module.css';
 import { getAvatarColor } from '../../utils/avatarColor';
+import AchievementsSection from './AchievementsSection';
 
 const ProfilePage = () => {
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(null);
+  const [achievements, setAchievements] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       axiosAdmin.get('/api/users/me/stats'),
       axiosAdmin.get('/api/reading?status=all'),
+      axiosAdmin.get('/api/users/me/achievements'),
     ])
-      .then(([statsRes, readingRes]) => {
+      .then(([statsRes, readingRes, achievementsRes]) => {
         setData(statsRes.data);
         const books = readingRes.data || [];
         const readCount = books.filter(b => b.status === 'read').length;
@@ -23,6 +26,7 @@ const ProfilePage = () => {
           unread: books.length - readCount,
           rate: books.length > 0 ? Math.round((readCount / books.length) * 100) : 0,
         });
+        setAchievements(achievementsRes.data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -259,6 +263,16 @@ const ProfilePage = () => {
               <div className={styles.progressFillGreen} style={{ width: `${reading.rate}%` }} />
             </div>
           </div>
+        </>
+      )}
+
+      {achievements && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginTop: '2rem', marginBottom: '1rem' }}>
+            <h2 className={styles.sectionTitle} style={{ margin: 0 }}>Succès</h2>
+            <span className={styles.since}>{achievements.summary.unlocked} / {achievements.summary.total} débloqués</span>
+          </div>
+          <AchievementsSection achievements={achievements} />
         </>
       )}
     </div>

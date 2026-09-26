@@ -106,6 +106,13 @@ curl https://app.ndd.fr/api/users/me/stats \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/users/me/achievements`
+Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Recommandation IA/best-seller et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès).
+```bash
+curl https://app.ndd.fr/api/users/me/achievements \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/users/me/export`
 Export de toutes les données personnelles de l'utilisateur connecté au format JSON (portabilité RGPD) : compte (sans secrets ni mots de passe), demandes de livres, bibliothèque de lecture, sessions actives (IP et user-agent déchiffrés).
 ```bash
@@ -174,7 +181,7 @@ curl https://app.ndd.fr/api/requests/quota \
 ```
 
 ### `POST /api/requests`
-Seuls `title` et `author` sont obligatoires — les autres champs (`link`, `thumbnail`, `description`, `pageCount`...) sont optionnels.
+Seuls `title` et `author` sont obligatoires — les autres champs (`link`, `thumbnail`, `description`, `pageCount`...) sont optionnels. `origin` (optionnel, `recommendation` ou `bestseller`) trace l'origine de la demande pour le succès "Recommandation IA & Best-seller" du Profil — absent ou vide pour une recherche/saisie manuelle classique.
 ```bash
 curl -X POST https://app.ndd.fr/api/requests \
   -H "Authorization: Bearer <token>" \
@@ -655,7 +662,7 @@ curl https://app.ndd.fr/api/admin/health \
 ```
 
 ### `GET /api/admin/download-logs`
-Filtrable par `connector` (`valentine`, `annasarchive`, `fourtoutici`), `success` (`true`/`false`) et `searchMode` (`detailed`, `direct-valentine`, `direct-fourtoutici`, `admin-manual`) — ce dernier distingue le chemin de recherche ayant mené au téléchargement, indépendamment de `triggeredBy`.
+Filtrable par `connector` (`valentine`, `annasarchive`, `libgen`, `fourtoutici`), `success` (`true`/`false`) et `searchMode` (`detailed`, `direct-valentine`, `direct-fourtoutici`, `admin-manual`) — ce dernier distingue le chemin de recherche ayant mené au téléchargement, indépendamment de `triggeredBy`. `libgen` distingue les téléchargements servis par le repli LibGen de ceux servis directement par Anna's Archive.
 ```bash
 curl "https://app.ndd.fr/api/admin/download-logs?page=1&limit=50&searchMode=direct-valentine" \
   -H "Authorization: Bearer <token>"

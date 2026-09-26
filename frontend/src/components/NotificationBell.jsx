@@ -22,6 +22,7 @@ const CATEGORIES = [
   { key: 'completed',    label: 'Disponible',  adminOnly: false },
   { key: 'canceled',     label: 'Annulé',      adminOnly: false },
   { key: 'adminComment', label: 'Message',      adminOnly: false },
+  { key: 'achievement_unlocked', label: 'Trophées', adminOnly: false },
   { key: 'reported',     label: 'Signalement', adminOnly: true  },
   { key: 'new_request',  label: 'Demandes',    adminOnly: true  },
   { key: 'request_completed_admin', label: 'Complétées', adminOnly: true },
@@ -30,7 +31,7 @@ const CATEGORIES = [
   { key: 'config',       label: 'Config',      adminOnly: true  },
 ];
 
-const DASHBOARD_TYPES = new Set(['completed', 'canceled', 'adminComment', 'deleted', 'resolved']);
+const DASHBOARD_TYPES = new Set(['completed', 'canceled', 'adminComment', 'deleted', 'resolved', 'achievement_unlocked']);
 const ADMIN_TYPES     = new Set(['reported', 'new_request', 'userComment', 'request_completed_admin']);
 
 const getNotificationText = (n) => {
@@ -62,6 +63,7 @@ const getNotificationIcon = (n) => {
   if (n.type === 'request_completed_admin') return '✅';
   if (n.type === 'userComment')  return '💬';
   if (n.type === 'update')       return '🔄';
+  if (n.type === 'achievement_unlocked') return '🏆';
   return '💬';
 };
 
@@ -184,7 +186,9 @@ const NotificationBell = () => {
     await markAsSeen(n);
     setIsOpen(false);
     const id = n.request?._id;
-    if (ADMIN_TYPES.has(n.type)) {
+    if (n.type === 'achievement_unlocked') {
+      navigate('/profile');
+    } else if (ADMIN_TYPES.has(n.type)) {
       navigate(id ? `/admin?tab=requests&highlight=${id}` : '/admin');
     } else if (DASHBOARD_TYPES.has(n.type)) {
       navigate(id ? `/dashboard?highlight=${id}` : '/dashboard');

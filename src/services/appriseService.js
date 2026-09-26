@@ -90,7 +90,7 @@ class AppriseService {
   _sourceLabel({ connector, searchMode } = {}) {
     if (searchMode === 'already-available') return 'Déjà disponible (demande précédente)';
     if (searchMode === 'admin-manual') return 'Ajout manuel admin';
-    const connectorLabels = { valentine: 'Valentine', fourtoutici: 'Fourtoutici', annasarchive: "Anna's Archive / LibGen" };
+    const connectorLabels = { valentine: 'Valentine', fourtoutici: 'Fourtoutici', annasarchive: "Anna's Archive", libgen: 'LibGen' };
     const cLabel = connectorLabels[connector] || connector || 'Source inconnue';
     const modeLabel = (searchMode === 'direct-valentine' || searchMode === 'direct-fourtoutici') ? 'directe' : 'détaillée';
     return `${cLabel} (recherche ${modeLabel})`;

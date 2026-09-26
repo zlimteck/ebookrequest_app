@@ -134,6 +134,9 @@ function UserForm() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [searchMode, setSearchMode] = useState(() => localStorage.getItem('ebookrequest_search_mode') || 'google');
   const [selectedBook, setSelectedBook] = useState(null);
+  // Origine de la sélection (recommandation IA / bestseller Découvrir), pour le succès
+  // "Recommandation IA & Best-seller" — vide pour une recherche/saisie manuelle classique.
+  const [requestOrigin, setRequestOrigin] = useState('');
   const [rawPublishedDate, setRawPublishedDate] = useState('');
   const [seriesInfo, setSeriesInfo]   = useState(null); // { name, index }
   const [seriesModal, setSeriesModal] = useState(false);
@@ -267,6 +270,7 @@ function UserForm() {
               pages: prefill.pageCount || ''
             }));
             setSearchMode('manual');
+            if (prefill.origin) setRequestOrigin(prefill.origin);
 
             // Vérifier la disponibilité et les doublons si on a un titre et un auteur
             if (prefill.title && prefill.author) {
@@ -468,6 +472,7 @@ function UserForm() {
     // reste affiche indefiniment sur les selections suivantes valides.
     setMessage({ text: '', type: '' });
     setSelectedBook(book);
+    setRequestOrigin(searchContext.origin || '');
 
     // Mettre à jour le formulaire avec les informations du livre
     if (book.volumeInfo) {
@@ -623,6 +628,7 @@ function UserForm() {
       format: form.format || '',
       category: form.category || 'ebook',
       ...(selectedBook?.id && { googleBooksId: selectedBook.id }),
+      ...(requestOrigin && { origin: requestOrigin }),
       ...(isAdmin && targetUserId && { targetUserId }),
       ...(seriesInfo && { seriesName: seriesInfo.name, seriesIndex: seriesInfo.index }),
       ...(calibreEnabled && { selectedShelves }),
@@ -706,6 +712,7 @@ function UserForm() {
       });
 
       setSelectedBook(null);
+      setRequestOrigin('');
       setRawPublishedDate('');
       setSeriesInfo(null);
 

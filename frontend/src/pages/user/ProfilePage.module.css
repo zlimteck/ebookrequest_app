@@ -215,3 +215,168 @@
   transition: width 0.6s ease;
   min-width: 4px;
 }
+
+/* Succès */
+.achievementCategory {
+  margin-bottom: 1.5rem;
+}
+
+.achievementCategoryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.achievementCategoryTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.achievementsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .achievementsGrid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .achievementsGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.achievementCard {
+  background: var(--color-bg2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  padding: 1.1rem 0.6rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.achievementCard:not(.locked):hover {
+  transform: translateY(-2px);
+}
+
+.achievementCard.locked {
+  opacity: 0.55;
+}
+
+.achievementMedal {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg3, var(--color-bg));
+  border: 2px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.achievementCard:not(.locked) .achievementMedal {
+  border-color: var(--tier-color);
+  box-shadow: 0 0 0 4px var(--tier-glow), 0 4px 14px -6px var(--tier-glow);
+}
+
+.achievementIcon {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.achievementCard:not(.locked) .achievementIcon,
+.achievementCard:not(.locked) .achievementTier {
+  color: var(--tier-color);
+}
+
+.achievementIcon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Logos pleins (Apple) plutôt que des icônes ligne : pas de contour, remplis
+   directement en currentColor. */
+.achievementIcon svg.filledIcon {
+  fill: currentColor;
+  stroke: none;
+}
+
+.achievementTier {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.maskIcon {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* Hardcover : filtre (pas de masque) pour garder les nuances internes du logo
+   (les petites étoiles) visibles, plutôt qu'un aplat uni comme .maskIcon. */
+.hardcoverImg {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.hardcoverImg.tierBronze   { filter: sepia(1) saturate(4) hue-rotate(-8deg) brightness(0.95); }
+.hardcoverImg.tierSilver   { filter: none; }
+.hardcoverImg.tierGold     { filter: sepia(1) saturate(4) hue-rotate(8deg) brightness(1.05); }
+.hardcoverImg.tierPlatinum { filter: sepia(1) saturate(4) hue-rotate(150deg) brightness(1.05); }
+.hardcoverImg.tierDiamond  { filter: sepia(1) saturate(4) hue-rotate(213deg) brightness(1); }
+.hardcoverImg.tierAccent   { filter: sepia(1) saturate(4) hue-rotate(204deg) brightness(1); }
+
+.achievementCard.locked .hardcoverImg {
+  filter: grayscale(1);
+}
+
+.connectorLetters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  line-height: 1;
+}
+
+.connectorLetters span {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
+  font-size: 0.72rem;
+}
+
+.tierBronze   { --tier-color: #b8763b; --tier-glow: rgba(184,118,59,0.35); }
+.tierSilver   { --tier-color: #a7b0bd; --tier-glow: rgba(167,176,189,0.35); }
+.tierGold     { --tier-color: #e6b93d; --tier-glow: rgba(230,185,61,0.42); }
+.tierPlatinum { --tier-color: #5fd0d6; --tier-glow: rgba(95,208,214,0.42); }
+.tierDiamond  { --tier-color: #9b8cf2; --tier-glow: rgba(155,140,242,0.48); }
+.tierAccent   { --tier-color: var(--color-accent); --tier-glow: rgba(99,102,241,0.35); }

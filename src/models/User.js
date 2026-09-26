@@ -178,6 +178,30 @@ const userSchema = new mongoose.Schema({
     default: 10,
     min: 1,
   },
+  // Dénormalisé pour éviter de recalculer les succès à chaque fois qu'un autre
+  // endroit de l'app a besoin du total (ex. liste admin des utilisateurs) —
+  // recalculé et réécrit à chaque appel de GET /api/users/me/achievements.
+  achievementsUnlocked: {
+    type: Number,
+    default: 0,
+  },
+  // Clés des succès déjà débloqués (ex. "requests-20", "twoFactor"), pour détecter
+  // les nouveaux déblocages d'un appel à l'autre et notifier uniquement ceux-là.
+  unlockedAchievements: {
+    type: [String],
+    default: [],
+  },
+  // Succès "Easter egg" de l'app iOS — déclenché depuis un point d'entrée encore à
+  // définir côté app (voir issue #41), pas de logique de déblocage ici pour l'instant.
+  easterEggUnlocked: {
+    type: Boolean,
+    default: false,
+  },
+  // Sticky une fois débloqués : Session a un TTL (purge auto par MongoDB), donc un
+  // succès recalculé uniquement depuis les sessions encore existantes pourrait sinon
+  // redevenir "verrouillé" après expiration/suppression de la session qui l'a débloqué.
+  iosConnectedUnlocked: { type: Boolean, default: false },
+  iosAlphaUnlocked:     { type: Boolean, default: false },
   passkeys: [{
     credentialID: { type: String, required: true },
     credentialPublicKey: { type: String, required: true },

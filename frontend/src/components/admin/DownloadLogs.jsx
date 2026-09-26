@@ -5,6 +5,7 @@ import styles from './DownloadLogs.module.css';
 const CONNECTOR_LABELS = {
   valentine: 'Valentine',
   annasarchive: "Anna's Archive",
+  libgen: 'LibGen',
   fourtoutici: 'Fourtoutici',
   manual: 'Manuel',
 };
@@ -12,6 +13,7 @@ const CONNECTOR_LABELS = {
 const CONNECTOR_CHIP_CLASS = {
   valentine: 'chipValentine',
   annasarchive: 'chipAnnas',
+  libgen: 'chipAnnas',
   fourtoutici: 'chipManual',
   manual: 'chipManual',
 };
@@ -70,6 +72,7 @@ const DownloadLogs = () => {
           <option value="">Tous les connecteurs</option>
           <option value="valentine">Valentine</option>
           <option value="annasarchive">Anna's Archive</option>
+          <option value="libgen">LibGen</option>
           <option value="fourtoutici">Fourtoutici</option>
         </select>
         <select className={styles.select} value={filterSuccess} onChange={e => setFilterSuccess(e.target.value)}>

@@ -425,6 +425,10 @@ export async function downloadWithFallback(title, author, requestId, category = 
     // avant de considérer Anna's Archive comme réellement indisponible.
     let results = [];
     let lastErr = null;
+    // Trace si le résultat retenu vient d'Anna's Archive ou du repli LibGen (bloc
+    // suivant), pour logger le bon connecteur — les deux partagent ensuite le même
+    // pipeline de scoring/téléchargement (downloadFromAnnas gère aussi les md5 libgen).
+    let resultsSource = 'annasarchive';
     for (const q of searchQueries) {
       try {
         const res = await searchOnAnnasArchive(q);
@@ -458,6 +462,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
             lastErr = null;
             if (res.results?.length) {
               results = res.results;
+              resultsSource = 'libgen';
               console.log(`[Orchestrateur] LibGen : ${results.length} résultat(s) pour "${q}"`);
               break;
             }
@@ -502,7 +507,7 @@ export async function downloadWithFallback(title, author, requestId, category = 
 
     if (!scored.length) {
       console.log(`[Orchestrateur] Anna's Archive : aucun résultat avec auteur compatible pour "${title}" / "${author}"`);
-      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Aucun résultat avec auteur compatible' });
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: resultsSource, success: false, error: 'Aucun résultat avec auteur compatible' });
       await handleAutoDownloadFailure(bookRequest, 'Aucune correspondance fiable trouvée sur les sources automatiques.', notificationAnnaUrl);
       return;
     }
@@ -517,11 +522,11 @@ export async function downloadWithFallback(title, author, requestId, category = 
 
     const afterAnnas = await BookRequest.findById(requestId).lean();
     if (afterAnnas?.status === 'completed') {
-      console.log(`[Orchestrateur] ✓ Anna's Archive a complété "${title}"`);
-      await logDownload({ bookRequest: bookRequest || afterAnnas, connector: 'annasarchive', success: true });
-      await notifyCompletion(afterAnnas, { connector: 'annasarchive', searchMode: 'detailed' });
+      console.log(`[Orchestrateur] ✓ ${resultsSource === 'libgen' ? 'LibGen' : 'Anna\'s Archive'} a complété "${title}"`);
+      await logDownload({ bookRequest: bookRequest || afterAnnas, connector: resultsSource, success: true });
+      await notifyCompletion(afterAnnas, { connector: resultsSource, searchMode: 'detailed' });
     } else {
-      await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'annasarchive', success: false, error: 'Téléchargement Anna\'s Archive échoué' });
+      await logDownload({ bookRequest: bookRequest || { title, author }, connector: resultsSource, success: false, error: 'Téléchargement échoué' });
       await handleAutoDownloadFailure(bookRequest, 'Le téléchargement automatique a échoué.', notificationAnnaUrl);
     }
 

@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['deleted', 'resolved', 'new_request', 'request_completed', 'request_completed_admin'],
+    enum: ['deleted', 'resolved', 'new_request', 'request_completed', 'request_completed_admin', 'achievement_unlocked'],
     required: true
   },
   title: { type: String, required: true },
