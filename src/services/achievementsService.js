@@ -243,7 +243,7 @@ export async function getUserAchievements(userId) {
       const label = labelByKey[key];
       const message = `Nouveau succès débloqué : ${label}`;
       Notification.create({ user: userId, type: 'achievement_unlocked', title: 'Succès débloqué', message }).catch(() => {});
-      sendPushToUser(userId, { title: 'Succès débloqué', body: label, url: '/profile' }).catch(() => {});
+      sendPushToUser(userId, { title: 'Succès débloqué', body: label, url: '/profile?achievement=1' }).catch(() => {});
     }
   }
 
