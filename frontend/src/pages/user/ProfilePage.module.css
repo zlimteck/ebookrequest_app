@@ -374,6 +374,13 @@
   font-size: 0.72rem;
 }
 
+.textIcon {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: -0.02em;
+}
+
 .tierBronze   { --tier-color: #b8763b; --tier-glow: rgba(184,118,59,0.35); }
 .tierSilver   { --tier-color: #a7b0bd; --tier-glow: rgba(167,176,189,0.35); }
 .tierGold     { --tier-color: #e6b93d; --tier-glow: rgba(230,185,61,0.42); }

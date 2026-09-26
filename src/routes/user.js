@@ -49,6 +49,16 @@ router.post('/me/achievements/easter-egg', requireAuth, async (req, res) => {
   }
 });
 
+// Succès "404" (voir issue #41) — idempotent, même principe que l'easter egg.
+router.post('/me/achievements/found-404', requireAuth, async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.id }, { found404Unlocked: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement du succès' });
+  }
+});
+
 // GET /api/users/me/export — export de toutes les données personnelles de
 // l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
 // Exclut délibérément les secrets (mots de passe, clés API, tokens) même si

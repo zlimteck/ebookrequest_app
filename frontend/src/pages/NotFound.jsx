@@ -1,8 +1,19 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axiosAdmin from '../axiosAdmin';
 import styles from './NotFound.module.css';
 
 export default function NotFound() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Succès "Ta vu elle est belle ma 404" — uniquement si déjà connecté, pour ne
+    // pas déclencher le redirect automatique vers /login sur un 401 (interceptor
+    // axiosAdmin) quand un visiteur non authentifié atterrit ici.
+    if (localStorage.getItem('role')) {
+      axiosAdmin.post('/api/users/me/achievements/found-404').catch(() => {});
+    }
+  }, []);
 
   return (
     <div className={styles.page}>

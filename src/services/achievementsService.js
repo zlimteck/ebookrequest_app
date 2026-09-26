@@ -63,7 +63,7 @@ export async function getUserAchievements(userId) {
   const Notification = mongoose.model('Notification');
   const { decrypt } = await import('./cryptoService.js');
 
-  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements');
+  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements');
   if (!user) return null;
 
   const [
@@ -198,6 +198,11 @@ export async function getUserAchievements(userId) {
         id: 'easterEgg',
         label: 'Easter egg',
         unlocked: !!user.easterEggUnlocked,
+      },
+      {
+        id: 'found404',
+        label: 'Ta vu elle est belle ma 404',
+        unlocked: !!user.found404Unlocked,
       },
     ];
 

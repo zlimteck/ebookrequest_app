@@ -202,6 +202,8 @@ const userSchema = new mongoose.Schema({
   // redevenir "verrouillé" après expiration/suppression de la session qui l'a débloqué.
   iosConnectedUnlocked: { type: Boolean, default: false },
   iosAlphaUnlocked:     { type: Boolean, default: false },
+  // Succès "404" — débloqué en visitant la page 404 (voir issue #41).
+  found404Unlocked: { type: Boolean, default: false },
   passkeys: [{
     credentialID: { type: String, required: true },
     credentialPublicKey: { type: String, required: true },

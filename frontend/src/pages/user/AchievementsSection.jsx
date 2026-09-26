@@ -77,6 +77,9 @@ const FlaskIcon = () => (
 const EggIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M12 3c-2.8 0-5 5-5 10a5 5 0 0 0 10 0c0-5-2.2-10-5-10Z" /></svg>
 );
+const Icon404 = () => (
+  <span className={styles.textIcon}>404</span>
+);
 
 const ICONS = {
   requests: LayersIcon,
@@ -180,6 +183,7 @@ export default function AchievementsSection({ achievements }) {
           />
           <AchievementCard unlocked={byId.kindle?.unlocked} tierClass={styles.tierAccent} icon={<ReaderIcon />} tierLabel={byId.kindle?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Envoi Kindle" />
           <AchievementCard unlocked={byId.nightOwl?.unlocked} tierClass={styles.tierAccent} icon={<MoonIcon />} tierLabel={byId.nightOwl?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Oiseau de nuit" />
+          <AchievementCard unlocked={byId.found404?.unlocked} tierClass={styles.tierAccent} icon={<Icon404 />} tierLabel={byId.found404?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Ta vu elle est belle ma 404" />
         </div>
       </div>
 
