@@ -222,6 +222,23 @@ export async function getUserAchievements(userId) {
       },
     ];
 
+  // Sticky : un succès déjà débloqué une fois ne doit jamais redevenir "verrouillé",
+  // même si la donnée vivante qui le calcule change ensuite (ex. "Oiseau de nuit"
+  // recalculé depuis une simple requête d'existence — si la demande de nuit est
+  // supprimée après coup, le succès ne doit pas disparaître). On applique ce OR
+  // avec l'historique AVANT de compter, pour que categories renvoyées au frontend
+  // reflètent déjà l'état définitif — voir issue #41.
+  const previouslyUnlocked = new Set(user.unlockedAchievements || []);
+  for (const cat of categories) {
+    if (cat.tiers) {
+      for (const tier of cat.tiers) {
+        if (!tier.unlocked && previouslyUnlocked.has(`${cat.id}-${tier.threshold}`)) tier.unlocked = true;
+      }
+    } else if (!cat.unlocked && previouslyUnlocked.has(cat.id)) {
+      cat.unlocked = true;
+    }
+  }
+
   // Total débloqué / débloquable : chaque palier d'une catégorie progressive compte
   // pour un succès distinct, comme affiché dans l'UI (une carte par palier).
   // currentKeys/currentLabels servent aussi à détecter les nouveaux déblocages
@@ -250,7 +267,6 @@ export async function getUserAchievements(userId) {
     }
   }
 
-  const previouslyUnlocked = new Set(user.unlockedAchievements || []);
   const newKeys = currentKeys.filter(k => !previouslyUnlocked.has(k));
 
   await User.updateOne({ _id: userId }, {
