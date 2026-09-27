@@ -25,6 +25,7 @@ import BroadcastMessage from '../../components/admin/BroadcastMessage';
 import UpdatesPanel from '../../components/admin/UpdatesPanel';
 import EmailLogsPanel from '../../components/admin/EmailLogsPanel';
 import OPDSPanel from '../../components/admin/OPDSPanel';
+import FileManagerPanel from '../../components/admin/FileManagerPanel';
 import InvitationsPanel from '../../components/admin/InvitationsPanel';
 import ConnectorsPanel from '../../components/admin/ConnectorsPanel';
 import SettingsPanel from '../../components/admin/SettingsPanel';
@@ -701,6 +702,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         return <EmailLogsPanel />;
       case 'opds':
         return <OPDSPanel />;
+      case 'files':
+        return <FileManagerPanel />;
       case 'logs':
         return (
           <div className={styles.logsContainer}>
@@ -1825,6 +1828,15 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      )
+    },
+    {
+      id: 'files',
+      label: 'Fichiers',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
       )
     },

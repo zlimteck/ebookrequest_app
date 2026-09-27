@@ -682,6 +682,39 @@ curl "https://app.ndd.fr/api/admin/download-logs?page=1&limit=50&searchMode=dire
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/admin/files`
+Liste les fichiers de `uploads/books`, avec pour chacun les demandes (`BookRequest`) qui le référencent (`filePath` identique) — un même fichier peut être lié à plusieurs demandes (étagères additionnelles multi-utilisateurs).
+```bash
+curl https://app.ndd.fr/api/admin/files \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/admin/files`
+Envoie un nouveau fichier ebook dans `uploads/books` (`multipart/form-data`, champ `file`), sans le rattacher à une demande.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/files \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/chemin/vers/livre.epub"
+```
+
+### `PATCH /api/admin/files/rename`
+Renomme un fichier existant et met à jour `filePath` sur toutes les demandes qui le référencaient.
+```bash
+curl -X PATCH https://app.ndd.fr/api/admin/files/rename \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "ancien-nom.epub", "newName": "nouveau-nom"}'
+```
+
+### `DELETE /api/admin/files`
+Supprime un fichier de `uploads/books`. Si des demandes le référencent et que `confirm` n'est pas fourni, ne supprime rien et renvoie `{ success: false, requiresConfirmation: true, linkedRequests: [...] }`. Avec `confirm: true`, supprime le fichier et repasse les demandes concernées en `pending` avec `autoDownloadFailed` renseigné (badge "traitement manuel" déjà utilisé ailleurs).
+```bash
+curl -X DELETE https://app.ndd.fr/api/admin/files \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "livre.epub", "confirm": true}'
+```
+
 ### `GET /api/requests/all`
 ```bash
 curl https://app.ndd.fr/api/requests/all \

@@ -159,6 +159,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Santé des services :** état en direct de chaque source et connecteur, avec distinction entre « injoignable » et « joignable mais inutilisable » (challenge anti-bot non résolu), et bandeau d'explication sur la carte du connecteur concerné
 - **Alertes de panne :** notification email + Apprise aux admins quand un service tombe, avec anti-spam de 24 h par service (activable par connecteur)
 - Traçabilité des changements de configuration (activation/désactivation d'un service) dans les logs admin
+- **Gestionnaire de fichiers :** lister, envoyer, renommer et supprimer les ebooks stockés sur le serveur, avec avertissement listant les demandes concernées avant toute suppression d'un fichier encore lié
 - **Recherche globale :** (`⌘K` / `Ctrl+K` ou barre dans le menu) résultats groupés par catégorie : demandes, bibliothèque, utilisateurs (admin)
 
 **Intégration (MCP)**

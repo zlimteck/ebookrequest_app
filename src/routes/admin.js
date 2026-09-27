@@ -5,6 +5,8 @@ import DownloadLog from '../models/DownloadLog.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getLogBuffer, subscribeToLogs, unsubscribeFromLogs } from '../services/logBuffer.js';
 import BookRequest from '../models/BookRequest.js';
+import AdminLog from '../models/AdminLog.js';
+import upload from '../middleware/upload.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -164,6 +166,147 @@ router.get('/uploads-list', (req, res) => {
   } catch (err) {
     console.error('Erreur uploads-list:', err);
     res.status(500).json({ success: false, files: [] });
+  }
+});
+
+// ── Gestionnaire de fichiers (uploads/books) ────────────────────────────────
+// Distinct de /uploads-list (déjà utilisé par le sélecteur "fichier existant"
+// à la création d'une demande) : renvoie aussi les demandes liées à chaque
+// fichier, nécessaire pour l'avertissement avant suppression/renommage. Un
+// même fichier physique peut être référencé par plusieurs BookRequest (étagères
+// additionnelles multi-utilisateurs) — voir BookRequest.filePath.
+const filesUploadDir = path.join(__dirname, '../../uploads/books');
+
+// Empêche toute traversée de répertoire : le nom résolu doit rester strictement
+// dans uploads/books, jamais utiliser un chemin fourni par le client tel quel.
+function resolveSafeFileName(name) {
+  const safe = path.basename(String(name || ''));
+  if (!safe || safe !== name) return null;
+  const fullPath = path.join(filesUploadDir, safe);
+  if (!fullPath.startsWith(filesUploadDir + path.sep)) return null;
+  return { safe, fullPath };
+}
+
+router.get('/files', async (req, res) => {
+  try {
+    if (!fs.existsSync(filesUploadDir)) return res.json({ success: true, files: [] });
+
+    const names = fs.readdirSync(filesUploadDir).filter(name => !name.startsWith('.'));
+    const relPaths = names.map(name => `books/${name}`);
+    const linkedRequests = await BookRequest.find({ filePath: { $in: relPaths } })
+      .select('title author username status filePath')
+      .lean();
+    const linkedByPath = new Map();
+    for (const r of linkedRequests) {
+      if (!linkedByPath.has(r.filePath)) linkedByPath.set(r.filePath, []);
+      linkedByPath.get(r.filePath).push({ _id: r._id, title: r.title, author: r.author, username: r.username, status: r.status });
+    }
+
+    const files = names.map(name => {
+      const fullPath = path.join(filesUploadDir, name);
+      const stat = fs.statSync(fullPath);
+      const filePath = `books/${name}`;
+      return {
+        name,
+        filePath,
+        size: stat.size,
+        modifiedAt: stat.mtime,
+        linkedRequests: linkedByPath.get(filePath) || [],
+      };
+    }).sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+
+    res.json({ success: true, files });
+  } catch (err) {
+    console.error('Erreur GET /files:', err);
+    res.status(500).json({ success: false, error: 'Erreur lors de la lecture du dossier.' });
+  }
+});
+
+router.post('/files', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: 'Aucun fichier reçu.' });
+    res.json({ success: true, file: { name: req.file.filename, filePath: `books/${req.file.filename}` } });
+  } catch (err) {
+    console.error('Erreur POST /files:', err);
+    res.status(500).json({ success: false, error: 'Erreur lors de l\'envoi du fichier.' });
+  }
+});
+
+router.patch('/files/rename', async (req, res) => {
+  try {
+    const { name, newName } = req.body;
+    const from = resolveSafeFileName(name);
+    if (!from || !fs.existsSync(from.fullPath)) {
+      return res.status(404).json({ success: false, error: 'Fichier introuvable.' });
+    }
+    const ext = path.extname(from.safe);
+    const requestedNewName = String(newName || '').trim();
+    if (!requestedNewName) return res.status(400).json({ success: false, error: 'Nouveau nom requis.' });
+    const finalNewName = requestedNewName.toLowerCase().endsWith(ext.toLowerCase()) ? requestedNewName : `${requestedNewName}${ext}`;
+    const to = resolveSafeFileName(finalNewName);
+    if (!to) return res.status(400).json({ success: false, error: 'Nouveau nom invalide.' });
+    if (fs.existsSync(to.fullPath)) return res.status(409).json({ success: false, error: 'Un fichier porte déjà ce nom.' });
+
+    fs.renameSync(from.fullPath, to.fullPath);
+
+    const oldFilePath = `books/${from.safe}`;
+    const newFilePath = `books/${to.safe}`;
+    const result = await BookRequest.updateMany({ filePath: oldFilePath }, { filePath: newFilePath });
+
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'rename_file',
+      details: `${oldFilePath} → ${newFilePath} (${result.modifiedCount} demande(s) mise(s) à jour)`,
+    }).catch(() => {});
+
+    res.json({ success: true, filePath: newFilePath, updatedRequests: result.modifiedCount });
+  } catch (err) {
+    console.error('Erreur PATCH /files/rename:', err);
+    res.status(500).json({ success: false, error: 'Erreur lors du renommage.' });
+  }
+});
+
+router.delete('/files', async (req, res) => {
+  try {
+    const { name, confirm } = req.body;
+    const target = resolveSafeFileName(name);
+    if (!target || !fs.existsSync(target.fullPath)) {
+      return res.status(404).json({ success: false, error: 'Fichier introuvable.' });
+    }
+    const filePath = `books/${target.safe}`;
+
+    const linked = await BookRequest.find({ filePath }).select('title author username status').lean();
+    if (linked.length && !confirm) {
+      return res.json({ success: false, requiresConfirmation: true, linkedRequests: linked });
+    }
+
+    fs.unlinkSync(target.fullPath);
+
+    if (linked.length) {
+      await BookRequest.updateMany(
+        { filePath },
+        {
+          filePath: '',
+          status: 'pending',
+          autoDownloadFailed: { at: new Date(), reason: 'Fichier supprimé manuellement par un administrateur.' },
+        }
+      );
+    }
+
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'delete_file',
+      details: `${filePath} (${linked.length} demande(s) repassée(s) en traitement manuel)`,
+    }).catch(() => {});
+
+    res.json({ success: true, unlinkedRequests: linked.length });
+  } catch (err) {
+    console.error('Erreur DELETE /files:', err);
+    res.status(500).json({ success: false, error: 'Erreur lors de la suppression.' });
   }
 });
 
