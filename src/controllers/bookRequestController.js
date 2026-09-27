@@ -1435,20 +1435,20 @@ export const updateUserComment = async (req, res) => {
 
     if (comment?.trim()) {
       appriseService.notifyUserComment(request, comment).catch(() => {});
-      // Email + push aux admins — commentaire utilisateur
+      // Email + push aux admins — commentaire utilisateur, même préférence
+      // (notifyOnComment) pour les deux canaux.
       User.find({ role: 'admin' }).select('email username emailVerified _id').then(async admins => {
         getAdminEmailPrefs().then(prefs => {
           if (!prefs.enabled || !prefs.notifyOnComment) return;
           admins.filter(a => a.emailVerified && a.email).forEach(admin =>
             sendUserCommentToAdminsEmail(admin, request, comment).catch(() => {}));
+          admins.forEach(admin =>
+            sendPushToUser(admin._id, {
+              title: 'Nouveau commentaire',
+              body: `${request.username} a commenté sa demande "${request.title}".`,
+              url: `/admin?request=${request._id}`,
+            }).catch(() => {}));
         }).catch(() => {});
-
-        admins.forEach(admin =>
-          sendPushToUser(admin._id, {
-            title: 'Nouveau commentaire',
-            body: `${request.username} a commenté sa demande "${request.title}".`,
-            url: `/admin?request=${request._id}`,
-          }).catch(() => {}));
       }).catch(() => {});
     }
 
@@ -1670,14 +1670,16 @@ export const addComment = async (req, res) => {
           if (!prefs.enabled || !prefs.notifyOnComment) return;
           admins.filter(a => a.emailVerified && a.email).forEach(admin =>
             sendUserCommentToAdminsEmail(admin, request, text.trim()).catch(() => {}));
+          // Même préférence que l'email (notifyOnComment) : pas de granularité
+          // dédiée au push côté admin pour ce type d'event, cohérent avec le
+          // reste des notifs admin (aucune n'a ce niveau de détail).
+          admins.forEach(admin =>
+            sendPushToUser(admin._id, {
+              title: 'Nouveau commentaire',
+              body: `${request.username} a commenté sa demande "${request.title}".`,
+              url: `/admin?request=${request._id}`,
+            }).catch(() => {}));
         }).catch(() => {});
-
-        admins.forEach(admin =>
-          sendPushToUser(admin._id, {
-            title: 'Nouveau commentaire',
-            body: `${request.username} a commenté sa demande "${request.title}".`,
-            url: `/admin?request=${request._id}`,
-          }).catch(() => {}));
       }).catch(() => {});
     }
 
