@@ -1462,13 +1462,14 @@ export const updateUserComment = async (req, res) => {
 export const editUserRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, author, format, link, description, thumbnail, pageCount, publishedDate } = req.body;
+    const { title, author, format, link, description, thumbnail, pageCount, publishedDate, category } = req.body;
 
     if (!title?.trim() || !author?.trim()) {
       return res.status(400).json({ error: 'Le titre et l\'auteur sont obligatoires.' });
     }
 
-    const request = await BookRequest.findOne({ _id: id, user: req.user.id });
+    const isAdmin = req.user.role === 'admin';
+    const request = await BookRequest.findOne(isAdmin ? { _id: id } : { _id: id, user: req.user.id });
     if (!request) return res.status(404).json({ error: 'Demande non trouvée.' });
 
     // Corriger titre/auteur reste utile même après téléchargement (ex. une
@@ -1476,7 +1477,8 @@ export const editUserRequest = async (req, res) => {
     // dont les noms de fichiers n'imposent aucun ordre fiable). On élargit
     // donc au-delà de "pending seulement" : "completed" aussi, mais pas les
     // statuts contestés/clos (reported, canceled) où ça n'a pas de sens.
-    if (!['pending', 'completed'].includes(request.status)) {
+    // Un admin peut corriger n'importe quel statut.
+    if (!isAdmin && !['pending', 'completed'].includes(request.status)) {
       return res.status(403).json({ error: `Cette demande ne peut plus être modifiée (statut : ${request.status}).` });
     }
 
@@ -1487,6 +1489,12 @@ export const editUserRequest = async (req, res) => {
     if (description !== undefined) updates.description = description;
     if (thumbnail !== undefined) updates.thumbnail = thumbnail;
     if (pageCount !== undefined) updates.pageCount = pageCount;
+    if (category !== undefined) {
+      if (!['ebook', 'manga', 'comic'].includes(category)) {
+        return res.status(400).json({ error: 'Catégorie invalide.' });
+      }
+      updates.category = category;
+    }
     if (publishedDate !== undefined) {
       if (publishedDate && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) {
         return res.status(400).json({ error: 'Format de date invalide. Utilisez : 2024, 2024-06 ou 2024-06-15.' });

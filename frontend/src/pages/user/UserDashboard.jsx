@@ -118,7 +118,7 @@ const UserDashboard = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, dir: 'asc' });
   const [deleteModal, setDeleteModal] = useState(null); // request object
   const [editModal, setEditModal]   = useState(null); // request object
-  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '', description: '', pageCount: '' });
+  const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '', description: '', pageCount: '', category: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [calibreEnabled, setCalibreEnabled] = useState(false);
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
@@ -496,6 +496,7 @@ const UserDashboard = () => {
       thumbnail:     request.thumbnail     || '',
       description:   request.description   || '',
       pageCount:     request.pageCount ? String(request.pageCount) : '',
+      category:      request.category      || 'ebook',
     });
     setEditModal(request);
   };
@@ -1604,6 +1605,18 @@ const UserDashboard = () => {
                   onChange={e => setEditForm(f => ({ ...f, author: e.target.value }))}
                   placeholder="Nom de l'auteur"
                 />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Catégorie</label>
+                <select
+                  className={styles.editInput}
+                  value={editForm.category}
+                  onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                >
+                  <option value="ebook">Ebook</option>
+                  <option value="comic">BD</option>
+                  <option value="manga">Manga</option>
+                </select>
               </div>
               <div className={styles.editFieldRow}>
                 <label className={styles.editLabel}>Format</label>

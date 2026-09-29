@@ -7,6 +7,13 @@ function isoToFr(str) {
   if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+function frToIso(str) {
+  const s = (str || '').trim();
+  if (/^\d{4}$/.test(s)) return s;
+  if (/^\d{2}\/\d{4}$/.test(s)) { const [m, y] = s.split('/'); return `${y}-${m}`; }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}`; }
+  return s;
+}
 
 const KNOWN_FORMATS = new Set(['epub', 'mobi', 'pdf', 'cbz', 'cbr', 'azw3', 'fb2', 'djvu']);
 function isKnownFormat(fmt) {
@@ -109,6 +116,9 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [commentValue, setCommentValue] = useState('');
   const [commentModal, setCommentModal] = useState(null); // request._id en cours de commentaire admin
   const [threadModal, setThreadModal] = useState(null); // request object pour le fil
+  const [editModal, setEditModal] = useState(null); // request object en cours d'édition (admin)
+  const [editForm, setEditForm] = useState({ title: '', author: '', category: 'ebook', format: '', link: '', publishedDate: '', pageCount: '' });
+  const [editSaving, setEditSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [previewBook, setPreviewBook] = useState(null);
@@ -186,6 +196,43 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  const openEditModal = (request) => {
+    setEditForm({
+      title:         request.title         || '',
+      author:        request.author        || '',
+      category:      request.category      || 'ebook',
+      format:        request.format        || '',
+      link:          request.link          || '',
+      publishedDate: isoToFr(request.publishedDate || ''),
+      pageCount:     request.pageCount ? String(request.pageCount) : '',
+    });
+    setEditModal(request);
+  };
+
+  const handleEditRequest = async () => {
+    if (!editModal) return;
+    if (!editForm.title.trim() || !editForm.author.trim()) {
+      toast.error('Le titre et l\'auteur sont obligatoires.');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const payload = {
+        ...editForm,
+        publishedDate: frToIso(editForm.publishedDate),
+        pageCount: editForm.pageCount ? parseInt(editForm.pageCount, 10) : 0,
+      };
+      const { data } = await axiosAdmin.patch(`/api/requests/${editModal._id}/user-edit`, payload);
+      setRequests(prev => prev.map(r => r._id === editModal._id ? { ...r, ...data.request } : r));
+      toast.success('Demande mise à jour.');
+      setEditModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la modification.');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const openConnectorsModal = (request) => {
@@ -1201,6 +1248,10 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                     </svg>
                                   </button>
                                 )}
+                                <button className={styles.aIconBtn} title="Modifier la demande"
+                                  onClick={() => openEditModal(request)}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                                </button>
                                 <button className={styles.aIconBtn} title={request.adminComment ? 'Modifier la note admin' : 'Ajouter une note admin'}
                                   onClick={() => { setCommentModal(request._id); setCommentValue(request.adminComment || ''); }}>
                                   {request.adminComment
@@ -1510,6 +1561,13 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
 
                       {/* Boutons d'action — une seule ligne */}
                       <div className={styles.statusButtons}>
+                        <button
+                          className={styles.aIconBtn}
+                          title="Modifier la demande"
+                          onClick={() => openEditModal(request)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </button>
                         {isReadable(request.filePath) && (
                           <button
                             className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
@@ -2051,6 +2109,71 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
       })()}
 
       {/* Modal commentaire admin */}
+      {editModal && (
+        <div className={styles.uploadModalOverlay} onClick={(e) => { if (e.target === e.currentTarget && !editSaving) setEditModal(null); }}>
+          <div className={styles.uploadModal}>
+            <div className={styles.uploadModalHeader}>
+              <div>
+                <h3 className={styles.uploadModalTitle}>Modifier la demande</h3>
+                <p className={styles.uploadModalBook}>{editModal.title}</p>
+              </div>
+              <button className={styles.uploadModalClose} onClick={() => !editSaving && setEditModal(null)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className={styles.uploadModalBody}>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Titre *</label>
+                <input className={styles.editInput} value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Titre du livre" />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Auteur *</label>
+                <input className={styles.editInput} value={editForm.author} onChange={e => setEditForm(f => ({ ...f, author: e.target.value }))} placeholder="Nom de l'auteur" />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Catégorie</label>
+                <select className={styles.editInput} value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
+                  <option value="ebook">Ebook</option>
+                  <option value="comic">BD</option>
+                  <option value="manga">Manga</option>
+                </select>
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Format</label>
+                <select className={styles.editInput} value={editForm.format} onChange={e => setEditForm(f => ({ ...f, format: e.target.value }))}>
+                  <option value="">Non précisé</option>
+                  {['epub', 'mobi', 'azw3', 'fb2', 'cbz', 'cbr', 'pdf'].map(fmt => (
+                    <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Lien</label>
+                <input className={styles.editInput} value={editForm.link} onChange={e => setEditForm(f => ({ ...f, link: e.target.value }))} placeholder="https://..." />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Date de sortie</label>
+                <input className={styles.editInput} value={editForm.publishedDate} onChange={e => setEditForm(f => ({ ...f, publishedDate: e.target.value }))} placeholder="2024, 06/2024 ou 15/06/2024" />
+              </div>
+              <div className={styles.editFieldRow}>
+                <label className={styles.editLabel}>Nombre de pages</label>
+                <input className={styles.editInput} type="number" min="0" value={editForm.pageCount} onChange={e => setEditForm(f => ({ ...f, pageCount: e.target.value }))} placeholder="0" />
+              </div>
+            </div>
+
+            <div className={styles.uploadModalFooter}>
+              <button className={`${styles.button} ${styles.secondary}`} onClick={() => setEditModal(null)} disabled={editSaving}>Annuler</button>
+              <button className={`${styles.button} ${styles.primary}`} onClick={handleEditRequest} disabled={editSaving || !editForm.title.trim() || !editForm.author.trim()}>
+                {editSaving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {commentModal && (() => {
         const req = requests.find(r => r._id === commentModal);
         return (
