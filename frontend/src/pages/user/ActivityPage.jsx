@@ -144,7 +144,16 @@ export default function ActivityPage() {
               {data.items.map((item, i) => (
                 <div key={i} className={styles.card}>
                   <div className={styles.thumbWrap}>
-                    {item.thumbnail && <img src={item.thumbnail} alt="" className={styles.thumb} />}
+                    {item.thumbnail ? (
+                      <img src={item.thumbnail} alt="" className={styles.thumb} />
+                    ) : (
+                      <div className={styles.thumbPlaceholder}>
+                        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        </svg>
+                      </div>
+                    )}
                     <div className={styles.badges}>
                       <span className={`${styles.badge} ${styles[CATEGORY_BADGE_CLASS[item.category]] || ''}`}>{CATEGORY_LABELS[item.category] || item.category}</span>
                       {item.format && <span className={styles.badge}>{item.format}</span>}
@@ -189,6 +198,7 @@ export default function ActivityPage() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
+                      legend: { display: false },
                       tooltip: {
                         backgroundColor: 'rgba(30,41,59,0.95)',
                         cornerRadius: 8,
