@@ -477,8 +477,8 @@ function ProxyCard() {
             value={config.mode}
             onChange={e => setConfig(c => ({ ...c, mode: e.target.value }))}
           >
-            <option value="fallback">Repli — connexion directe en priorité, proxy si échec</option>
-            <option value="default">Par défaut — proxy en priorité, connexion directe si échec</option>
+            <option value="fallback">Repli : connexion directe en priorité, proxy si échec</option>
+            <option value="default">Par défaut : proxy en priorité, connexion directe si échec</option>
           </select>
         </div>
 
@@ -522,7 +522,7 @@ function ProxyCard() {
           </div>
           {config._hasPassword && !config.password && (
             <p className={styles.fieldHint}>
-              Mot de passe déjà enregistré — laisser vide pour conserver, ou{' '}
+              Mot de passe déjà enregistré : laisser vide pour conserver, ou{' '}
               <button
                 type="button"
                 className={styles.linkBtn}
@@ -817,7 +817,7 @@ function AIProviderCard() {
               </button>
             </div>
             {config._hasApiKey && !config.apiKey && (
-              <p className={styles.fieldHint}>Clé déjà enregistrée — laisser vide pour conserver.</p>
+              <p className={styles.fieldHint}>Clé déjà enregistrée : laisser vide pour conserver.</p>
             )}
           </div>
         )}
@@ -1179,7 +1179,7 @@ function EmailProviderCard() {
                 </button>
               </div>
               {config._hasApiKey && !config.apiKey && (
-                <p className={styles.fieldHint}>Mot de passe déjà enregistré — laisser vide pour conserver.</p>
+                <p className={styles.fieldHint}>Mot de passe déjà enregistré : laisser vide pour conserver.</p>
               )}
             </div>
           </>
@@ -1200,7 +1200,7 @@ function EmailProviderCard() {
               </button>
             </div>
             {config._hasApiKey && !config.apiKey && (
-              <p className={styles.fieldHint}>Clé déjà enregistrée — laisser vide pour conserver.</p>
+              <p className={styles.fieldHint}>Clé déjà enregistrée : laisser vide pour conserver.</p>
             )}
           </div>
         )}
@@ -1322,7 +1322,7 @@ function SearchPathBanner() {
         <strong>Ordre de recherche actuel :</strong> {steps.join(' → ')}
         {state.proxyEnabled && (
           <span className={styles.searchPathProxyNote}>
-            {' '}— proxy sortant actif (mode {state.proxyMode === 'default' ? 'par défaut' : 'repli'}), appliqué à tous les appels sortants.
+            {' '}: proxy sortant actif (mode {state.proxyMode === 'default' ? 'par défaut' : 'repli'}), appliqué à tous les appels sortants.
           </span>
         )}
         <br />
@@ -1385,6 +1385,68 @@ function ManualModeCard() {
           <div>
             <p className={styles.cardName}>Recherche manuelle</p>
             <p className={styles.cardDesc}>Bouton "Manuel" (saisie à blanc) dans "Demander un livre". Le formulaire pré-rempli après une sélection en recherche détaillée n'est pas affecté par ce réglage.</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input type="checkbox" checked={enabled} onChange={handleToggle} />
+          <span className={styles.slider} />
+        </label>
+      </div>
+      {alert && (
+        <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`} style={{ margin: '0 1.5rem 1rem' }}>
+          {alert.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityFeedCard() {
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/activity-feed')
+      .then(res => setEnabled(res.data.enabled ?? true))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleToggle = async (e) => {
+    const value = e.target.checked;
+    setEnabled(value);
+    try {
+      await axiosAdmin.put('/api/connectors/activity-feed', { enabled: value });
+    } catch (err) {
+      setEnabled(!value);
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={styles.cardLogoWrap}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+          </div>
+          <div>
+            <p className={styles.cardName}>Flux d'activité</p>
+            <p className={styles.cardDesc}>Affiche aux utilisateurs les derniers livres complétés sur l'instance (titre, auteur, couverture), anonymisé : aucun nom d'utilisateur n'est exposé.</p>
           </div>
         </div>
         <label className={styles.switch}>
@@ -1650,6 +1712,7 @@ export default function SettingsPanel() {
       <EmailProviderCard />
       <RSSFeedCard />
       <ManualModeCard />
+      <ActivityFeedCard />
       <ApnsCard />
       <ProxyCard />
     </div>

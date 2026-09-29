@@ -80,6 +80,114 @@ router.get('/manual-mode-status', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/requests/activity — flux d'activité de l'instance (derniers livres
+// complétés, tous utilisateurs confondus), anonymisé, désactivable par un admin.
+// Voir issue #40.
+router.get('/activity', requireAuth, async (req, res) => {
+  try {
+    const ConnectorSettings = (await import('../models/ConnectorSettings.js')).default;
+    const settingsDoc = await ConnectorSettings.findOne({ service: 'activityFeed' }).lean();
+    const enabled = settingsDoc?.enabled ?? true;
+    if (!enabled) return res.json({ enabled: false, items: [], total: 0, page: 1, pages: 0 });
+
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const filter = { status: 'completed' };
+    if (['ebook', 'comic', 'manga'].includes(req.query.category)) filter.category = req.query.category;
+
+    const DownloadLog = (await import('../models/DownloadLog.js')).default;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [items, total, stats, connectorCounts, manualCount] = await Promise.all([
+      BookRequest.find(filter)
+        .sort({ completedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select('title author thumbnail completedAt category format statusHistory')
+        .lean(),
+      BookRequest.countDocuments(filter),
+      // Stats agrégées uniquement (aucun nom d'utilisateur) — voir issue #40.
+      BookRequest.aggregate([
+        // Les stats globales restent sur l'ensemble complété (pas filtrées par
+        // catégorie), pour ne pas donner l'impression que l'instance est plus
+        // ou moins active selon le filtre affiché.
+        { $match: { status: 'completed' } },
+        {
+          $facet: {
+            thisMonth: [
+              { $match: { completedAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } },
+              { $count: 'count' },
+            ],
+            byCategory: [
+              { $group: { _id: '$category', count: { $sum: 1 } } },
+            ],
+            dailyTrend: [
+              { $match: { completedAt: { $gte: thirtyDaysAgo } } },
+              { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$completedAt' } }, count: { $sum: 1 } } },
+              { $sort: { _id: 1 } },
+            ],
+            bestMonth: [
+              { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$completedAt' } }, count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+              { $limit: 1 },
+            ],
+            overallTotal: [{ $count: 'count' }],
+          },
+        },
+      ]),
+      // Répartition par connecteur (téléchargements auto réussis) — DownloadLog
+      // ne couvre pas les ajouts manuels admin, comptés séparément ci-dessous.
+      DownloadLog.aggregate([
+        { $match: { success: true } },
+        { $group: { _id: '$connector', count: { $sum: 1 } } },
+      ]),
+      BookRequest.countDocuments({ status: 'completed', statusHistory: { $elemMatch: { status: 'completed' } } }),
+    ]);
+
+    // Zéro-remplissage des 30 derniers jours : l'agrégation ne renvoie que les
+    // jours avec au moins une complétion, sinon la courbe aurait des trous.
+    const dailyTrendByDate = Object.fromEntries((stats[0]?.dailyTrend || []).map(d => [d._id, d.count]));
+    const dailyTrend = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toISOString().slice(0, 10);
+      dailyTrend.push({ date: dateKey, count: dailyTrendByDate[dateKey] || 0 });
+    }
+
+    res.json({
+      enabled: true,
+      // Anonymisé par défaut (voir issue #40) : aucun nom d'utilisateur exposé.
+      items: items.map(r => ({
+        title: r.title,
+        author: r.author,
+        thumbnail: r.thumbnail || '',
+        completedAt: r.completedAt,
+        category: r.category || 'ebook',
+        format: r.format || '',
+        // Le chemin auto (connectorOrchestrator.js) ne pousse jamais d'entrée
+        // statusHistory — sa présence pour 'completed' signale donc un ajout
+        // manuel (admin). Aucune donnée nouvelle nécessaire, juste déductible.
+        origin: (r.statusHistory || []).some(h => h.status === 'completed') ? 'manual' : 'auto',
+      })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      stats: {
+        totalCompleted: stats[0]?.overallTotal?.[0]?.count || 0,
+        completedThisMonth: stats[0]?.thisMonth?.[0]?.count || 0,
+        byCategory: Object.fromEntries((stats[0]?.byCategory || []).map(c => [c._id || 'ebook', c.count])),
+        dailyTrend,
+        bestMonth: stats[0]?.bestMonth?.[0] ? { month: stats[0].bestMonth[0]._id, count: stats[0].bestMonth[0].count } : null,
+        byConnector: Object.fromEntries(connectorCounts.map(c => [c._id, c.count])),
+        manualCount,
+      },
+    });
+  } catch {
+    res.status(500).json({ enabled: false, items: [], total: 0, page: 1, pages: 0 });
+  }
+});
+
 // GET /api/requests/direct-search-status — le front s'en sert pour savoir
 // s'il doit même proposer le bouton "Recherche directe".
 router.get('/direct-search-status', requireAuth, async (req, res) => {

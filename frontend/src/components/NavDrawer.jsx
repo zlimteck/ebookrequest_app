@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import styles from './NavDrawer.module.css';
 import { getAvatarColor } from '../utils/avatarColor';
+import axiosAdmin from '../axiosAdmin';
 import pkg from '../../package.json';
 const { version } = pkg;
 
@@ -53,6 +54,16 @@ const NAV_ITEMS = [
     exact: false,
   },
   {
+    to: '/activity',
+    label: 'Activité',
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+    ),
+    exact: false,
+  },
+  {
     to: '/settings',
     label: 'Paramètres',
     icon: (
@@ -79,6 +90,17 @@ const ADMIN_ITEM = {
 const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout, onSearchOpen }) => {
   const location = useLocation();
   const drawerRef = useRef(null);
+  const [activityEnabled, setActivityEnabled] = useState(true);
+
+  // Le flux d'activité peut être désactivé/réactivé par un admin (Réglages) :
+  // on revérifie à chaque ouverture du drawer plutôt qu'une seule fois au
+  // montage, pour refléter le changement sans recharger la page.
+  useEffect(() => {
+    if (!isOpen) return;
+    axiosAdmin.get('/api/requests/activity?limit=1')
+      .then(res => setActivityEnabled(res.data.enabled !== false))
+      .catch(() => {});
+  }, [isOpen]);
 
   // Fermeture avec Escape
   useEffect(() => {
@@ -98,7 +120,8 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
     return location.pathname.startsWith(item.to);
   };
 
-  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+  const baseItems = activityEnabled ? NAV_ITEMS : NAV_ITEMS.filter(item => item.to !== '/activity');
+  const navItems = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems;
 
   const color = getAvatarColor({ role, hasValentine: localStorage.getItem('hasValentine') === 'true' });
 

@@ -875,6 +875,35 @@ router.put('/manual-mode', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ── GET /api/connectors/activity-feed ──────────────────────────────────────────
+// Flux d'activité de l'instance (derniers livres complétés, tous utilisateurs
+// confondus, anonymisé) — voir issue #40. Même schéma générique { enabled } que
+// manual-mode, activé par défaut.
+router.get('/activity-feed', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'activityFeed' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/activity-feed ──────────────────────────────────────────
+router.put('/activity-feed', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'activityFeed' },
+      { enabled: !!enabled },
+      { upsert: true, new: true, runValidators: true }
+    );
+    logSettingsToggle(req, 'Flux d\'activité', doc.enabled);
+    res.json({ enabled: doc.enabled });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
 // ── GET /api/connectors/rss ───────────────────────────────────────────────────
 router.get('/rss', requireAuth, requireAdmin, async (req, res) => {
   try {

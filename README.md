@@ -114,6 +114,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Gestion des utilisateurs (rôles, quotas, activation/désactivation)
 - Catalogue OPDS pour accès depuis les liseuses (Calibre, KOReader…)
 - Succès/badges sur le profil (requêtes, lecture, discussions IA, ancienneté, connecteurs utilisés…), notification à chaque déblocage
+- **Flux d'activité de l'instance :** page dédiée listant les dernières demandes complétées (couverture, titre, auteur), entièrement anonymisée (aucun nom d'utilisateur affiché) ; statistiques (total, complétions du mois, meilleur mois), répartition par catégorie et auto/manuel, tendance sur 30 jours, filtre par catégorie ; désactivable par un admin dans **Réglages**
 
 **Notifications**
 - Notifications email et push (web VAPID + natif iOS via APNs) par événement

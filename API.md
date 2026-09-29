@@ -225,6 +225,13 @@ curl https://app.ndd.fr/api/requests/direct-search-status \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/requests/activity?page=1&limit=24&category=ebook`
+Flux d'activité de l'instance : dernières demandes complétées (auto + manuel admin), anonymisé (aucun nom d'utilisateur exposé). Renvoie aussi des statistiques agrégées (total, complétions du mois, répartition par catégorie, tendance sur 30 jours, meilleur mois, répartition auto/manuel). Désactivable par un admin via `/api/connectors/activity-feed` (renvoie alors `{"enabled": false, "items": []}`).
+```bash
+curl "https://app.ndd.fr/api/requests/activity?page=1&limit=24" \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/requests/valentine-source-status` / `GET /api/requests/fourtoutici-source-status`
 Indique si la source Valentine / Fourtoutici est activée côté connecteur, pour que le front masque l'onglet correspondant dans la recherche directe (indépendant de `direct-search-status` ci-dessus, qui coupe toute la fonctionnalité).
 ```bash
@@ -1036,6 +1043,21 @@ curl -X PUT https://app.ndd.fr/api/connectors/rss \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true, "url": "https://predb.me/?cats=books-ebooks&rss=1"}'
+```
+
+### `GET /api/connectors/activity-feed`
+Active ou non le flux d'activité de l'instance (`/activity` côté front), activé par défaut.
+```bash
+curl https://app.ndd.fr/api/connectors/activity-feed \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/activity-feed`
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/activity-feed \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
 ```
 
 ### `GET /api/connectors/apns`
