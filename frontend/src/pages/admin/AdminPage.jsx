@@ -119,6 +119,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [editModal, setEditModal] = useState(null); // request object en cours d'édition (admin)
   const [editForm, setEditForm] = useState({ title: '', author: '', category: 'ebook', format: '', link: '', publishedDate: '', pageCount: '' });
   const [editSaving, setEditSaving] = useState(false);
+  const [metadataModal, setMetadataModal] = useState(null); // { request, loading, candidates, error }
+  const [fetchingMetaId, setFetchingMetaId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [previewBook, setPreviewBook] = useState(null);
@@ -232,6 +234,54 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
       toast.error(err.response?.data?.error || 'Erreur lors de la modification.');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  // Récupération a posteriori des métadonnées Google Books, même logique et
+  // mêmes routes que côté user (voir UserDashboard.jsx) — un admin peut
+  // corriger la couverture/description manquante de n'importe quelle demande.
+  const openMetadataPicker = async (request) => {
+    setMetadataModal({ request, loading: true, candidates: [], error: null });
+    try {
+      const res = await axiosAdmin.get(`/api/requests/${request._id}/metadata-candidates`);
+      setMetadataModal({ request, loading: false, candidates: res.data.candidates || [], error: null });
+    } catch (err) {
+      setMetadataModal({
+        request, loading: false, candidates: [],
+        error: err.response?.data?.error || 'Aucune métadonnée trouvée sur Google Books.',
+      });
+    }
+  };
+
+  const swapMetadataTitleAuthor = async () => {
+    if (!metadataModal?.request) return;
+    const { _id, title, author } = metadataModal.request;
+    setMetadataModal(prev => ({ ...prev, loading: true }));
+    try {
+      const { data } = await axiosAdmin.patch(`/api/requests/${_id}/user-edit`, { title: author, author: title });
+      setRequests(prev => prev.map(r => r._id === _id ? { ...r, ...data.request } : r));
+      toast.success('Titre et auteur inversés.');
+      openMetadataPicker(data.request);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Erreur lors de l'inversion titre/auteur.");
+      setMetadataModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const applyMetadataChoice = async (candidate) => {
+    if (!metadataModal?.request) return;
+    setFetchingMetaId(metadataModal.request._id);
+    try {
+      const res = await axiosAdmin.post(`/api/requests/${metadataModal.request._id}/metadata-candidates/apply`, {
+        googleBooksId: candidate.googleBooksId,
+      });
+      setRequests(prev => prev.map(r => r._id === metadataModal.request._id ? { ...r, ...res.data.request } : r));
+      toast.success('Métadonnées mises à jour.');
+      setMetadataModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de l\'application des métadonnées.');
+    } finally {
+      setFetchingMetaId(null);
     }
   };
 
@@ -2125,6 +2175,16 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
             </div>
 
             <div className={styles.uploadModalBody}>
+              <button
+                type="button"
+                className={styles.metadataFetchBtn}
+                onClick={() => { const r = editModal; setEditModal(null); openMetadataPicker(r); }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                Récupérer les métadonnées (couverture, description…)
+              </button>
               <div className={styles.editFieldRow}>
                 <label className={styles.editLabel}>Titre *</label>
                 <input className={styles.editInput} value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Titre du livre" />
@@ -2168,6 +2228,93 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
               <button className={`${styles.button} ${styles.secondary}`} onClick={() => setEditModal(null)} disabled={editSaving}>Annuler</button>
               <button className={`${styles.button} ${styles.primary}`} onClick={handleEditRequest} disabled={editSaving || !editForm.title.trim() || !editForm.author.trim()}>
                 {editSaving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {metadataModal && (
+        <div className={styles.uploadModalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setMetadataModal(null); }}>
+          <div className={styles.uploadModal}>
+            <div className={styles.uploadModalHeader}>
+              <div>
+                <h3 className={styles.uploadModalTitle}>Métadonnées Google Books</h3>
+                <p className={styles.uploadModalBook}>{metadataModal.request?.title}</p>
+              </div>
+              <button className={styles.uploadModalClose} onClick={() => setMetadataModal(null)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className={styles.uploadModalBody}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
+                Choisis le bon livre : rien n'est appliqué tant que tu n'as pas cliqué sur un résultat.
+              </p>
+              {metadataModal.request?.author && (
+                <button
+                  type="button"
+                  onClick={swapMetadataTitleAuthor}
+                  disabled={metadataModal.loading}
+                  title="Si le titre et l'auteur ont été inversés à la création de la demande (ex. sources sans champs structurés comme Fourtoutici)"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                    fontSize: '0.75rem', color: 'var(--color-text-muted)',
+                    background: 'var(--color-bg3)', border: '1px solid var(--color-border)',
+                    borderRadius: '8px', padding: '0.25rem 0.55rem',
+                    cursor: 'pointer', marginBottom: '1rem',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                    <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                  Inverser titre / auteur (« {metadataModal.request.author} » → titre)
+                </button>
+              )}
+
+              {metadataModal.loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 0' }}>
+                  <div className={styles.loadingSpinner} />
+                </div>
+              ) : metadataModal.error ? (
+                <p style={{ fontSize: '0.85rem', color: '#f59e0b' }}>{metadataModal.error}</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '55vh', overflowY: 'auto' }}>
+                  {metadataModal.candidates.map(c => (
+                    <button
+                      key={c.googleBooksId}
+                      onClick={() => applyMetadataChoice(c)}
+                      disabled={!!fetchingMetaId}
+                      style={{
+                        display: 'flex', gap: '0.75rem', textAlign: 'left', alignItems: 'flex-start',
+                        background: 'var(--color-bg3)', border: '1px solid var(--color-border)',
+                        borderRadius: '8px', padding: '0.6rem', cursor: 'pointer', color: 'inherit',
+                      }}
+                    >
+                      {c.thumbnail ? (
+                        <img src={c.thumbnail} alt="" style={{ width: 44, height: 66, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 44, height: 66, flexShrink: 0, background: 'var(--color-bg2)', borderRadius: 4 }} />
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{c.title}</div>
+                        {c.authors && <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{c.authors}</div>}
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
+                          {[c.publishedDate, c.pageCount ? `${c.pageCount} pages` : null].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.uploadModalFooter}>
+              <button className={`${styles.button} ${styles.secondary}`} onClick={() => setMetadataModal(null)}>
+                {metadataModal.loading || metadataModal.error ? 'Fermer' : 'Aucun ne correspond'}
               </button>
             </div>
           </div>

@@ -1072,6 +1072,28 @@
   margin-bottom: 1.5rem;
 }
 
+.metadataFetchBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1.25rem;
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 8px;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.metadataFetchBtn:hover {
+  background: rgba(99,102,241,0.18);
+  border-color: var(--color-accent);
+}
+
 .modalForm label {
   display: block;
   margin-bottom: 0.5rem;
