@@ -58,6 +58,10 @@ export default function ActivityPage() {
 
   useEffect(() => { load(page, category); }, [page, category, load]);
 
+  useEffect(() => {
+    axiosAdmin.post('/api/users/me/achievements/activity-visited').catch(() => {});
+  }, []);
+
   const handleCategoryChange = (cat) => {
     setCategory(cat);
     setPage(1);

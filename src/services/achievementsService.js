@@ -70,7 +70,7 @@ export async function getUserAchievements(userId) {
   const Notification = mongoose.model('Notification');
   const { decrypt } = await import('./cryptoService.js');
 
-  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent');
+  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked activityVisitedUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent readingShare');
   if (!user) return null;
 
   const [
@@ -219,6 +219,19 @@ export async function getUserAchievements(userId) {
         id: 'found404',
         label: 'Ta vu elle est belle ma 404',
         unlocked: !!user.found404Unlocked,
+      },
+      {
+        id: 'readingShare',
+        label: 'Bibliothèque partagée',
+        // Sticky naturellement : le token n'est jamais effacé quand le partage est
+        // désactivé (voir issue #39), donc sa seule présence suffit à savoir que
+        // l'utilisateur a activé le partage au moins une fois.
+        unlocked: !!user.readingShare?.token,
+      },
+      {
+        id: 'activityVisited',
+        label: 'Curieux de l\'activité',
+        unlocked: !!user.activityVisitedUnlocked,
       },
     ];
 

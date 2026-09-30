@@ -217,6 +217,8 @@ const userSchema = new mongoose.Schema({
   iosAlphaUnlocked:     { type: Boolean, default: false },
   // Succès "404" — débloqué en visitant la page 404 (voir issue #41).
   found404Unlocked: { type: Boolean, default: false },
+  // Succès "Curieux de l'activité" — débloqué en visitant /activity une fois.
+  activityVisitedUnlocked: { type: Boolean, default: false },
   passkeys: [{
     credentialID: { type: String, required: true },
     credentialPublicKey: { type: String, required: true },

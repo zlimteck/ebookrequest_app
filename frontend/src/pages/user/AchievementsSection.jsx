@@ -88,6 +88,12 @@ const FlaskIcon = () => (
 const EggIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M12 3c-2.8 0-5 5-5 10a5 5 0 0 0 10 0c0-5-2.2-10-5-10Z" /></svg>
 );
+const ShareIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+);
+const PulseIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+);
 const Icon404 = () => (
   <span className={styles.textIcon}>404</span>
 );
@@ -197,6 +203,8 @@ export default function AchievementsSection({ achievements }) {
           <AchievementCard unlocked={byId.kindle?.unlocked} tierClass={styles.tierAccent} icon={<ReaderIcon />} tierLabel={byId.kindle?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Envoi Kindle" />
           <AchievementCard unlocked={byId.nightOwl?.unlocked} tierClass={styles.tierAccent} icon={<MoonIcon />} tierLabel={byId.nightOwl?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Oiseau de nuit" />
           <AchievementCard unlocked={byId.found404?.unlocked} tierClass={styles.tierAccent} icon={<Icon404 />} tierLabel={byId.found404?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Ta vu elle est belle ma 404" />
+          <AchievementCard unlocked={byId.readingShare?.unlocked} tierClass={styles.tierAccent} icon={<ShareIcon />} tierLabel={byId.readingShare?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Bibliothèque partagée" />
+          <AchievementCard unlocked={byId.activityVisited?.unlocked} tierClass={styles.tierAccent} icon={<PulseIcon />} tierLabel={byId.activityVisited?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Curieux de l'activité" />
         </div>
       </div>
 

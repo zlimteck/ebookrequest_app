@@ -59,6 +59,16 @@ router.post('/me/achievements/found-404', requireAuth, async (req, res) => {
   }
 });
 
+// Succès "Curieux de l'activité" — idempotent, même principe que found-404/easter-egg.
+router.post('/me/achievements/activity-visited', requireAuth, async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.id }, { activityVisitedUnlocked: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement du succès' });
+  }
+});
+
 // GET /api/users/me/export — export de toutes les données personnelles de
 // l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
 // Exclut délibérément les secrets (mots de passe, clés API, tokens) même si
