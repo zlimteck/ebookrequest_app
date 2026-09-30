@@ -81,7 +81,10 @@ function App() {
         path === '/forgot-password' ||
         path.startsWith('/reset-password/') ||
         path === '/setup' ||
-        path === '/register';
+        path === '/register' ||
+        path.startsWith('/library/') ||
+        path === '/privacy' ||
+        path === '/terms';
 
       if (isPublicPath) {
         setIsLoading(false);
