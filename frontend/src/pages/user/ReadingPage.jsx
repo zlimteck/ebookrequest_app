@@ -23,11 +23,12 @@ function getFileFormat(filePath) {
 }
 
 const FILTERS = [
-  { key: 'all',     label: 'Tous' },
-  { key: 'unread',  label: 'Non lus' },
-  { key: 'read',    label: 'Lus' },
-  { key: 'request', label: 'Demandes' },
-  { key: 'manual',  label: 'Ajouts' },
+  { key: 'all',       label: 'Tous' },
+  { key: 'unread',    label: 'Non lus' },
+  { key: 'reading',   label: 'En cours' },
+  { key: 'read',      label: 'Lus' },
+  { key: 'request',   label: 'Demandes' },
+  { key: 'manual',    label: 'Ajouts' },
 ];
 
 const SORTS = [
@@ -224,7 +225,8 @@ export default function ReadingPage() {
   const filtered = books
     .filter(b => {
       if (filter === 'read')    return b.status === 'read';
-      if (filter === 'unread')  return b.status === 'unread';
+      if (filter === 'reading') return b.status !== 'read' && b.readingProgress > 0;
+      if (filter === 'unread')  return b.status === 'unread' && !(b.readingProgress > 0);
       if (filter === 'request') return b.source === 'request';
       if (filter === 'manual')  return b.source === 'manual';
       return true;
