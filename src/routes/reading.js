@@ -6,6 +6,37 @@ import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js
 
 const router = express.Router();
 
+// GET /api/reading/public/:token — bibliothèque en lecture seule via lien de
+// partage public (issue #39), pas d'authentification. En bloc (tout ou rien,
+// pas de sélection livre par livre) ; les notes personnelles ne sont incluses
+// que si l'utilisateur a explicitement laissé includeNotes activé.
+router.get('/public/:token', async (req, res) => {
+  try {
+    const user = await User.findOne({ 'readingShare.token': req.params.token, 'readingShare.enabled': true })
+      .select('username readingShare');
+    if (!user) return res.status(404).json({ message: 'Bibliothèque introuvable ou partage désactivé.' });
+
+    const includeNotes = user.readingShare.includeNotes;
+    const books = await ReadingList.find({ userId: user._id }).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      username: user.username,
+      books: books.map(b => ({
+        title: b.title,
+        author: b.author,
+        thumbnail: b.thumbnail,
+        status: b.status,
+        readAt: b.readAt,
+        rating: includeNotes ? b.rating : undefined,
+        notes: includeNotes ? b.notes : undefined,
+      })),
+    });
+  } catch (error) {
+    console.error('Erreur bibliothèque publique:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // GET — liste de lecture de l'utilisateur
 router.get('/', requireAuth, async (req, res) => {
   try {

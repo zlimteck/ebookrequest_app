@@ -198,6 +198,62 @@ router.post('/opds-token/regenerate', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/users/reading-share — état du partage public de la bibliothèque (issue #39)
+router.get('/reading-share', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('readingShare');
+    const baseUrl = process.env.FRONTEND_URL || '';
+    res.json({
+      enabled: user.readingShare?.enabled || false,
+      includeNotes: user.readingShare?.includeNotes ?? true,
+      url: user.readingShare?.token ? `${baseUrl}/library/${user.readingShare.token}` : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/users/reading-share — activer/désactiver le partage, régler includeNotes.
+// Génère le token à la première activation seulement (pas de default sur le schéma,
+// pour ne pas exposer un token existant tant que l'utilisateur n'a jamais activé).
+router.put('/reading-share', requireAuth, async (req, res) => {
+  try {
+    const { enabled, includeNotes } = req.body;
+    const user = await User.findById(req.user.id).select('readingShare');
+    const update = {};
+    if (enabled !== undefined) {
+      update['readingShare.enabled'] = !!enabled;
+      if (enabled && !user.readingShare?.token) {
+        update['readingShare.token'] = crypto.randomBytes(24).toString('hex');
+      }
+    }
+    if (includeNotes !== undefined) update['readingShare.includeNotes'] = !!includeNotes;
+
+    await User.updateOne({ _id: req.user.id }, { $set: update });
+    const updated = await User.findById(req.user.id).select('readingShare');
+    const baseUrl = process.env.FRONTEND_URL || '';
+    res.json({
+      enabled: updated.readingShare?.enabled || false,
+      includeNotes: updated.readingShare?.includeNotes ?? true,
+      url: updated.readingShare?.token ? `${baseUrl}/library/${updated.readingShare.token}` : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/users/reading-share/regenerate — révoque l'ancien lien, en génère un nouveau
+router.post('/reading-share/regenerate', requireAuth, async (req, res) => {
+  try {
+    const token = crypto.randomBytes(24).toString('hex');
+    await User.updateOne({ _id: req.user.id }, { $set: { 'readingShare.token': token } });
+    const baseUrl = process.env.FRONTEND_URL || '';
+    res.json({ success: true, url: `${baseUrl}/library/${token}` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ── Calibre-Web routes ────────────────────────────────────────────────────────
 
 // GET /api/users/calibre

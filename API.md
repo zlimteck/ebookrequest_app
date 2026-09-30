@@ -171,6 +171,29 @@ curl -X POST https://app.ndd.fr/api/users/opds-token/regenerate \
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/users/reading-share`
+État du partage public de la bibliothèque de lecture (issue #39). Renvoie `enabled`, `includeNotes` et `url` (`null` tant que jamais activé).
+```bash
+curl https://app.ndd.fr/api/users/reading-share \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/users/reading-share`
+Active/désactive le partage et/ou règle l'inclusion des notes personnelles. Le token de partage n'est généré qu'à la première activation.
+```bash
+curl -X PUT https://app.ndd.fr/api/users/reading-share \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "includeNotes": false}'
+```
+
+### `POST /api/users/reading-share/regenerate`
+Révoque le lien actuel et en génère un nouveau.
+```bash
+curl -X POST https://app.ndd.fr/api/users/reading-share/regenerate \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/users/valentine/quota`
 Quota de téléchargements Valentine restants. Utilise le compte personnel de l'utilisateur s'il en a configuré un (`source: "own"`), sinon le compte admin partagé (`source: "admin"`). Dans ce second cas, si une limite personnelle est configurée par un admin (`User.valentineDirectLimit`), la réponse inclut aussi `personalLimit: { limit, used, remaining, days }`, la part que cet utilisateur peut consommer sur le compte partagé, sur une fenêtre glissante de `days` jours.
 ```bash
@@ -379,6 +402,12 @@ curl "https://app.ndd.fr/api/reading?status=reading" \
   -H "Authorization: Bearer <token>"
 ```
 Paramètre optionnel : `status` (`to_read`, `reading`, `read`)
+
+### `GET /api/reading/public/:token`
+Bibliothèque en lecture seule via un lien de partage public (issue #39), **sans authentification**. 404 si le token est invalide ou si le partage a été désactivé. Toute la bibliothèque est exposée en bloc (pas de sélection livre par livre) ; `rating`/`notes` absents des livres si l'utilisateur a désactivé `includeNotes`. Token géré via `/api/users/reading-share`.
+```bash
+curl https://app.ndd.fr/api/reading/public/<token>
+```
 
 ### `GET /api/reading/export`
 Export CSV de la bibliothèque de lecture de l'utilisateur (titre, auteur, statut, note, date de lecture, notes personnelles, origine, date d'ajout).

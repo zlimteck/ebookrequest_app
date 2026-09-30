@@ -128,6 +128,13 @@ const userSchema = new mongoose.Schema({
     sparse: true,
     default: () => crypto.randomBytes(32).toString('hex'),
   },
+  readingShare: {
+    enabled: { type: Boolean, default: false },
+    // Généré à l'activation seulement (pas de default sur le schéma comme opdsToken,
+    // voir issue #39) : sparse+unique pour ne pas collisionner entre utilisateurs.
+    token: { type: String, default: null },
+    includeNotes: { type: Boolean, default: true },
+  },
   twoFactor: {
     enabled: { type: Boolean, default: false },
     secret: { type: String, select: false },
@@ -225,6 +232,7 @@ const userSchema = new mongoose.Schema({
 
 // Index pour les recherches par email
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
+userSchema.index({ 'readingShare.token': 1 }, { unique: true, sparse: true });
 
 // Middleware pour hacher le mot de passe avant de sauvegarder
 userSchema.pre('save', async function(next) {

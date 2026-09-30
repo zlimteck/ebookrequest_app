@@ -23,6 +23,7 @@ const ResetPassword = React.lazy(() => import('./pages/auth/ResetPassword'));
 const Register      = React.lazy(() => import('./pages/auth/Register'));
 const SetupPage     = React.lazy(() => import('./pages/auth/SetupPage'));
 const PrivacyPage   = React.lazy(() => import('./pages/PrivacyPage'));
+const PublicLibraryPage = React.lazy(() => import('./pages/PublicLibraryPage'));
 const TermsPage     = React.lazy(() => import('./pages/TermsPage'));
 import styles from './styles/Navbar.module.css';
 import axiosAdmin from './axiosAdmin';
@@ -152,6 +153,11 @@ function App() {
   const isSetupPage = location.pathname === '/setup';
   const isPrivacyPage = location.pathname === '/privacy';
   const isTermsPage = location.pathname === '/terms';
+  const isLibraryPage = location.pathname.startsWith('/library/');
+
+  if (isLibraryPage) {
+    return <Suspense fallback={null}><PublicLibraryPage /></Suspense>;
+  }
 
   if (isPrivacyPage) {
     return <Suspense fallback={null}><PrivacyPage /></Suspense>;

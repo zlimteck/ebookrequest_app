@@ -75,6 +75,8 @@ const UserSettings = () => {
   const [passwordStrength, setPasswordStrength] = useState(0);
 
   const [opdsUrl, setOpdsUrl] = useState('');
+  const [readingShare, setReadingShare] = useState({ enabled: false, includeNotes: true, url: null });
+  const [readingShareLoading, setReadingShareLoading] = useState(false);
   const [opdsLoading, setOpdsLoading] = useState(false);
 
   const [calibre, setCalibre] = useState({
@@ -176,6 +178,14 @@ const UserSettings = () => {
         // silencieux — l'utilisateur peut cliquer sur le bouton pour générer
       }
     };
+    const fetchReadingShare = async () => {
+      try {
+        const res = await axiosAdmin.get('/api/users/reading-share');
+        setReadingShare(res.data);
+      } catch {
+        // silencieux
+      }
+    };
     const fetchCalibreConfig = async () => {
       try {
         const res = await axiosAdmin.get('/api/users/calibre');
@@ -233,6 +243,7 @@ const UserSettings = () => {
     };
     fetchUserData();
     fetchOpdsToken();
+    fetchReadingShare();
     fetchCalibreConfig();
     fetchAppriseStatus();
     fetchValentineConfig();
@@ -537,7 +548,7 @@ const UserSettings = () => {
         setTimeout(() => {
           setCalibreSyncing(syncing => {
             if (!syncing) return syncing;
-            setCalibreSyncResult({ error: "Pas de réponse — la synchronisation a peut-être été interrompue côté serveur. Réessayez." });
+            setCalibreSyncResult({ error: "Pas de réponse : la synchronisation a peut-être été interrompue côté serveur. Réessayez." });
             return false;
           });
         }, 5 * 60 * 1000);
@@ -615,7 +626,7 @@ const UserSettings = () => {
   };
 
   const handleHardcoverImport = async () => {
-    if (!window.confirm('Importer votre bibliothèque Hardcover existante ? Seuls les livres absents de votre bibliothèque EbookRequest seront ajoutés — rien de déjà présent ne sera modifié.')) return;
+    if (!window.confirm('Importer votre bibliothèque Hardcover existante ? Seuls les livres absents de votre bibliothèque EbookRequest seront ajoutés, rien de déjà présent ne sera modifié.')) return;
     setHardcoverImporting(true);
     setHardcoverTestResult(null);
     try {
@@ -975,7 +986,7 @@ const UserSettings = () => {
               >
                 <span className={styles.themeOptionIcon}>{opt.icon}</span>
                 <span className={styles.themeOptionLabel}>
-                  {opt.label}{opt.desc && <span className={styles.themeOptionDesc}> — {opt.desc}</span>}
+                  {opt.label}{opt.desc && <span className={styles.themeOptionDesc}> : {opt.desc}</span>}
                 </span>
               </button>
             ))}
@@ -1398,6 +1409,98 @@ const UserSettings = () => {
 
         </div>
 
+        {/* ── Bibliothèque publique (issue #39) ── */}
+        <div className={styles.settingsCard}>
+          <h2 className={styles.sectionTitle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            Bibliothèque publique
+          </h2>
+
+          <div className={styles.toggleRow}>
+            <div className={styles.toggleInfo}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.toggleIcon}>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <div>
+                <p className={styles.toggleLabel}>Partager ma bibliothèque via un lien public</p>
+                <p className={styles.toggleDesc}>Toute la bibliothèque devient visible en lecture seule, sans compte requis</p>
+              </div>
+            </div>
+            <label className={styles.switch}>
+              <input type="checkbox" checked={readingShare.enabled} disabled={readingShareLoading}
+                onChange={async e => {
+                  setReadingShareLoading(true);
+                  try {
+                    const res = await axiosAdmin.put('/api/users/reading-share', { enabled: e.target.checked });
+                    setReadingShare(res.data);
+                  } catch { toast.error('Erreur lors de la mise à jour.'); }
+                  finally { setReadingShareLoading(false); }
+                }} />
+              <span className={styles.slider} />
+            </label>
+          </div>
+
+          {readingShare.enabled && (<>
+            <div className={styles.toggleRow} style={{ marginTop: '0.5rem' }}>
+              <div className={styles.toggleInfo}>
+                <div>
+                  <p className={styles.toggleLabel}>Inclure mes notes et avis</p>
+                  <p className={styles.toggleDesc}>Notes étoiles et notes libres visibles publiquement</p>
+                </div>
+              </div>
+              <label className={styles.switch}>
+                <input type="checkbox" checked={readingShare.includeNotes} disabled={readingShareLoading}
+                  onChange={async e => {
+                    setReadingShareLoading(true);
+                    try {
+                      const res = await axiosAdmin.put('/api/users/reading-share', { includeNotes: e.target.checked });
+                      setReadingShare(res.data);
+                    } catch { toast.error('Erreur lors de la mise à jour.'); }
+                    finally { setReadingShareLoading(false); }
+                  }} />
+                <span className={styles.slider} />
+              </label>
+            </div>
+
+            <div className={styles.fieldRow} style={{ marginTop: '0.75rem' }}>
+              <label className={styles.fieldLabel}>Lien de partage</label>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <input readOnly value={readingShare.url || 'Chargement…'}
+                  className={`${styles.fieldInput} ${styles.fieldInputDisabled}`}
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                  onFocus={e => e.target.select()} />
+                <button type="button" className={styles.btnOutline} disabled={!readingShare.url}
+                  onClick={() => { navigator.clipboard.writeText(readingShare.url); toast.success('Lien copié !'); }}
+                  style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+                <button type="button" className={styles.btnOutline} disabled={readingShareLoading}
+                  title="Générer un nouveau lien (révoque l'ancien)"
+                  onClick={async () => {
+                    setReadingShareLoading(true);
+                    try {
+                      const res = await axiosAdmin.post('/api/users/reading-share/regenerate');
+                      setReadingShare(prev => ({ ...prev, url: res.data.url }));
+                      toast.success('Nouveau lien généré, l\'ancien ne fonctionne plus.');
+                    } catch { toast.error('Erreur lors de la régénération.'); }
+                    finally { setReadingShareLoading(false); }
+                  }}
+                  style={{ padding: '0.4rem 0.6rem', flexShrink: 0 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </>)}
+        </div>
+
         {/* ── MCP ── */}
         {mcpInfo && mcpInfo.configured && (() => {
           const opdsToken = opdsUrl ? opdsUrl.substring(opdsUrl.lastIndexOf('/') + 1) : '';
@@ -1445,7 +1548,7 @@ const UserSettings = () => {
                   }} />
                 </span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                  {mcpInfo.online ? 'En ligne' : 'Hors ligne'} — Gérez vos demandes depuis n'importe quel client compatible MCP
+                  {mcpInfo.online ? 'En ligne' : 'Hors ligne'} : gérez vos demandes depuis n'importe quel client compatible MCP
                 </span>
               </div>
               <style>{`@keyframes mcp-ping { 75%,100% { transform: scale(2); opacity: 0; } }`}</style>
@@ -1504,7 +1607,7 @@ const UserSettings = () => {
               <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              Les clés Hardcover expirent après 1 an et sont réinitialisées chaque 1er janvier — pensez à la renouveler sur hardcover.app (dernier enregistrement : {new Date(hardcover.keyUpdatedAt).toLocaleDateString('fr-FR')}).
+              Les clés Hardcover expirent après 1 an et sont réinitialisées chaque 1er janvier, pensez à la renouveler sur hardcover.app (dernier enregistrement : {new Date(hardcover.keyUpdatedAt).toLocaleDateString('fr-FR')}).
             </p>
           )}
           <div className={styles.toggleRow} style={{ marginBottom: '0.75rem' }}>
@@ -1642,7 +1745,7 @@ const UserSettings = () => {
             <label className={styles.fieldLabel}>
               Type de serveur
               <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
-                Détecté automatiquement lors du test de connexion — forçable si besoin
+                Détecté automatiquement lors du test de connexion, forçable si besoin
               </span>
             </label>
             <select
@@ -1732,7 +1835,7 @@ const UserSettings = () => {
                 {calibreTestResult.connected
                   ? calibreTestResult.uploadAllowed === false
                     ? '⚠ Connecté mais permission "Upload books" manquante'
-                    : '✓ Connecté avec succès — upload autorisé'
+                    : '✓ Connecté avec succès : upload autorisé'
                   : `✗ ${calibreTestResult.error || 'Connexion échouée'}`}
               </p>
               {calibreTestResult.warning && (
@@ -1759,7 +1862,7 @@ const UserSettings = () => {
                   <>
                     Renvoyer les livres non complètement synchronisés (échecs d'upload ou d'étagère uniquement).
                     <span style={{ marginLeft: '0.3rem', opacity: 0.75 }}>
-                      — Dernière sync : {new Date(calibre.lastSync).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} à {new Date(calibre.lastSync).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      Dernière sync : {new Date(calibre.lastSync).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} à {new Date(calibre.lastSync).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </>
                 ) : (
@@ -1773,7 +1876,7 @@ const UserSettings = () => {
               </div>
               {calibreSyncing && !calibreSyncResult && (
                 <p style={{ marginTop: '0.5rem', fontSize: '0.83rem', color: 'var(--color-text-secondary)' }}>
-                  En cours en arrière-plan — peut prendre un moment par livre, tu peux continuer à utiliser l'app.
+                  En cours en arrière-plan, peut prendre un moment par livre, tu peux continuer à utiliser l'app.
                 </p>
               )}
               {calibreSyncResult && (

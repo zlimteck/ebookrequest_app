@@ -127,6 +127,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 **Bibliothèque & lecture**
 - Bibliothèque personnelle avec statut de lecture, notation par étoiles et notes libres
 - Tri par date, titre, auteur ou note, filtre par source (demandes / ajouts manuels)
+- **Partage public en lecture seule** (façon Letterboxd/Goodreads) : lien à activer dans les paramètres, toute la bibliothèque exposée en bloc, sans compte requis pour la consulter ; notes/avis personnels inclus ou non selon le choix de l'utilisateur, lien révocable à tout moment
 - **Synchronisation Hardcover :** (par utilisateur, clé API personnelle dans les paramètres, distincte de la clé Hardcover admin utilisée pour la recherche) :
   - Push automatique vers Hardcover à chaque changement de statut (à lire / en cours / lu, déduit du pourcentage de lecture) ou de note, à l'ajout d'un livre (manuel ou via une demande complétée)
   - Import initial de la bibliothèque Hardcover existante — n'ajoute que les livres absents côté EbookRequest, ne modifie jamais un livre déjà suivi
