@@ -8,6 +8,8 @@ import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/go
 import { fetchFromGoogle } from '../routes/googleBooks.js';
 import { cleanSeriesTitle, extractVolumeSubtitle, extractBareVolumeSubtitle } from '../utils/titleCleaning.js';
 import { authorMatchScore, titleMatchScore } from '../utils/textMatch.js';
+import { recordActivity } from '../services/streakService.js';
+import { getUserAchievements } from '../services/achievementsService.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
 import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback, logDownload, notifyCompletion } from '../services/connectorOrchestrator.js';
@@ -215,6 +217,13 @@ export const createBookRequest = async (req, res) => {
     });
 
     await newRequest.save();
+
+    // Gamification : série de jours consécutifs d'activité, best-effort.
+    recordActivity(user._id).catch(() => {});
+    // Notifie immédiatement un nouveau succès débloqué par cette création (plutôt que
+    // d'attendre la prochaine visite du profil) — recalcul normalement déclenché par
+    // GET /api/users/me/achievements, ici en best-effort pour les actions fréquentes.
+    getUserAchievements(user._id).catch(() => {});
 
     // Auto-ajouter à la liste de lecture de l'utilisateur
     try {

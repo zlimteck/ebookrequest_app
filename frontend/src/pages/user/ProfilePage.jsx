@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axiosAdmin from '../../axiosAdmin';
 import styles from './ProfilePage.module.css';
 import { getAvatarColor } from '../../utils/avatarColor';
-import AchievementsSection from './AchievementsSection';
+import AchievementsSection, { TIER_LABELS, TIER_CLASS } from './AchievementsSection';
 
 const ProfilePage = () => {
   const [data, setData] = useState(null);
@@ -82,9 +82,17 @@ const ProfilePage = () => {
             </div>
           )}
           <div className={styles.userInfo}>
-            <h1 className={styles.username}>{user.username}</h1>
+            <h1 className={styles.username}>
+              {user.username}
+              {achievements?.topTier && user.showProfileTitle !== false && (
+                <span className={`${styles.titleBadge} ${TIER_CLASS[achievements.topTier]}`}>{TIER_LABELS[achievements.topTier]}</span>
+              )}
+            </h1>
             <span className={styles.role}>{user.role === 'admin' ? 'Administrateur' : 'Utilisateur'}</span>
             <span className={styles.since}>Membre depuis {memberSince}</span>
+            {achievements?.streak?.current > 0 && (
+              <span className={styles.streakBadge}>🔥 {achievements.streak.current} jour{achievements.streak.current > 1 ? 's' : ''} de suite</span>
+            )}
           </div>
         </div>
       </div>

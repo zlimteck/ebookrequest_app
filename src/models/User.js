@@ -219,6 +219,16 @@ const userSchema = new mongoose.Schema({
   found404Unlocked: { type: Boolean, default: false },
   // Succès "Curieux de l'activité" — débloqué en visitant /activity une fois.
   activityVisitedUnlocked: { type: Boolean, default: false },
+  // Série de jours consécutifs d'activité (gamification) — voir src/services/streakService.js.
+  // `longest` est sticky, jamais décrémenté, sert de base au succès "Série d'activité".
+  activityStreak: {
+    current: { type: Number, default: 0 },
+    longest: { type: Number, default: 0 },
+    lastActiveDate: { type: String, default: null }, // 'YYYY-MM-DD'
+  },
+  // Affichage du titre cosmétique (palier de succès le plus prestigieux) à côté
+  // du pseudo sur le profil — activé par défaut, masquable dans les paramètres.
+  showProfileTitle: { type: Boolean, default: true },
   passkeys: [{
     credentialID: { type: String, required: true },
     credentialPublicKey: { type: String, required: true },

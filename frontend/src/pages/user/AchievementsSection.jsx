@@ -1,6 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import styles from './ProfilePage.module.css';
 import hardcoverLogo from '../../assets/icons/hardcover-mono.png';
+import { shareAchievementImage, TIER_HEX, GENERIC_ACCENT_HEX } from '../../utils/achievementShare';
+
+// Reconstruit l'icône React réellement utilisée dans l'app (ligne/pleine en SVG, logo
+// raster, ou texte comme "404") pour l'image de partage, plutôt qu'un emoji générique —
+// les SVG s'appuient sur des classes CSS (fill:none/stroke:currentColor) qui n'existent
+// pas hors du DOM de l'app, donc reteintées explicitement ici.
+function resolveShareIcon(icon, accentHex, filled) {
+  if (!React.isValidElement(icon)) return {};
+  // `icon` est souvent <Icon /> (élément dont le type est le composant, pas 'svg') —
+  // on rend le composant et on inspecte sa sortie, plutôt que de se fier à icon.type
+  // qui ne correspond qu'à un <svg> passé directement.
+  const markup = renderToStaticMarkup(icon);
+  if (markup.startsWith('<svg')) {
+    const presentation = filled
+      ? `fill="${accentHex}" stroke="none"`
+      : `fill="none" stroke="${accentHex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+    return { iconSvgMarkup: markup.replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" ${presentation} `) };
+  }
+  if (markup.startsWith('<img')) {
+    const src = markup.match(/src="([^"]+)"/)?.[1];
+    return src ? { iconImageSrc: src } : {};
+  }
+  const text = markup.replace(/<[^>]+>/g, '').trim();
+  return text ? { iconText: text } : {};
+}
+
+// Mêmes filtres duotone que .hardcoverImg.tierXxx (ProfilePage.module.css), dupliqués
+// ici pour l'image de partage (canvas, pas de CSS disponible).
+const HARDCOVER_TIER_FILTER = {
+  bronze: 'sepia(1) saturate(4) hue-rotate(-8deg) brightness(0.95)',
+  silver: 'none',
+  gold: 'sepia(1) saturate(4) hue-rotate(8deg) brightness(1.05)',
+  platinum: 'sepia(1) saturate(4) hue-rotate(150deg) brightness(1.05)',
+  diamond: 'sepia(1) saturate(4) hue-rotate(213deg) brightness(1)',
+  diamondBlue: 'sepia(1) saturate(4) hue-rotate(182deg) brightness(1)',
+  diamondRed: 'sepia(1) saturate(4) hue-rotate(325deg) brightness(1)',
+  diamondBlack: 'grayscale(1) brightness(0.75)',
+  legend: 'sepia(1) saturate(4) hue-rotate(253deg) brightness(1)',
+};
 
 // Recolore une image/silhouette monochrome via currentColor (masque CSS) — utilisé
 // uniquement pour Hardcover (raster), pas pour Apple : un masque sur fichier SVG
@@ -25,7 +65,7 @@ const AppleIcon = () => (
   </svg>
 );
 
-const TIER_CLASS = {
+export const TIER_CLASS = {
   bronze: styles.tierBronze,
   silver: styles.tierSilver,
   gold: styles.tierGold,
@@ -37,7 +77,7 @@ const TIER_CLASS = {
   legend: styles.tierLegend,
 };
 
-const TIER_LABELS = {
+export const TIER_LABELS = {
   bronze: 'Bronze',
   silver: 'Argent',
   gold: 'Or',
@@ -66,6 +106,9 @@ const EnvelopeIcon = () => (
 );
 const CalendarIcon = () => (
   <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+);
+const FlameIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
 );
 const ShelfIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M3 21V3M21 21V3M6 3v18M10 3v18M14 21l0-18 4 2v14" /></svg>
@@ -110,6 +153,7 @@ const ICONS = {
   connectors: PlugIcon,
   kindle: ReaderIcon,
   nightOwl: MoonIcon,
+  streak: FlameIcon,
 };
 
 function tierName(categoryId, threshold) {
@@ -125,13 +169,52 @@ function tierName(categoryId, threshold) {
       const years = threshold / 12;
       return `${years} an${years > 1 ? 's' : ''}`;
     }
+    case 'streak': return `${threshold} jours`;
     default: return `${threshold}`;
   }
 }
 
-function AchievementCard({ unlocked, tierClass, icon, tierLabel, name }) {
+const ShareOutIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+
+function AchievementCard({ unlocked, tierClass, icon, tierLabel, name, shareLabel, shareRank, accentHex, thresholdLabel, filledIcon, imageFilter }) {
+  const [sharing, setSharing] = useState(false);
+
+  const handleShare = async (e) => {
+    e.stopPropagation();
+    if (sharing) return;
+    setSharing(true);
+    const resolvedAccent = accentHex || GENERIC_ACCENT_HEX;
+    try {
+      const { iconSvgMarkup, iconImageSrc, iconText } = resolveShareIcon(icon, resolvedAccent, filledIcon);
+      await shareAchievementImage({
+        label: shareLabel || name,
+        tierLabel: shareRank || null,
+        accentHex: resolvedAccent,
+        thresholdLabel,
+        iconSvgMarkup,
+        iconImageSrc,
+        iconImageFilter: iconImageSrc ? imageFilter : undefined,
+        iconText,
+      });
+    } catch {
+      // partage annulé ou non supporté, pas d'erreur à afficher
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <div className={`${styles.achievementCard} ${unlocked ? tierClass : ''} ${unlocked ? '' : styles.locked}`}>
+      {unlocked && (
+        <button type="button" className={styles.shareBtn} onClick={handleShare} disabled={sharing} title="Partager ce succès">
+          <ShareOutIcon />
+        </button>
+      )}
       <div className={styles.achievementMedal}>
         <div className={styles.achievementIcon}>{icon}</div>
       </div>
@@ -160,6 +243,11 @@ function ProgressiveCategory({ id, label, tiers }) {
                 : Icon && <Icon />}
               tierLabel={tier.unlocked ? TIER_LABELS[tier.tier] : 'Verrouillé'}
               name={tierName(id, tier.threshold)}
+              shareLabel={label}
+              shareRank={TIER_LABELS[tier.tier]}
+              accentHex={TIER_HEX[tier.tier]}
+              thresholdLabel={`Palier ${tier.threshold}`}
+              imageFilter={id === 'hardcoverSync' ? HARDCOVER_TIER_FILTER[tier.tier] : undefined}
             />
           );
         })}
@@ -172,7 +260,7 @@ export default function AchievementsSection({ achievements }) {
   if (!achievements) return null;
   const byId = Object.fromEntries(achievements.categories.map(c => [c.id, c]));
 
-  const progressiveIds = ['requests', 'reading', 'aiBestseller', 'tenure', 'chatbot', 'calibreSync', 'hardcoverSync'];
+  const progressiveIds = ['requests', 'reading', 'aiBestseller', 'tenure', 'streak', 'chatbot', 'calibreSync', 'hardcoverSync'];
 
   return (
     <>
@@ -213,7 +301,7 @@ export default function AchievementsSection({ achievements }) {
           <p className={styles.achievementCategoryTitle}>App iOS</p>
         </div>
         <div className={styles.achievementsGrid}>
-          <AchievementCard unlocked={byId.iosConnected?.unlocked} tierClass={styles.tierAccent} icon={<AppleIcon />} tierLabel={byId.iosConnected?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Connecté via l'app iOS" />
+          <AchievementCard unlocked={byId.iosConnected?.unlocked} tierClass={styles.tierAccent} icon={<AppleIcon />} tierLabel={byId.iosConnected?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Connecté via l'app iOS" filledIcon />
           <AchievementCard unlocked={byId.iosAlpha?.unlocked} tierClass={styles.tierAccent} icon={<FlaskIcon />} tierLabel={byId.iosAlpha?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Participation à l'Alpha" />
           <AchievementCard unlocked={byId.easterEgg?.unlocked} tierClass={styles.tierAccent} icon={<EggIcon />} tierLabel={byId.easterEgg?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Easter egg" />
         </div>

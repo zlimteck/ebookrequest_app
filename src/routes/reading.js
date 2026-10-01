@@ -3,6 +3,8 @@ import ReadingList from '../models/ReadingList.js';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { syncReadingEntryToHardcover } from '../services/hardcoverSyncService.js';
+import { recordActivity } from '../services/streakService.js';
+import { getUserAchievements } from '../services/achievementsService.js';
 
 const router = express.Router();
 
@@ -131,6 +133,8 @@ router.post('/', requireAuth, async (req, res) => {
 
     // Synchro Hardcover en tâche de fond — ne doit jamais retarder/bloquer la réponse
     syncReadingEntryToHardcover(req.user.id, book).catch(() => {});
+    recordActivity(req.user.id).catch(() => {});
+    getUserAchievements(req.user.id).catch(() => {});
 
     res.status(201).json(book);
   } catch (error) {
@@ -159,6 +163,13 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (notes !== undefined) book.notes = notes.trim();
     if (thumbnail !== undefined) book.thumbnail = thumbnail;
     await book.save();
+
+    // Gamification : série de jours consécutifs d'activité, uniquement sur une
+    // activité de lecture réelle (statut ou progression), pas sur une simple note.
+    if (status !== undefined || readingProgress !== undefined) {
+      recordActivity(req.user.id).catch(() => {});
+      getUserAchievements(req.user.id).catch(() => {});
+    }
 
     // Synchro Hardcover : on attend le résultat (appel unique, rapide) pour pouvoir
     // informer l'utilisateur en cas d'échec, sans jamais faire échouer la requête.

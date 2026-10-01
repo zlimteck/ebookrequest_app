@@ -10,7 +10,7 @@ const User = mongoose.model('User');
 // Met à jour le profil utilisateur (email et préférences de notification)
 export const updateUserProfile = async (req, res) => {
   try {
-    const { email, notificationPreferences, kindleEmail } = req.body;
+    const { email, notificationPreferences, kindleEmail, showProfileTitle } = req.body;
     const updates = {};
     
     // Récupérer l'utilisateur complet pour avoir accès au nom d'utilisateur
@@ -69,6 +69,12 @@ export const updateUserProfile = async (req, res) => {
         return res.status(400).json({ error: 'L\'adresse Kindle doit être de la forme nom@kindle.com.' });
       }
       updates.kindleEmail = trimmed;
+    }
+
+    // Titre cosmétique (palier de succès le plus prestigieux) affiché à côté
+    // du pseudo sur le profil — masquable par l'utilisateur.
+    if (showProfileTitle !== undefined) {
+      updates.showProfileTitle = !!showProfileTitle;
     }
 
     // Mettre à jour les préférences de notification si fournies (deep merge par sous-objet)
@@ -185,7 +191,8 @@ export const getCurrentUser = async (req, res) => {
         avatar: user.avatar || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        twoFactor: { enabled: user.twoFactor?.enabled || false }
+        twoFactor: { enabled: user.twoFactor?.enabled || false },
+        showProfileTitle: user.showProfileTitle ?? true,
       }
     });
   } catch (error) {
@@ -223,7 +230,7 @@ export const getUserStats = async (req, res) => {
     const BookRequest = mongoose.model('BookRequest');
     const ReadingList = mongoose.model('ReadingList');
     const [user, total, pending, completed, canceled, reported, downloaded, calibreSynced, calibreFailed, hardcoverSynced, hardcoverFailed] = await Promise.all([
-      User.findById(req.user.id).select('username avatar role createdAt calibreWeb hardcover'),
+      User.findById(req.user.id).select('username avatar role createdAt calibreWeb hardcover showProfileTitle'),
       BookRequest.countDocuments({ user: req.user.id }),
       BookRequest.countDocuments({ user: req.user.id, status: 'pending' }),
       BookRequest.countDocuments({ user: req.user.id, status: 'completed' }),
@@ -238,7 +245,7 @@ export const getUserStats = async (req, res) => {
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     const calibreEnabled = user.calibreWeb?.enabled || false;
     const hardcoverEnabled = user.hardcover?.enabled || false;
-    const userPublic = { username: user.username, avatar: user.avatar, role: user.role, createdAt: user.createdAt };
+    const userPublic = { username: user.username, avatar: user.avatar, role: user.role, createdAt: user.createdAt, showProfileTitle: user.showProfileTitle ?? true };
     res.json({
       success: true,
       stats: { total, pending, completed, canceled, reported, downloaded, completionRate, calibreSynced, calibreFailed, hardcoverSynced, hardcoverFailed },

@@ -26,6 +26,8 @@ const SYNC_THRESHOLDS = [10, 20, 50, 100, 200, 500, 1000, 2500, 5000];
 // Ancienneté exprimée en mois (3 mois, 6 mois, 1/2/4/6/8/10/15 ans)
 const TENURE_MONTHS_THRESHOLDS = [3, 6, 12, 24, 48, 72, 96, 120, 180];
 const CHATBOT_THRESHOLDS = [5, 20, 50, 100, 200, 500, 1000, 2500, 5000];
+// Série de jours consécutifs d'activité, en jours — voir streakService.js.
+const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 90, 180, 365, 730];
 
 // Connecteurs distincts nécessaires pour le succès "polyglotte" — LibGen est tracé
 // séparément d'Anna's Archive depuis l'ajout du champ dédié (voir issue #41).
@@ -51,6 +53,7 @@ function tierName(categoryId, threshold) {
       const years = threshold / 12;
       return `${years} an${years > 1 ? 's' : ''}`;
     }
+    case 'streak': return `${threshold} jours`;
     default: return `${threshold}`;
   }
 }
@@ -70,7 +73,7 @@ export async function getUserAchievements(userId) {
   const Notification = mongoose.model('Notification');
   const { decrypt } = await import('./cryptoService.js');
 
-  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked activityVisitedUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent readingShare');
+  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked activityVisitedUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent readingShare activityStreak');
   if (!user) return null;
 
   const [
@@ -159,6 +162,12 @@ export async function getUserAchievements(userId) {
         label: 'Ancienneté',
         count: tenureMonths,
         tiers: buildTiers(TENURE_MONTHS_THRESHOLDS, tenureMonths),
+      },
+      {
+        id: 'streak',
+        label: 'Série d\'activité',
+        count: user.activityStreak?.longest || 0,
+        tiers: buildTiers(STREAK_THRESHOLDS, user.activityStreak?.longest || 0),
       },
       {
         id: 'chatbot',
@@ -297,5 +306,24 @@ export async function getUserAchievements(userId) {
     }
   }
 
-  return { categories, summary: { unlocked, total } };
+  // Titre cosmétique : palier le plus prestigieux débloqué, tous critères confondus
+  // (ex. "legend" si au moins une catégorie progressive a atteint 9 paliers) —
+  // purement dérivé, aucune donnée stockée, affiché à côté du pseudo sur le profil.
+  let topTierIndex = -1;
+  for (const cat of categories) {
+    if (!cat.tiers) continue;
+    for (const tier of cat.tiers) {
+      if (!tier.unlocked) continue;
+      const idx = TIER_COLORS.indexOf(tier.tier);
+      if (idx > topTierIndex) topTierIndex = idx;
+    }
+  }
+  const topTier = topTierIndex >= 0 ? TIER_COLORS[topTierIndex] : null;
+
+  return {
+    categories,
+    summary: { unlocked, total },
+    streak: { current: user.activityStreak?.current || 0, longest: user.activityStreak?.longest || 0 },
+    topTier,
+  };
 }

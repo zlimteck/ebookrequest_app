@@ -82,7 +82,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 **Téléchargement**
 - Téléchargement automatique via V, avec repli Fourtoutici puis Anna's Archive puis LibGen
 - Recherche manuelle sur les connecteurs depuis le panel admin une section par source (V, Fourtoutici, Anna's Archive, LibGen), interrogées en parallèle
-- **Fourtoutici :** site communautaire francophone sans ordre fiable titre/auteur dans ses noms de fichiers — désambiguïsation automatique en plusieurs niveaux (règle des articles, vérification croisée Google Books, repli local), avec bouton d'inversion manuelle en dernier recours si le résultat reste incorrect
+- **Fourtoutici :** site communautaire francophone sans ordre fiable titre/auteur dans ses noms de fichiers, désambiguïsation automatique en plusieurs niveaux (règle des articles, vérification croisée Google Books, repli local), avec bouton d'inversion manuelle en dernier recours si le résultat reste incorrect
 - Si aucune source n'aboutit, la demande est marquée « traitement manuel » côté utilisateur (mise à jour en direct via WebSocket) et les admins sont notifiés
 - Envoi automatique du fichier vers Calibre-Web à la complétion d'une demande
 - Synchronisation automatique de l'étagère Kobo dans Calibre-Web (le livre apparaît directement sur la liseuse)
@@ -113,7 +113,8 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Réinitialisation de mot de passe par email
 - Gestion des utilisateurs (rôles, quotas, activation/désactivation)
 - Catalogue OPDS pour accès depuis les liseuses (Calibre, KOReader…)
-- Succès/badges sur le profil (requêtes, lecture, discussions IA, ancienneté, connecteurs utilisés…), notification à chaque déblocage
+- Succès/badges sur le profil (requêtes, lecture, discussions IA, ancienneté, série d'activité, connecteurs utilisés…), notification à chaque déblocage
+- Série de jours consécutifs d'activité et titre cosmétique affiché à côté du pseudo selon le palier de succès le plus prestigieux débloqué, masquable dans Paramètres
 - **Flux d'activité de l'instance :** page dédiée listant les dernières demandes complétées (couverture, titre, auteur), entièrement anonymisée (aucun nom d'utilisateur affiché) ; statistiques (total, complétions du mois, meilleur mois), répartition par catégorie et auto/manuel, tendance sur 30 jours, filtre par catégorie ; désactivable par un admin dans **Réglages**
 
 **Notifications**
@@ -130,7 +131,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Partage public en lecture seule** (façon Letterboxd/Goodreads) : lien à activer dans les paramètres, toute la bibliothèque exposée en bloc, sans compte requis pour la consulter ; notes/avis personnels inclus ou non selon le choix de l'utilisateur, lien révocable à tout moment
 - **Synchronisation Hardcover :** (par utilisateur, clé API personnelle dans les paramètres, distincte de la clé Hardcover admin utilisée pour la recherche) :
   - Push automatique vers Hardcover à chaque changement de statut (à lire / en cours / lu, déduit du pourcentage de lecture) ou de note, à l'ajout d'un livre (manuel ou via une demande complétée)
-  - Import initial de la bibliothèque Hardcover existante — n'ajoute que les livres absents côté EbookRequest, ne modifie jamais un livre déjà suivi
+  - Import initial de la bibliothèque Hardcover existante : n'ajoute que les livres absents côté EbookRequest, ne modifie jamais un livre déjà suivi
   - Badge de statut (✓/✗) sur chaque livre, bouton « Synchroniser maintenant », et cron de rattrapage quotidien en filet de sécurité
 - Visionneuse in-browser sans installation :
   - **PDF :** viewer natif du navigateur
@@ -181,7 +182,7 @@ Une app iOS native existe pour EbookRequest, distribuée en IPA non signée via 
 
 Installation nécessaire :
 - Une app de sideloading compatible AltStore (AltStore Classic, AltStore PAL, SideStore...).
-- Un compte Apple Developer payant (99 $/an) **ou** un certificat de signature `.p12` valide, pour signer et installer l'IPA — une IPA non signée ne s'installe pas telle quelle sur iOS.
+- Un compte Apple Developer payant (99 $/an) **ou** un certificat de signature `.p12` valide, pour signer et installer l'IPA : une IPA non signée ne s'installe pas telle quelle sur iOS.
 
 ## API
 
@@ -237,7 +238,7 @@ services:
 
 > Les variables d'environnement sont lues depuis le fichier `.env` placé au même niveau que `docker-compose.yml`.
 >
-> À noter : **aucun solveur libre ne passe actuellement DDoS-Guard** (voir l'avertissement plus haut) —
+> À noter : **aucun solveur libre ne passe actuellement DDoS-Guard** (voir l'avertissement plus haut),
 > LibGen prend le relais pour la recherche et le téléchargement automatique dans tous les cas.
 
 ### Variables d'environnement
@@ -294,13 +295,13 @@ Générer les clés VAPID :
 npx web-push generate-vapid-keys
 ```
 
-**Notifications push natives (iOS/APNs) :** aucune variable d'environnement — configurable uniquement depuis **Admin → Réglages**, avec les secrets (clé `.p8` ou token de relais) chiffrés en base. Deux modes disponibles :
-- **Direct :** l'instance contacte directement Apple (APNs) avec sa propre clé `.p8`, Key ID et Team ID — nécessite un compte Apple Developer.
+**Notifications push natives (iOS/APNs) :** aucune variable d'environnement : configurable uniquement depuis **Admin → Réglages**, avec les secrets (clé `.p8` ou token de relais) chiffrés en base. Deux modes disponibles :
+- **Direct :** l'instance contacte directement Apple (APNs) avec sa propre clé `.p8`, Key ID et Team ID, nécessite un compte Apple Developer.
 - **Relais :** l'instance délègue l'envoi à un serveur relais externe (URL + token), sans avoir besoin de ses propres identifiants Apple.
 
 Dans les deux cas, la couverture est identique : tout utilisateur de l'instance ayant enregistré l'app iOS et accepté les notifications reçoit les pushs, seul le transport diffère.
 
-Le mode **Relais** existe pour les instances qui n'ont pas de compte Apple Developer : elles s'appuient sur un serveur intermédiaire qui détient les identifiants Apple et relaie les envois pour toutes les instances qui lui sont rattachées. Le code de ce relais est un projet séparé : [ebookrequest-apns-relay](https://github.com/zlimteck/ebookrequest-apns-relay). Une instance doit d'abord s'enregistrer auprès du relais (self-registration), puis être approuvée manuellement par l'administrateur du relais — cette approbation se fait depuis **Admin → Relais push** (URL du relais + `ADMIN_SECRET`, stockés uniquement dans le navigateur de l'admin), qui liste les demandes en attente et les instances déjà actives.
+Le mode **Relais** existe pour les instances qui n'ont pas de compte Apple Developer : elles s'appuient sur un serveur intermédiaire qui détient les identifiants Apple et relaie les envois pour toutes les instances qui lui sont rattachées. Le code de ce relais est un projet séparé : [ebookrequest-apns-relay](https://github.com/zlimteck/ebookrequest-apns-relay). Une instance doit d'abord s'enregistrer auprès du relais (self-registration), puis être approuvée manuellement par l'administrateur du relais : cette approbation se fait depuis **Admin → Relais push** (URL du relais + `ADMIN_SECRET`, stockés uniquement dans le navigateur de l'admin), qui liste les demandes en attente et les instances déjà actives.
 
 #### Intelligence artificielle
 

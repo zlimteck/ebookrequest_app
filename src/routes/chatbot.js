@@ -2,6 +2,7 @@ import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { isAIConfigured } from '../services/aiProviderService.js';
 import { chatWithTools, getRateLimitInfo, incrementUsage } from '../services/chatbotService.js';
+import { getUserAchievements } from '../services/achievementsService.js';
 import User from '../models/User.js';
 
 const router = express.Router();
@@ -50,7 +51,9 @@ router.post('/message', requireAuth, async (req, res) => {
     }
 
     incrementUsage(String(req.user.id));
-    User.updateOne({ _id: req.user.id }, { $inc: { chatbotMessagesSent: 1 } }).catch(() => {});
+    User.updateOne({ _id: req.user.id }, { $inc: { chatbotMessagesSent: 1 } })
+      .then(() => getUserAchievements(req.user.id).catch(() => {}))
+      .catch(() => {});
     const { remaining: updatedRemaining } = getRateLimitInfo(String(req.user.id), userLimit);
 
     const isAdmin = user.role === 'admin';

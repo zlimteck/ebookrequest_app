@@ -107,7 +107,7 @@ curl https://app.ndd.fr/api/users/me/stats \
 ```
 
 ### `GET /api/users/me/achievements`
-Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, discussions avec l'IA, 2FA, email vérifié, ancienneté, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit, page 404, app iOS, easter egg), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total } }`. Chaque catégorie progressive monte jusqu'à 9 paliers (`bronze/silver/gold/platinum/diamond/diamondBlue/diamondRed/diamondBlack/legend`). Recommandation IA/best-seller, discussions IA et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès). Notification cloche + push envoyée automatiquement à chaque nouveau succès détecté par cet appel.
+Succès/badges de l'utilisateur connecté (requêtes, lecture, recommandation IA/best-seller, discussions avec l'IA, 2FA, email vérifié, ancienneté, série d'activité, sync Calibre-Web/Hardcover, connecteurs utilisés, envoi Kindle, oiseau de nuit, page 404, bibliothèque partagée, visite de la page Activité, app iOS, easter egg), calculés à la volée depuis les données existantes. Réponse : `{ categories: [...], summary: { unlocked, total }, streak: { current, longest }, topTier }`. Chaque catégorie progressive monte jusqu'à 9 paliers (`bronze/silver/gold/platinum/diamond/diamondBlue/diamondRed/diamondBlack/legend`). `topTier` est le palier le plus prestigieux débloqué tous critères confondus (`null` si aucun), utilisé pour le titre cosmétique affiché sur le profil. Recommandation IA/best-seller, discussions IA et envoi Kindle ne sont pas rétroactifs (comptent uniquement l'activité postérieure à l'ajout de ces succès). Notification cloche + push envoyée automatiquement à chaque nouveau succès détecté par cet appel.
 ```bash
 curl https://app.ndd.fr/api/users/me/achievements \
   -H "Authorization: Bearer <token>"
@@ -144,6 +144,7 @@ curl -X DELETE https://app.ndd.fr/api/users/me \
 ```
 
 ### `PUT /api/users/profile`
+Accepte aussi `showProfileTitle` (bool) pour afficher ou masquer le titre cosmétique (palier de succès le plus prestigieux) à côté du pseudo sur le profil, activé par défaut.
 ```bash
 curl -X PUT https://app.ndd.fr/api/users/profile \
   -H "Authorization: Bearer <token>" \

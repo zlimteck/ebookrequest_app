@@ -71,6 +71,29 @@
   font-weight: 700;
   margin: 0;
   color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.titleBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--tier-color, var(--color-accent, #6366f1));
+}
+
+.streakBadge {
+  display: inline-block;
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f59e0b;
 }
 
 .role {
@@ -254,6 +277,7 @@
 }
 
 .achievementCard {
+  position: relative;
   background: var(--color-bg2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius, 8px);
@@ -264,6 +288,33 @@
   gap: 0.5rem;
   text-align: center;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shareBtn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.shareBtn:hover {
+  color: var(--tier-color, var(--color-accent));
+  border-color: var(--tier-color, var(--color-accent));
+}
+
+.shareBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .achievementCard:not(.locked):hover {
