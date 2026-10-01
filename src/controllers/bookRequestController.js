@@ -1508,6 +1508,20 @@ export const editUserRequest = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // Propage titre/auteur/couverture vers l'entrée Bibliothèque liée (ReadingList.requestId,
+    // rempli une seule fois à la création) — sinon une correction post-complétion (ex. titre/
+    // auteur inversés) ne se reflète jamais côté Bibliothèque. Best-effort, comme les
+    // ReadingList.create existants : ne doit jamais faire échouer la réponse.
+    if (updated.status === 'completed') {
+      const readingListUpdates = {};
+      if (title?.trim() && title.trim() !== request.title) readingListUpdates.title = updated.title;
+      if (author?.trim() && author.trim() !== request.author) readingListUpdates.author = updated.author;
+      if (thumbnail !== undefined && thumbnail !== request.thumbnail) readingListUpdates.thumbnail = updated.thumbnail;
+      if (Object.keys(readingListUpdates).length) {
+        ReadingList.updateOne({ requestId: updated._id }, { $set: readingListUpdates }).catch(() => {});
+      }
+    }
+
     res.json({ success: true, request: updated });
   } catch (error) {
     console.error('editUserRequest error:', error.message);
