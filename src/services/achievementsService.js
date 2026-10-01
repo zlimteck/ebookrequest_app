@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { FLAG_LABELS } from '../constants/flags.js';
 
 // Paliers réutilisés par plusieurs catégories progressives — identifiants distincts
 // même au-delà de "diamond" (jusqu'à 8 seuils sur Ancienneté), pour que chaque palier
@@ -73,7 +74,7 @@ export async function getUserAchievements(userId) {
   const Notification = mongoose.model('Notification');
   const { decrypt } = await import('./cryptoService.js');
 
-  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked activityVisitedUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent readingShare activityStreak');
+  const user = await User.findById(userId).select('username createdAt twoFactor emailVerified easterEggUnlocked found404Unlocked activityVisitedUnlocked iosConnectedUnlocked iosAlphaUnlocked unlockedAchievements chatbotMessagesSent readingShare activityStreak unlockedFlags');
   if (!user) return null;
 
   const [
@@ -320,10 +321,17 @@ export async function getUserAchievements(userId) {
   }
   const topTier = topTierIndex >= 0 ? TIER_COLORS[topTierIndex] : null;
 
+  // Flags secrets (mini-CTF, voir src/routes/flags.js) : volontairement hors de
+  // `categories`/`summary` (jamais de carte verrouillée, jamais compté dans le total)
+  // — un flag non trouvé n'existe tout simplement pas dans la réponse, seuls ceux déjà
+  // débloqués sont renvoyés.
+  const flags = (user.unlockedFlags || []).map(slug => ({ slug, label: FLAG_LABELS[slug] || slug }));
+
   return {
     categories,
     summary: { unlocked, total },
     streak: { current: user.activityStreak?.current || 0, longest: user.activityStreak?.longest || 0 },
     topTier,
+    flags,
   };
 }

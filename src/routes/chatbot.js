@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { isAIConfigured } from '../services/aiProviderService.js';
 import { chatWithTools, getRateLimitInfo, incrementUsage } from '../services/chatbotService.js';
 import { getUserAchievements } from '../services/achievementsService.js';
+import { unlockFlag } from '../services/flagService.js';
+import { FLAG_LABELS, SECRET_PHRASE } from '../constants/flags.js';
 import User from '../models/User.js';
 
 const router = express.Router();
@@ -28,7 +30,7 @@ router.post('/message', requireAuth, async (req, res) => {
   try {
     if (!(await isAIConfigured())) return res.status(503).json({ error: 'IA non configurée.' });
 
-    const user = await User.findById(req.user.id).select('chatbotEnabled chatbotDailyLimit role').lean();
+    const user = await User.findById(req.user.id).select('chatbotEnabled chatbotDailyLimit role unlockedFlags').lean();
     if (!user?.chatbotEnabled && user?.role !== 'admin') return res.status(403).json({ error: 'Accès au chatbot non autorisé.' });
 
     const userLimit = user.chatbotDailyLimit ?? 10;
@@ -46,8 +48,26 @@ router.post('/message', requireAuth, async (req, res) => {
       content: String(m.content || '').slice(0, 500),
     }));
 
-    if (!history[history.length - 1]?.content?.trim()) {
+    const lastMessage = history[history.length - 1]?.content?.trim();
+    if (!lastMessage) {
       return res.status(400).json({ error: 'Message vide.' });
+    }
+
+    // Flag secret caché dans le payload base64 de /api/flags/base64 (voir
+    // constants/flags.js) : glisser la bonne phrase dans un message chatbot débloque
+    // un second flag. Réponse custom plutôt que de laisser passer au modèle : le
+    // system prompt hors-sujet (SYSTEM_PROMPT dans chatbotService.js) répondrait sinon
+    // par le refus générique, aucune garantie que le modèle "joue le jeu" sinon. Ne
+    // compte pas dans le quota quotidien, pas d'appel IA pour ce tour.
+    // Prérequis : n'a d'effet que si le flag base64 a déjà été trouvé — quelqu'un qui
+    // tomberait sur la phrase sans être passé par là (partagée, devinée) ne doit rien
+    // débloquer et le message doit être traité normalement par le bot.
+    if (lastMessage.toLowerCase() === SECRET_PHRASE.toLowerCase() && user.unlockedFlags?.includes('base64')) {
+      unlockFlag(req.user.id, 'secretPhrase', FLAG_LABELS.secretPhrase).catch(() => {});
+      return res.json({
+        reply: "Bien joué, tu as déchiffré le base64 et compris où le coller. Flag débloqué : va checker ton profil.",
+        remaining,
+      });
     }
 
     incrementUsage(String(req.user.id));

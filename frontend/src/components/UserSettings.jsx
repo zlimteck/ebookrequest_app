@@ -1342,6 +1342,9 @@ const UserSettings = () => {
             );
           })()}
           <div className={styles.btnRowEnd}>
+            <a href="/docs/api" className={styles.btnOutline} style={{ textDecoration: 'none' }}>
+              Documentation API
+            </a>
             <button type="button" className={styles.btnOutline} onClick={handleRegenerateOpds} disabled={opdsLoading}>
               {opdsLoading ? 'Régénération…' : 'Régénérer le token'}
             </button>

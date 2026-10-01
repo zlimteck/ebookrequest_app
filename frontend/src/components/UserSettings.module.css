@@ -610,12 +610,15 @@ input:focus + .slider {
 }
 
 .btnOutline {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   padding: 0.55rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.2;
   background: none;
   border: 1px solid var(--color-accent);
   color: var(--color-accent);
@@ -682,6 +685,7 @@ input:focus + .slider {
 .btnRowEnd {
   display: flex;
   justify-content: flex-end;
+  gap: 0.6rem;
   margin-top: 1rem;
 }
 
@@ -731,7 +735,13 @@ input:focus + .slider {
   }
 
   .btnRowEnd {
+    flex-direction: column;
     justify-content: flex-start;
+  }
+
+  .btnRowEnd .btnOutline {
+    width: 100%;
+    justify-content: center;
   }
 }
 

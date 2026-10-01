@@ -110,6 +110,9 @@ const CalendarIcon = () => (
 const FlameIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
 );
+const FlagIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M4 22V4a1 1 0 0 1 1-1h13.5a.5.5 0 0 1 .4.8l-3.2 4.2 3.2 4.2a.5.5 0 0 1-.4.8H5" /></svg>
+);
 const ShelfIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M3 21V3M21 21V3M6 3v18M10 3v18M14 21l0-18 4 2v14" /></svg>
 );
@@ -306,6 +309,19 @@ export default function AchievementsSection({ achievements }) {
           <AchievementCard unlocked={byId.easterEgg?.unlocked} tierClass={styles.tierAccent} icon={<EggIcon />} tierLabel={byId.easterEgg?.unlocked ? 'Débloqué' : 'Verrouillé'} name="Easter egg" />
         </div>
       </div>
+
+      {achievements.flags?.length > 0 && (
+        <div className={styles.achievementCategory}>
+          <div className={styles.achievementCategoryHead}>
+            <p className={styles.achievementCategoryTitle}>Flags</p>
+          </div>
+          <div className={styles.achievementsGrid}>
+            {achievements.flags.map(f => (
+              <AchievementCard key={f.slug} unlocked tierClass={styles.tierAccent} icon={<FlagIcon />} tierLabel="Débloqué" name={f.label} />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

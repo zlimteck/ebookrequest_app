@@ -45,6 +45,8 @@ import searchRoutes from './routes/search.js';
 import chatbotRoutes from './routes/chatbot.js';
 import passkeyRoutes from './routes/passkey.js';
 import sessionsRoutes from './routes/sessions.js';
+import docsRoutes from './routes/docs.js';
+import flagsRoutes from './routes/flags.js';
 import activityTracker from './middleware/activityTracker.js';
 import { createRequire } from 'module';
 import { startValentineCron } from './services/valentineCron.js';
@@ -189,6 +191,8 @@ app.use('/api/search', searchRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/auth/passkey', passkeyRoutes);
 app.use('/api/sessions', sessionsRoutes);
+app.use('/api/docs', docsRoutes);
+app.use('/api/flags', flagsRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));

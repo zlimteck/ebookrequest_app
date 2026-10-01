@@ -186,7 +186,7 @@ Installation nécessaire :
 
 ## API
 
-La référence complète des endpoints REST avec exemples `curl` est disponible dans [`API.md`](API.md).
+La référence complète des endpoints REST avec exemples `curl` est disponible dans [`API.md`](API.md), aussi consultable depuis l'app (**Paramètres → Token d'accès**), filtrée selon le rôle de l'utilisateur connecté.
 
 ## Déploiement Docker
 

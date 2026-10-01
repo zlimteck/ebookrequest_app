@@ -1,11 +1,11 @@
-# EbookRequest — Référence API
+# EbookRequest : Référence API
 
 Toutes les routes sont préfixées par `/api`. L'authentification se fait via le header `Authorization: Bearer <token>`.
 
 Deux types de tokens sont acceptés :
 
-- **JWT** — obtenu via `/api/auth/login`. Expire après un certain délai.
-- **Token d'accès** — token personnel stable (sans expiration), visible dans **Paramètres → Token d'accès**. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, MCP, applications tierces).
+- **JWT** : obtenu via `/api/auth/login`. Expire après un certain délai.
+- **Token d'accès** : token personnel stable (sans expiration), visible dans **Paramètres → Token d'accès**. Utilisable comme Bearer sur toutes les routes authentifiées. Pratique pour les intégrations externes (scripts, raccourcis, MCP, applications tierces).
 
 ```bash
 curl https://app.ndd.fr/api/requests/quota \
@@ -23,7 +23,7 @@ curl -X POST https://app.ndd.fr/api/auth/login \
   -d '{"username": "alice", "password": "monmotdepasse"}'
 ```
 
-### `POST /api/auth/register`
+### `POST /api/auth/register` (admin)
 ```bash
 curl -X POST https://app.ndd.fr/api/auth/register \
   -H "Content-Type: application/json" \
@@ -61,20 +61,20 @@ curl -X POST https://app.ndd.fr/api/auth/2fa/verify-login \
   -d '{"tempToken": "<tempToken>", "code": "123456"}'
 ```
 
-### `POST /api/auth/2fa/recover` — Utiliser un code de récupération
+### `POST /api/auth/2fa/recover` : utiliser un code de récupération
 ```bash
 curl -X POST https://app.ndd.fr/api/auth/2fa/recover \
   -H "Content-Type: application/json" \
   -d '{"tempToken": "<tempToken>", "recoveryCode": "ABCD-EFGH"}'
 ```
 
-### `GET /api/auth/2fa/setup` — Obtenir le QR code (activation)
+### `GET /api/auth/2fa/setup` : obtenir le QR code (activation)
 ```bash
 curl https://app.ndd.fr/api/auth/2fa/setup \
   -H "Authorization: Bearer <token>"
 ```
 
-### `POST /api/auth/2fa/verify-setup` — Confirmer l'activation
+### `POST /api/auth/2fa/verify-setup` : confirmer l'activation
 ```bash
 curl -X POST https://app.ndd.fr/api/auth/2fa/verify-setup \
   -H "Authorization: Bearer <token>" \
@@ -113,14 +113,14 @@ curl https://app.ndd.fr/api/users/me/achievements \
   -H "Authorization: Bearer <token>"
 ```
 
-### `POST /api/users/me/achievements/easter-egg`
-Signale le déblocage du succès "Easter egg" (déclenché depuis l'app iOS). Idempotent, ne fait que passer le flag à `true` — la notification est envoyée au prochain appel de `GET /api/users/me/achievements`.
+### `POST /api/users/me/achievements/easter-egg` (admin)
+Signale le déblocage du succès "Easter egg" (déclenché depuis l'app iOS). Idempotent, ne fait que passer le flag à `true` : la notification est envoyée au prochain appel de `GET /api/users/me/achievements`.
 ```bash
 curl -X POST https://app.ndd.fr/api/users/me/achievements/easter-egg \
   -H "Authorization: Bearer <token>"
 ```
 
-### `POST /api/users/me/achievements/found-404`
+### `POST /api/users/me/achievements/found-404` (admin)
 Signale le déblocage du succès "Ta vu elle est belle ma 404" (page 404, web uniquement). Idempotent, même principe que l'easter egg.
 ```bash
 curl -X POST https://app.ndd.fr/api/users/me/achievements/found-404 \
@@ -219,7 +219,7 @@ curl https://app.ndd.fr/api/requests/quota \
 ```
 
 ### `POST /api/requests`
-Seuls `title` et `author` sont obligatoires — les autres champs (`link`, `thumbnail`, `description`, `pageCount`...) sont optionnels. `origin` (optionnel, `recommendation` ou `bestseller`) trace l'origine de la demande pour le succès "Recommandation IA & Best-seller" du Profil — absent ou vide pour une recherche/saisie manuelle classique.
+Seuls `title` et `author` sont obligatoires, les autres champs (`link`, `thumbnail`, `description`, `pageCount`...) sont optionnels. `origin` (optionnel, `recommendation` ou `bestseller`) trace l'origine de la demande pour le succès "Recommandation IA & Best-seller" du Profil, absent ou vide pour une recherche/saisie manuelle classique.
 ```bash
 curl -X POST https://app.ndd.fr/api/requests \
   -H "Authorization: Bearer <token>" \
@@ -456,7 +456,7 @@ curl -X POST https://app.ndd.fr/api/availability/check \
 
 ## Notifications
 
-Notification automatique "date de sortie atteinte" : quand `publishedDate` d'une demande encore en attente est dépassée, l'utilisateur est notifié par email (`notificationPreferences.email.bookReleased`), Apprise personnel (`notificationPreferences.apprise.notifyOnRelease`) et push (web/iOS, selon `notificationPreferences.push.enabled` — pas de préférence par type d'événement pour le push, seuls email et Apprise ont un interrupteur dédié), configurables via `PUT /api/users/profile`. Une seule notification par demande tous canaux confondus (`BookRequest.releaseNotifiedAt`), vérifiée toutes les 12h.
+Notification automatique "date de sortie atteinte" : quand `publishedDate` d'une demande encore en attente est dépassée, l'utilisateur est notifié par email (`notificationPreferences.email.bookReleased`), Apprise personnel (`notificationPreferences.apprise.notifyOnRelease`) et push (web/iOS, selon `notificationPreferences.push.enabled` : pas de préférence par type d'événement pour le push, seuls email et Apprise ont un interrupteur dédié), configurables via `PUT /api/users/profile`. Une seule notification par demande tous canaux confondus (`BookRequest.releaseNotifiedAt`), vérifiée toutes les 12h.
 
 ### `GET /api/notifications/history`
 ```bash
@@ -652,7 +652,7 @@ curl -X POST https://app.ndd.fr/api/users/hardcover/sync-now \
 ```
 
 ### `POST /api/users/hardcover/import`
-Importe la bibliothèque Hardcover existante — n'ajoute que les livres absents côté EbookRequest.
+Importe la bibliothèque Hardcover existante : n'ajoute que les livres absents côté EbookRequest.
 ```bash
 curl -X POST https://app.ndd.fr/api/users/hardcover/import \
   -H "Authorization: Bearer <token>"
@@ -660,7 +660,7 @@ curl -X POST https://app.ndd.fr/api/users/hardcover/import \
 
 ---
 
-## Apprise
+## Apprise (admin)
 
 Configuration globale, réservée aux admins.
 
@@ -713,14 +713,14 @@ curl https://app.ndd.fr/api/admin/health \
 ```
 
 ### `GET /api/admin/download-logs`
-Filtrable par `connector` (`valentine`, `annasarchive`, `libgen`, `fourtoutici`), `success` (`true`/`false`) et `searchMode` (`detailed`, `direct-valentine`, `direct-fourtoutici`, `admin-manual`) — ce dernier distingue le chemin de recherche ayant mené au téléchargement, indépendamment de `triggeredBy`. `libgen` distingue les téléchargements servis par le repli LibGen de ceux servis directement par Anna's Archive.
+Filtrable par `connector` (`valentine`, `annasarchive`, `libgen`, `fourtoutici`), `success` (`true`/`false`) et `searchMode` (`detailed`, `direct-valentine`, `direct-fourtoutici`, `admin-manual`), ce dernier distingue le chemin de recherche ayant mené au téléchargement, indépendamment de `triggeredBy`. `libgen` distingue les téléchargements servis par le repli LibGen de ceux servis directement par Anna's Archive.
 ```bash
 curl "https://app.ndd.fr/api/admin/download-logs?page=1&limit=50&searchMode=direct-valentine" \
   -H "Authorization: Bearer <token>"
 ```
 
 ### `GET /api/admin/files`
-Liste les fichiers de `uploads/books`, avec pour chacun les demandes (`BookRequest`) qui le référencent (`filePath` identique) — un même fichier peut être lié à plusieurs demandes (étagères additionnelles multi-utilisateurs).
+Liste les fichiers de `uploads/books`, avec pour chacun les demandes (`BookRequest`) qui le référencent (`filePath` identique) : un même fichier peut être lié à plusieurs demandes (étagères additionnelles multi-utilisateurs).
 ```bash
 curl https://app.ndd.fr/api/admin/files \
   -H "Authorization: Bearer <token>"
@@ -791,13 +791,13 @@ curl -X PATCH https://app.ndd.fr/api/requests/ID/download-link \
   -d '{"downloadLink": "https://exemple.fr/livre.epub"}'
 ```
 
-### `GET /api/admin/users` — Liste des utilisateurs
+### `GET /api/admin/users` : liste des utilisateurs
 ```bash
 curl https://app.ndd.fr/api/admin/users \
   -H "Authorization: Bearer <token>"
 ```
 
-### `POST /api/admin/users` — Créer un utilisateur
+### `POST /api/admin/users` : créer un utilisateur
 ```bash
 curl -X POST https://app.ndd.fr/api/admin/users \
   -H "Authorization: Bearer <token>" \
@@ -805,7 +805,7 @@ curl -X POST https://app.ndd.fr/api/admin/users \
   -d '{"username": "bob", "password": "pass", "email": "bob@exemple.fr", "role": "user"}'
 ```
 
-### `PUT /api/admin/users/:id` — Modifier un utilisateur
+### `PUT /api/admin/users/:id` : modifier un utilisateur
 `valentineDirectLimit`/`valentineDirectLimitDays` limitent la consommation de cet utilisateur sur le compte Valentine admin partagé (recherche directe), sans effet s'il a son propre compte Valentine. `emailSendLimit`/`emailSendLimitDays` limitent le nombre d'envois de livre par email (voir `POST /api/requests/:id/send-email`), jamais appliqué aux admins. `-1` = illimité dans les deux cas.
 ```bash
 curl -X PUT https://app.ndd.fr/api/admin/users/ID \
@@ -961,7 +961,7 @@ curl -X POST https://app.ndd.fr/api/connectors/predb/test \
 
 ## Réglages (admin)
 
-Config transverse (Google Books, Hardcover, IA, Email, RSS, Proxy sortant) — DB en priorité, repli sur `.env` avec migration automatique au premier `GET` si la variable correspondante existe déjà (sauf Hardcover, qui n'a pas de variable `.env` : désactivé par défaut, config uniquement en DB).
+Config transverse (Google Books, Hardcover, IA, Email, RSS, Proxy sortant) : DB en priorité, repli sur `.env` avec migration automatique au premier `GET` si la variable correspondante existe déjà (sauf Hardcover, qui n'a pas de variable `.env`, désactivé par défaut, config uniquement en DB).
 
 ### `GET /api/connectors/googlebooks`
 ```bash
@@ -1031,7 +1031,7 @@ curl -X POST https://app.ndd.fr/api/connectors/aiprovider/test \
 ```
 
 ### `POST /api/connectors/aiprovider/models`
-Liste les modèles réellement disponibles auprès du fournisseur (OpenAI ou Claude uniquement), en interrogeant directement leur API — jamais une liste figée côté app, pour rester à jour sans mise à jour du code à chaque nouveau modèle. Utilise la clé fournie, ou celle déjà enregistrée si absente/masquée.
+Liste les modèles réellement disponibles auprès du fournisseur (OpenAI ou Claude uniquement), en interrogeant directement leur API : jamais une liste figée côté app, pour rester à jour sans mise à jour du code à chaque nouveau modèle. Utilise la clé fournie, ou celle déjà enregistrée si absente/masquée.
 ```bash
 curl -X POST https://app.ndd.fr/api/connectors/aiprovider/models \
   -H "Authorization: Bearer <token>" \
@@ -1149,6 +1149,13 @@ curl https://app.ndd.fr/api/legal/privacy
 ### `GET /api/legal/terms`
 ```bash
 curl https://app.ndd.fr/api/legal/terms
+```
+
+### `GET /api/docs/api`
+Sert ce document (`API.md`, racine du repo), lu à chaque requête pour toujours refléter le fichier réellement déployé. Les sections admin (`Administration`, `Invitations`, `Connecteurs (admin)`, `Réglages (admin)`) et les routes marquées `(admin)` sont retirées de la réponse pour un utilisateur non-admin. Lien affiché dans **Paramètres → Token d'accès**. La page `/docs/api` ajoute un bouton "Tester cette route" sur chaque route `GET` sans paramètre d'URL, exécutée avec la session de l'utilisateur connecté.
+```bash
+curl https://app.ndd.fr/api/docs/api \
+  -H "Authorization: Bearer <token>"
 ```
 
 ---

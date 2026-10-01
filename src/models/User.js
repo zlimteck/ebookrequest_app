@@ -229,6 +229,9 @@ const userSchema = new mongoose.Schema({
   // Affichage du titre cosmétique (palier de succès le plus prestigieux) à côté
   // du pseudo sur le profil — activé par défaut, masquable dans les paramètres.
   showProfileTitle: { type: Boolean, default: true },
+  // Flags secrets (mini-CTF, voir src/routes/flags.js) — jamais documentés dans API.md,
+  // découverts uniquement en tentant des routes à la main. Slugs des flags trouvés.
+  unlockedFlags: { type: [String], default: [] },
   passkeys: [{
     credentialID: { type: String, required: true },
     credentialPublicKey: { type: String, required: true },

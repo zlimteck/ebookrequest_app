@@ -1,0 +1,181 @@
+.page {
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  background: var(--color-bg1);
+}
+
+.card {
+  width: 100%;
+  background: var(--color-bg2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.backBtn:hover {
+  color: var(--color-text);
+}
+
+.accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.accordionItem {
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  scroll-margin-top: 1rem;
+}
+
+.accordionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.accordionHeader:hover {
+  color: var(--color-accent);
+}
+
+.accordionBody {
+  padding: 0 1rem 1rem;
+}
+
+.markdown h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+.markdown h3 {
+  font-size: 0.95rem;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--color-text);
+}
+
+.markdown p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.markdown ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.markdown li {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.markdown strong {
+  color: var(--color-text);
+}
+
+.markdown code {
+  background: var(--color-bg3);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
+}
+
+.markdown a {
+  color: var(--color-accent);
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 2rem 0;
+}
+
+.codeBlock {
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1rem;
+  overflow-x: auto;
+}
+
+.codeBlock code {
+  background: none;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.testBlock {
+  margin: 0 0 1rem;
+}
+
+.testBtn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--color-bg3);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-accent);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.testBtn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.testBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.testResult {
+  margin-top: 0.6rem;
+}
+
+.testError code {
+  color: #ef4444;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 1.25rem 0.75rem;
+  }
+  .card {
+    padding: 1.25rem;
+  }
+}
