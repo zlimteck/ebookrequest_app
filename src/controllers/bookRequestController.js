@@ -739,6 +739,7 @@ export const applyMetadataCandidate = async (req, res) => {
     const volumeInfo = data?.volumeInfo;
     if (!volumeInfo) return res.status(404).json({ error: 'Métadonnée introuvable sur Google Books.' });
 
+    const previousThumbnail = request.thumbnail;
     if (volumeInfo.imageLinks?.thumbnail) {
       request.thumbnail = volumeInfo.imageLinks.thumbnail.replace('http://', 'https://');
     }
@@ -756,6 +757,14 @@ export const applyMetadataCandidate = async (req, res) => {
     }
 
     await request.save();
+
+    // Même propagation que editUserRequest (voir issue #40 / session du 1er octobre) :
+    // sans ça, une couverture récupérée via Google Books après complétion ne se
+    // reflète jamais côté Bibliothèque. Best-effort, ne doit jamais faire échouer la réponse.
+    if (request.status === 'completed' && request.thumbnail && request.thumbnail !== previousThumbnail) {
+      ReadingList.updateOne({ requestId: request._id }, { $set: { thumbnail: request.thumbnail } }).catch(() => {});
+    }
+
     res.json({ success: true, request: request.toObject() });
   } catch (error) {
     console.error('Erreur apply-metadata:', error);
