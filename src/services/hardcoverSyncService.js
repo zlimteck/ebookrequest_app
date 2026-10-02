@@ -82,12 +82,22 @@ async function upsertUserBook(apiKey, bookId, statusId, rating) {
   // Filtré aussi par user_id : sans ça, si l'API renvoie un user_book qui n'appartient
   // pas à l'appelant, la mutation update (scopée au propriétaire côté Hardcover) échoue
   // avec "Record not found" — vérifié en conditions réelles.
+  // `edition`/`user_book_reads` récupérés ici pour la progression (voir syncReadingProgress) :
+  // un seul aller-retour au lieu d'une requête séparée après coup.
   const existing = await graphql(apiKey, `
     query Existing($bookId: Int!, $userId: Int) {
-      user_books(where: { book_id: { _eq: $bookId }, user_id: { _eq: $userId } }, limit: 1) { id }
+      user_books(where: { book_id: { _eq: $bookId }, user_id: { _eq: $userId } }, limit: 1) {
+        id
+        edition { id pages }
+        user_book_reads(where: { finished_at: { _is_null: true } }, order_by: { started_at: desc }, limit: 1) {
+          id
+          started_at
+        }
+      }
     }
   `, { bookId, userId });
-  const existingId = existing?.user_books?.[0]?.id;
+  const existingBook = existing?.user_books?.[0];
+  const existingId = existingBook?.id;
 
   const object = { status_id: statusId, ...(rating > 0 && { rating }) };
 
@@ -109,6 +119,56 @@ async function upsertUserBook(apiKey, bookId, statusId, rating) {
   const payload = result?.update_user_book || result?.insert_user_book;
   if (payload?.error) throw new Error(`${payload.error} (bookId=${bookId}, existingId=${existingId ?? 'aucun'})`);
   if (!payload?.id) throw new Error(`Réponse Hardcover inattendue, aucun id retourné (bookId=${bookId}, existingId=${existingId ?? 'aucun'})`);
+
+  return {
+    userBookId: payload.id,
+    edition: existingBook?.edition || null,
+    activeRead: existingBook?.user_book_reads?.[0] || null,
+  };
+}
+
+// Pousse la progression de lecture (en pages, Hardcover n'a pas de champ pourcentage
+// direct : `progress` est calculé par eux à partir de `progress_pages`/`edition.pages`).
+// Repris du mécanisme de Calibre-Web-NextGen (mutations insert_user_book_read /
+// update_user_book_read, non documentées sur docs.hardcover.app mais confirmées dans
+// leur code source). Sans édition choisie côté Hardcover, le nombre de pages total est
+// inconnu : on ne peut alors pousser qu'un statut (déjà fait par upsertUserBook), pas
+// de progression chiffrée — ignoré silencieusement plutôt qu'une erreur bloquante.
+async function syncReadingProgress(apiKey, { userBookId, edition, activeRead }, progressPercent, isFinished) {
+  const pages = edition?.pages;
+  if (!pages) return;
+
+  const progressPages = Math.round(pages * (Math.min(100, Math.max(0, progressPercent)) / 100));
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (activeRead?.id) {
+    await graphql(apiKey, `
+      mutation ($readId: Int!, $pages: Int, $editionId: Int, $startedAt: date, $finishedAt: date) {
+        update_user_book_read(id: $readId, object: {
+          progress_pages: $pages,
+          edition_id: $editionId,
+          started_at: $startedAt,
+          finished_at: $finishedAt
+        }) { id }
+      }
+    `, {
+      readId: activeRead.id,
+      pages: progressPages,
+      editionId: edition.id,
+      startedAt: activeRead.started_at || today,
+      finishedAt: isFinished ? today : null,
+    });
+  } else {
+    await graphql(apiKey, `
+      mutation ($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
+        insert_user_book_read(user_book_id: $id, user_book_read: {
+          progress_pages: $pages,
+          edition_id: $editionId,
+          started_at: $startedAt
+        }) { error user_book_read { id } }
+      }
+    `, { id: userBookId, pages: progressPages, editionId: edition.id, startedAt: today });
+  }
 }
 
 /**
@@ -148,7 +208,14 @@ export async function syncReadingEntryToHardcover(userId, entry) {
     }
 
     const statusId = resolveStatusId(entry);
-    await upsertUserBook(apiKey, bookId, statusId, entry.rating);
+    const userBook = await upsertUserBook(apiKey, bookId, statusId, entry.rating);
+    // Progression en pages, best-effort : une erreur ici ne doit pas faire échouer la
+    // synchro du statut/note déjà réussie juste au-dessus.
+    try {
+      await syncReadingProgress(apiKey, userBook, entry.readingProgress || 0, statusId === 3);
+    } catch (progressErr) {
+      console.warn(`[HardcoverSync] Progression non synchronisée pour "${entry.title}":`, progressErr.message);
+    }
     console.log(`[HardcoverSync] "${entry.title}" synchronisé (book_id ${bookId}, status_id ${statusId})`);
     await persist('synced', null);
     return { attempted: true, success: true, error: null };

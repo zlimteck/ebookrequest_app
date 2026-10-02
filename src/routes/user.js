@@ -485,7 +485,7 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
       if (m) csrfToken = m[1];
     } catch {}
 
-    const calibreBookId = await resolveCalibreBookId(request, url, cfg.username, password);
+    const calibreBookId = await resolveCalibreBookId(request, url, cfg.username, password, { patient: true });
     if (!calibreBookId) {
       // Pas encore dans Calibre (ou plus : ID périmé) : upload complet au lieu
       // d'échouer, étagères demandées appliquées dans la foulée (pushToCalibre

@@ -388,7 +388,18 @@ export async function pushBookToUserShelves(targetUser, calibreBookId, desiredSh
  * titre) — partagé entre la vérification en direct et l'envoi a posteriori
  * (self-service et multi-utilisateurs).
  */
-export async function resolveCalibreBookId(request, url, username, password) {
+// (patch) : `patient` conditionne la patience de la recherche OPDS. À `false`
+// (défaut), une seule tentative sans attente — correct pour un simple affichage
+// (ex. "quelles étagères déjà ?") où rien de grave ne se passe si le livre est
+// encore en cours d'ingestion CWA, l'UI retombe juste sur "rien à afficher".
+// À `true`, patience identique à pushToCalibre (voir matchCalibreBookId) —
+// OBLIGATOIRE partout où un échec de résolution déclenche un ré-upload de
+// secours ("probablement pas encore dans Calibre, upload complet plutôt
+// qu'échouer") : avec une seule tentative instantanée, ce fallback se
+// déclenchait presque systématiquement sur une instance CWA (ingestion
+// asynchrone), créant des doublons "Unknown" dans la bibliothèque à chaque
+// action manuelle sur les étagères additionnelles lancée peu après l'upload.
+export async function resolveCalibreBookId(request, url, username, password, { patient = false } = {}) {
   let calibreBookId = request.calibrePush?.calibreBookId || null;
   if (!calibreBookId) {
     // Même logique que pushToCalibre : le titre "vérité terrain" est celui
@@ -402,9 +413,10 @@ export async function resolveCalibreBookId(request, url, username, password) {
       if (epubMeta?.title) searchTitle = epubMeta.title;
     }
 
-    calibreBookId = await matchCalibreBookId(url, username, password, searchTitle, { maxAttempts: 1 });
+    const attemptOpts = patient ? { maxAttempts: 6, retryDelayMs: 10000 } : { maxAttempts: 1 };
+    calibreBookId = await matchCalibreBookId(url, username, password, searchTitle, attemptOpts);
     if (!calibreBookId && searchTitle !== request.title) {
-      calibreBookId = await matchCalibreBookId(url, username, password, request.title, { maxAttempts: 1 });
+      calibreBookId = await matchCalibreBookId(url, username, password, request.title, attemptOpts);
     }
   }
   return calibreBookId;
@@ -418,7 +430,7 @@ export async function resolveCalibreBookId(request, url, username, password) {
  * pour retrouver a posteriori l'ID d'un livre dont on n'a pas encore la
  * référence stockée.
  */
-export async function matchCalibreBookId(url, username, password, bookTitle, { maxAttempts = 4, retryDelayMs = 8000 } = {}) {
+export async function matchCalibreBookId(url, username, password, bookTitle, { maxAttempts = 8, retryDelayMs = 12000 } = {}) {
   if (!bookTitle) return null;
 
   const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
@@ -647,8 +659,14 @@ export async function pushToCalibre(user, filePath, bookTitle, shelfNames) {
       } catch {}
     }
   } else {
-    console.log('[Calibre] CWA détecté — attente 8s puis recherche OPDS par titre...');
-    await new Promise(r => setTimeout(r, 8000));
+    // (patch) : 8s + 4 tentatives × 8s (~32s au total) s'est révélé systématiquement
+    // trop court en conditions réelles — le pipeline d'ingestion asynchrone de CWA
+    // (watcher + tentative de conversion, même quand elle échoue, + réindexation)
+    // dépasse largement ce budget sur des fichiers volumineux (constaté : budget
+    // épuisé pour des mangas même sans erreur de conversion). Budget élargi à
+    // ~10s + 7×12s ≈ 94s, toujours best-effort (l'upload lui-même a déjà réussi).
+    console.log('[Calibre] CWA détecté — attente 10s puis recherche OPDS par titre...');
+    await new Promise(r => setTimeout(r, 10000));
 
     // Le titre fourni par la source (Valentine, etc.) peut différer de ce que
     // Calibre-Web indexe réellement, qui lit les métadonnées embarquées dans

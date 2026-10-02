@@ -468,7 +468,7 @@ router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) =>
         if (!cfg?.enabled || !cfg?.url) continue;
         try {
           const password = decrypt(cfg.password || '') ?? cfg.password;
-          calibreBookId = await resolveCalibreBookId(request, cfg.url.replace(/\/$/, ''), cfg.username, password);
+          calibreBookId = await resolveCalibreBookId(request, cfg.url.replace(/\/$/, ''), cfg.username, password, { patient: true });
           if (calibreBookId) break;
         } catch {}
       }
