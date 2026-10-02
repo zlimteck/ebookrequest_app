@@ -2,6 +2,7 @@ import axios from 'axios';
 import User from '../models/User.js';
 import ReadingList from '../models/ReadingList.js';
 import { decrypt } from './cryptoService.js';
+import { titleMatchScore, authorMatchScore } from '../utils/textMatch.js';
 
 // Synchronise le statut de lecture / la note d'un livre vers la bibliothèque
 // personnelle Hardcover de l'utilisateur (clé API perso, distincte de celle
@@ -57,13 +58,31 @@ async function graphql(apiKey, query, variables) {
 // l'id réel en base, ce qui fait échouer les mutations user_book avec "Record not found"
 // — vérifié en conditions réelles. Le `slug`, lui, est un identifiant stable partagé
 // entre l'index de recherche et la table `books`.
-async function findHardcoverBookId(apiKey, { title }) {
+// (patch) : ne prenait que le tout premier résultat de recherche (per_page: 1),
+// sans jamais vérifier l'auteur — un titre identique ou très proche porté par un
+// autre livre (ex. un roman et son adaptation BD, par des auteurs différents)
+// pouvait donc matcher le mauvais livre silencieusement. On récupère maintenant
+// plusieurs candidats et on les classe par titre+auteur (mêmes scores que pour
+// le matching Google Books, voir textMatch.js), pour ne retenir que le meilleur.
+async function findHardcoverBookId(apiKey, { title, author }) {
   const searchData = await graphql(apiKey, `
     query Search($q: String!) {
-      search(query: $q, query_type: "Book", per_page: 1, page: 1) { results }
+      search(query: $q, query_type: "Book", per_page: 5, page: 1) { results }
     }
   `, { q: title.trim() });
-  const slug = searchData?.search?.results?.hits?.[0]?.document?.slug;
+  const hits = searchData?.search?.results?.hits || [];
+  if (!hits.length) return null;
+
+  const scored = hits
+    .map(h => h?.document)
+    .filter(Boolean)
+    .map(doc => ({
+      doc,
+      score: titleMatchScore([title], doc.title || '') * 2 + authorMatchScore(author, (doc.author_names || []).join(' ')),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const slug = scored[0]?.doc?.slug;
   if (!slug) return null;
 
   const data = await graphql(apiKey, `
@@ -199,7 +218,7 @@ export async function syncReadingEntryToHardcover(userId, entry) {
       return { attempted: false, success: false, error: null };
     }
 
-    const bookId = await findHardcoverBookId(apiKey, { title: entry.title });
+    const bookId = await findHardcoverBookId(apiKey, { title: entry.title, author: entry.author });
     if (!bookId) {
       const error = `Livre introuvable sur Hardcover pour "${entry.title}"`;
       console.warn(`[HardcoverSync] ${error}`);
