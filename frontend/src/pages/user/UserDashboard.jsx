@@ -297,9 +297,11 @@ const UserDashboard = () => {
     setShelfModalSaving(true);
     setShelfModalError('');
     try {
+      // Timeout par défaut (60s) trop court : la résolution de l'ID Calibre peut
+      // patienter jusqu'à ~1 min avant de conclure à un ré-upload côté backend.
       const res = await axiosAdmin.post(`/api/users/calibre/requests/${shelfModalRequest._id}/shelves`, {
         shelves: shelfModalSelection,
-      });
+      }, { timeout: 180000 });
 
       // Cibles additionnelles (admin) — on envoie une cible même à shelves
       // vides si elle avait une sélection précédente, pour permettre le retrait.
@@ -313,7 +315,10 @@ const UserDashboard = () => {
           }));
         if (extraTargets.length) {
           try {
-            const extraRes = await axiosAdmin.post(`/api/requests/${shelfModalRequest._id}/extra-shelves`, { targets: extraTargets });
+            // Timeout par défaut (60s) trop court : la résolution de l'ID Calibre peut
+            // patienter jusqu'à ~1 min avant de conclure à un ré-upload (voir
+            // resolveCalibreBookId côté backend), qui ajoute lui-même de l'attente.
+            const extraRes = await axiosAdmin.post(`/api/requests/${shelfModalRequest._id}/extra-shelves`, { targets: extraTargets }, { timeout: 180000 });
             extraResults = extraRes.data?.results || [];
           } catch (err) {
             toast.warning(err.response?.data?.error || 'Erreur lors de l\'envoi vers les étagères additionnelles');
@@ -358,9 +363,11 @@ const UserDashboard = () => {
     setShelfModalSendingOnly(true);
     setShelfModalError('');
     try {
+      // Timeout par défaut (60s) trop court : la résolution de l'ID Calibre peut
+      // patienter jusqu'à ~1 min avant de conclure à un ré-upload côté backend.
       const res = await axiosAdmin.post(`/api/users/calibre/requests/${shelfModalRequest._id}/shelves`, {
         shelves: shelfModalSelection,
-      });
+      }, { timeout: 180000 });
       setRequests(prev => prev.map(r => r._id === shelfModalRequest._id
         ? { ...r, selectedShelves: shelfModalSelection, calibrePush: { ...r.calibrePush, status: res.data.failed?.length ? 'partial' : 'success', calibreBookId: res.data.calibreBookId } }
         : r));
@@ -1592,9 +1599,6 @@ const UserDashboard = () => {
               className={styles.metadataFetchBtn}
               onClick={() => { const r = editModal; setEditModal(null); openMetadataPicker(r); }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
               Récupérer les métadonnées (couverture, description…)
             </button>
             <div className={styles.modalForm}>

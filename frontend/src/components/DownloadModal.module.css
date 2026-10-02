@@ -13,63 +13,35 @@
   background: var(--color-bg2, #1e293b);
   border: 1px solid var(--color-border, #2d3748);
   border-radius: 12px;
+  padding: 2rem;
   width: 100%;
-  max-width: 400px;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 440px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Header ── */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--color-border, #2d3748);
-  background: var(--color-bg, #0f172a);
-}
-
+/* ── Header : même convention que les autres modales (h2 plein, pas de barre
+   colorée ni de bouton de fermeture rond, voir "Modifier la demande") ── */
 .title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  margin: 0 0 0.5rem 0;
   color: var(--color-text, #f8fafc);
-}
-
-.closeBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  background: none;
-  border: 1px solid var(--color-border, #2d3748);
-  border-radius: 6px;
-  color: var(--color-text-muted, #94a3b8);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.closeBtn:hover {
-  border-color: var(--color-danger, #ef4444);
-  color: var(--color-danger, #ef4444);
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 /* ── Body ── */
 .body {
-  padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  margin-top: 1rem;
 }
 
 .bookTitle {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-text, #f8fafc);
-  margin: 0;
+  font-size: 0.95rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin: 0 0 1.5rem 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -79,7 +51,7 @@
   font-size: 0.8rem;
   color: var(--color-text-muted, #94a3b8);
   font-style: italic;
-  margin: 0.1rem 0 0;
+  margin: -1.25rem 0 1.5rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -283,7 +255,31 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Pied de modale : même convention que les autres (bouton Annuler à droite) ── */
+.modalButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.cancelBtn {
+  padding: 0.65rem 1.25rem;
+  background: none;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cancelBtn:hover {
+  border-color: var(--color-text-muted, #94a3b8);
+  color: var(--color-text, #f8fafc);
+}
+
 @media (max-width: 480px) {
   .overlay { padding: 0.5rem; }
-  .modal { max-width: 100%; }
+  .modal { max-width: 100%; padding: 1.5rem; }
 }

@@ -107,9 +107,11 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
     setSendingToCalibre(true);
     setError('');
     try {
+      // Timeout par défaut (60s) trop court : la résolution de l'ID Calibre peut
+      // patienter jusqu'à ~1 min avant de conclure à un ré-upload côté backend.
       const res = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, {
         shelves: selections[owner._id] || [],
-      });
+      }, { timeout: 180000 });
       setStatuses(prev => ({
         ...prev,
         [owner._id]: { status: res.data?.failed?.length ? 'partial' : 'success', error: res.data?.failed?.length ? `Échec sur : ${res.data.failed.map(f => f.name).join(', ')}` : null },
@@ -154,7 +156,7 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
       // pas depuis extraShelfTargets), désormais utilisable par un admin.
       if (includeOwner) {
         try {
-          const ownerRes = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, { shelves: ownerShelves });
+          const ownerRes = await axiosAdmin.post(`/api/users/calibre/requests/${request._id}/shelves`, { shelves: ownerShelves }, { timeout: 180000 });
           newStatuses[owner._id] = {
             status: ownerRes.data?.failed?.length ? 'partial' : 'success',
             error: ownerRes.data?.failed?.length
@@ -167,7 +169,10 @@ export default function ExtraShelvesModal({ request, onClose, onUpdated }) {
       }
 
       if (targets.length) {
-        const res = await axiosAdmin.post(`/api/requests/${request._id}/extra-shelves`, { targets });
+        // Timeout par défaut (60s) trop court : la résolution de l'ID Calibre peut
+        // patienter jusqu'à ~1 min avant de conclure à un ré-upload (voir
+        // resolveCalibreBookId côté backend), qui ajoute lui-même de l'attente.
+        const res = await axiosAdmin.post(`/api/requests/${request._id}/extra-shelves`, { targets }, { timeout: 180000 });
         (res.data?.results || []).forEach(r => {
           newStatuses[r.userId] = { status: r.status, error: r.error || null };
         });
