@@ -386,6 +386,16 @@
   object-fit: contain;
 }
 
+.calibreSyncBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 1rem;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+}
+
 /* Notes */
 /* Progression lecture sur carte */
 .cardProgress {

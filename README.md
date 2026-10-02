@@ -46,6 +46,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - [Variables d'environnement](#variables-denvironnement)
   - [Lancer l'application](#lancer-lapplication)
   - [Reverse proxy (HTTPS)](#reverse-proxy-https)
+  - [Cloudflare Tunnel et gros fichiers](#cloudflare-tunnel-et-gros-fichiers)
   - [Créer le compte administrateur](#créer-le-compte-administrateur)
   - [Mise à jour](#mise-à-jour)
   - [Accès OPDS](#accès-opds)
@@ -133,6 +134,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - Push automatique vers Hardcover à chaque changement de statut (à lire / en cours / lu, déduit du pourcentage de lecture) ou de note, à l'ajout d'un livre (manuel ou via une demande complétée)
   - Import initial de la bibliothèque Hardcover existante : n'ajoute que les livres absents côté EbookRequest, ne modifie jamais un livre déjà suivi
   - Badge de statut (✓/✗) sur chaque livre, bouton « Synchroniser maintenant », et cron de rattrapage quotidien en filet de sécurité
+- **Badge de statut Calibre-Web** sur chaque livre issu d'une demande (réussi / partiel si une étagère n'a pas pu être assignée / échec), reflet de l'envoi déjà effectué à la complétion de la demande
 - Visionneuse in-browser sans installation :
   - **PDF :** viewer natif du navigateur
   - **EPUB :** lecteur paginé avec réglage de la taille de police, mode nuit, barre de progression, swipe mobile et sauvegarde automatique de la position de lecture
@@ -163,6 +165,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Alertes de panne :** notification email + Apprise aux admins quand un service tombe, avec anti-spam de 24 h par service (activable par connecteur)
 - Traçabilité des changements de configuration (activation/désactivation d'un service) dans les logs admin
 - **Gestionnaire de fichiers :** lister, envoyer, renommer et supprimer les ebooks stockés sur le serveur, avec avertissement listant les demandes concernées avant toute suppression d'un fichier encore lié
+- **Upload en chunks :** les fichiers de plus de 80 Mo (envoi manuel sur une demande ou dans le gestionnaire de fichiers) sont automatiquement découpés et réassemblés côté serveur, pour contourner la limite de taille de payload d'un éventuel proxy devant l'instance (voir [Cloudflare Tunnel et gros fichiers](#cloudflare-tunnel-et-gros-fichiers))
 - **Recherche globale :** (`⌘K` / `Ctrl+K` ou barre dans le menu) résultats groupés par catégorie : demandes, bibliothèque, utilisateurs (admin)
 
 **Intégration (MCP)**
@@ -385,6 +388,33 @@ L'application est accessible sur le port défini dans `PORT` (défaut : `5001`).
 L'application écoute sur le port `5001` en HTTP. Pour l'exposer sur un domaine en HTTPS, place un reverse proxy devant (Nginx Proxy Manager, Traefik, Caddy…) qui redirige le trafic HTTPS vers `localhost:5001`.
 
 Pense à renseigner `FRONTEND_URL` avec ton URL publique pour que les liens dans les emails fonctionnent correctement.
+
+### Cloudflare Tunnel et gros fichiers
+
+Si l'application est exposée via un **Cloudflare Tunnel** (ou tout proxy Cloudflare), les requêtes qui transitent par leur edge sont plafonnées à **100 Mo** sur le plan gratuit (200 Mo sur Business, configurable en Enterprise), une limite de leur infrastructure, pas d'EbookRequest, et non contournable depuis le dashboard.
+
+- **Upload manuel d'un fichier** (panel admin, sur une demande ou dans le gestionnaire de fichiers) : contourné automatiquement par l'application au-delà de 80 Mo, qui bascule sur un envoi en plusieurs morceaux (chunks). Rien à configurer.
+- **Synchronisation vers Calibre-Web** : ce flux appelle directement la route d'upload native de Calibre-Web (`/upload`), qui ne sait pas recevoir un fichier en plusieurs morceaux : la limite s'applique donc telle quelle si l'URL Calibre-Web configurée passe par Cloudflare. Si Calibre-Web tourne sur la **même machine** (même si dans une stack Docker séparée), le plus simple est de relier les deux conteneurs à un réseau Docker partagé et d'utiliser le nom du conteneur Calibre-Web comme URL (`http://<nom-du-conteneur>:<port>`), pour que le trafic ne sorte jamais sur Cloudflare :
+
+  ```bash
+  docker network create shared-net
+  ```
+
+  Dans les deux `docker-compose.yml` (EbookRequest et Calibre-Web) :
+
+  ```yaml
+  services:
+    mon-service:
+      # ...
+      networks:
+        - shared-net
+
+  networks:
+    shared-net:
+      external: true
+  ```
+
+  Puis `docker compose up -d` sur les deux stacks, et renseigner `http://<nom-du-conteneur-calibre>:<port>` dans **Paramètres → Calibre-Web**. Si Calibre-Web est sur une autre machine, l'URL locale du serveur (`http://<ip-locale>:<port>`) fonctionne aussi tant que les deux sont sur le même réseau local.
 
 ### Créer le compte administrateur
 

@@ -433,6 +433,29 @@ export default function ReadingPage() {
                       )}
                     </span>
                   )}
+                  {book.requestId?.calibrePush?.status && (
+                    <span
+                      className={styles.calibreSyncBadge}
+                      title={
+                        book.requestId.calibrePush.status === 'success'
+                          ? 'Synchronisé avec Calibre-Web'
+                          : book.requestId.calibrePush.status === 'partial'
+                            ? `Synchronisé avec Calibre-Web (étagère non assignée) : ${book.requestId.calibrePush.error || 'erreur inconnue'}`
+                            : `Échec de synchro Calibre-Web : ${book.requestId.calibrePush.error || 'erreur inconnue'}`
+                      }
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                      </svg>
+                      {book.requestId.calibrePush.status === 'failed' ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      ) : book.requestId.calibrePush.status === 'partial' ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      ) : (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      )}
+                    </span>
+                  )}
                   <StarRating rating={book.rating || 0} bookId={book._id} onRate={handleRate} />
                 </div>
                 {/* Progression EPUB */}

@@ -22,6 +22,7 @@ function isKnownFormat(fmt) {
 
 import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
+import { shouldChunk, uploadFileChunked } from '../../utils/chunkedUpload';
 import styles from './AdminPage.module.css';
 import { toast } from 'react-toastify';
 import NotificationsConfig from '../../components/admin/NotificationsConfig';
@@ -446,30 +447,40 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
 
   const handleSaveDownloadLink = async (id, link, fileToUpload) => {
     try {
-      const formData = new FormData();
-      
-      if (fileToUpload) {
+      if (fileToUpload && shouldChunk(fileToUpload)) {
+        // Gros fichier : upload en chunks pour ne jamais dépasser la limite de payload
+        // d'un éventuel proxy devant l'instance (ex. Cloudflare), puis on référence le
+        // fichier déjà assemblé côté serveur comme un "fichier existant".
         setUploadingFile(true);
         setUploadProgress(0);
-        formData.append('file', fileToUpload);
-      } else if (link) {
-        formData.append('downloadLink', link);
+        const { filePath } = await uploadFileChunked(fileToUpload, { onProgress: setUploadProgress });
+        await axiosAdmin.patch(`/api/requests/${id}/download-link`, { existingFilePath: filePath });
       } else {
-        throw new Error('Un fichier ou un lien est requis');
-      }
-      
-      await axiosAdmin.patch(`/api/requests/${id}/download-link`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        onUploadProgress: (progressEvent) => {
-          if (fileToUpload) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(progress);
-          }
+        const formData = new FormData();
+
+        if (fileToUpload) {
+          setUploadingFile(true);
+          setUploadProgress(0);
+          formData.append('file', fileToUpload);
+        } else if (link) {
+          formData.append('downloadLink', link);
+        } else {
+          throw new Error('Un fichier ou un lien est requis');
         }
-      });
-      
+
+        await axiosAdmin.patch(`/api/requests/${id}/download-link`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: (progressEvent) => {
+            if (fileToUpload) {
+              const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(progress);
+            }
+          }
+        });
+      }
+
       setFile(null);
       setDownloadLink('');
       setEditingDownloadLink(null);

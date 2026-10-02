@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import axiosAdmin from '../../axiosAdmin';
+import { shouldChunk, uploadFileChunked } from '../../utils/chunkedUpload';
 import styles from './FileManagerPanel.module.css';
 
 const CheckIcon = () => (
@@ -56,6 +57,7 @@ export default function FileManagerPanel() {
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [renamingName, setRenamingName] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteModal, setDeleteModal] = useState(null); // { name, linkedRequests }
@@ -89,17 +91,25 @@ export default function FileManagerPanel() {
     if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      await axiosAdmin.post('/api/admin/files', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      if (shouldChunk(file)) {
+        // Gros fichier : upload en chunks pour contourner la limite de payload d'un
+        // éventuel proxy devant l'instance (ex. Cloudflare) — le fichier assemblé
+        // atterrit directement dans uploads/books, il suffit de rafraîchir la liste.
+        await uploadFileChunked(file, { onProgress: setUploadProgress });
+      } else {
+        const formData = new FormData();
+        formData.append('file', file);
+        await axiosAdmin.post('/api/admin/files', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
       showAlertMsg('success', 'Fichier envoyé avec succès.');
       await loadFiles();
     } catch (err) {
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de l\'envoi du fichier.');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -206,7 +216,7 @@ export default function FileManagerPanel() {
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
               {uploading ? (
-                <span className={styles.dropZoneText}>Envoi en cours…</span>
+                <span className={styles.dropZoneText}>Envoi en cours{uploadProgress > 0 ? ` (${uploadProgress}%)` : '…'}</span>
               ) : (
                 <>
                   <span className={styles.dropZoneText}>Glisser un fichier ici</span>

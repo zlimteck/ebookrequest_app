@@ -12,6 +12,30 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Formats acceptés, partagés avec l'upload chunké (src/services/chunkUploadService.js)
+// pour appliquer exactement la même whitelist.
+export const ALLOWED_UPLOAD_EXTS = [
+  // Ebooks
+  '.pdf', '.epub', '.mobi', '.azw', '.azw3', '.kfx',
+  // Archives pour BD/Comics
+  '.cbz', '.cbr', '.cb7', '.cbt', '.cba', '.djvu',
+  // Documents
+  '.doc', '.docx', '.txt', '.rtf', '.odt',
+  // Images pour BD/Comics
+  '.jpg', '.jpeg', '.png', '.webp', '.gif'
+];
+
+// Même logique de nom de fichier que multer ci-dessous, exportée pour que l'upload
+// chunké (fichier assemblé hors multer) produise des noms identiques/sans collision.
+export function sanitizeUploadFilename(originalName) {
+  const name = path.parse(originalName).name;
+  const ext = path.extname(originalName).toLowerCase();
+  const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  return `${safeName}-${Date.now()}${ext}`;
+}
+
+export const UPLOAD_DIR = uploadDir;
+
 // Configuration de multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -19,36 +43,18 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Conserver le nom de fichier original
-    const originalName = path.parse(file.originalname).name;
-    const ext = path.extname(file.originalname).toLowerCase();
-    // Remplacer les caractères spéciaux et espaces par des underscores
-    const safeName = originalName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    // Ajouter un timestamp pour éviter les conflits de noms
-    const uniqueSuffix = '-' + Date.now();
-    cb(null, safeName + uniqueSuffix + ext);
+    cb(null, sanitizeUploadFilename(file.originalname));
   }
 });
 
 // Filtre pour n'accepter que les fichiers autorisés
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    // Ebooks
-    '.pdf', '.epub', '.mobi', '.azw', '.azw3', '.kfx',
-    // Archives pour BD/Comics
-    '.cbz', '.cbr', '.cb7', '.cbt', '.cba', '.djvu',
-    // Documents
-    '.doc', '.docx', '.txt', '.rtf', '.odt',
-    // Images pour BD/Comics
-    '.jpg', '.jpeg', '.png', '.webp', '.gif'
-  ];
-  
   const ext = path.extname(file.originalname).toLowerCase();
-  
-  if (allowedTypes.includes(ext)) {
+
+  if (ALLOWED_UPLOAD_EXTS.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Type de fichier non autorisé. Formats acceptés : ${allowedTypes.join(', ')}`), false);
+    cb(new Error(`Type de fichier non autorisé. Formats acceptés : ${ALLOWED_UPLOAD_EXTS.join(', ')}`), false);
   }
 };
 

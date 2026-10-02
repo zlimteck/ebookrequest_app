@@ -402,7 +402,7 @@ curl -X POST "https://app.ndd.fr/api/requests/ID/convert?format=mobi" \
 curl "https://app.ndd.fr/api/reading?status=reading" \
   -H "Authorization: Bearer <token>"
 ```
-Paramètre optionnel : `status` (`to_read`, `reading`, `read`)
+Paramètre optionnel : `status` (`to_read`, `reading`, `read`). Pour les livres issus d'une demande, `requestId` est peuplé avec `downloadLink`, `filePath`, `status`, `author` et `calibrePush` (`{ status: null|'success'|'partial'|'failed', error, pushedAt }`), utilisé pour le badge de synchro Calibre-Web.
 
 ### `GET /api/reading/public/:token`
 Bibliothèque en lecture seule via un lien de partage public (issue #39), **sans authentification**. 404 si le token est invalide ou si le partage a été désactivé. Toute la bibliothèque est exposée en bloc (pas de sélection livre par livre) ; `rating`/`notes` absents des livres si l'utilisateur a désactivé `includeNotes`. Token géré via `/api/users/reading-share`.
@@ -750,6 +750,41 @@ curl -X DELETE https://app.ndd.fr/api/admin/files \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "livre.epub", "confirm": true}'
+```
+
+### `POST /api/admin/chunked-upload/init`
+Démarre un upload en chunks (fichiers volumineux, voir [Cloudflare Tunnel et gros fichiers](../README.md#cloudflare-tunnel-et-gros-fichiers) dans le README) : réserve un `uploadId` pour le nom de fichier donné.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/chunked-upload/init \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "manga-tome-1.cbz"}'
+```
+
+### `POST /api/admin/chunked-upload/chunk`
+Envoie un morceau du fichier (`multipart/form-data` : `chunk` binaire, `uploadId`, `index`), à répéter pour chaque chunk.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/chunked-upload/chunk \
+  -H "Authorization: Bearer <token>" \
+  -F "uploadId=<uploadId>" -F "index=0" -F "chunk=@/chemin/vers/chunk-0"
+```
+
+### `POST /api/admin/chunked-upload/finalize`
+Réassemble les chunks dans `uploads/books` une fois tous envoyés. Renvoie `{ filename, filePath }`, `filePath` étant ensuite utilisable comme `existingFilePath` sur `PATCH /api/requests/:id/download-link`, ou directement listé par `GET /api/admin/files`.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/chunked-upload/finalize \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"uploadId": "<uploadId>", "totalChunks": 8, "filename": "manga-tome-1.cbz"}'
+```
+
+### `POST /api/admin/chunked-upload/abort`
+Annule un upload en chunks et supprime les morceaux déjà reçus.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/chunked-upload/abort \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"uploadId": "<uploadId>"}'
 ```
 
 ### `GET /api/requests/all`

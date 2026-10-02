@@ -47,6 +47,7 @@ import passkeyRoutes from './routes/passkey.js';
 import sessionsRoutes from './routes/sessions.js';
 import docsRoutes from './routes/docs.js';
 import flagsRoutes from './routes/flags.js';
+import chunkedUploadRoutes from './routes/chunkedUpload.js';
 import activityTracker from './middleware/activityTracker.js';
 import { createRequire } from 'module';
 import { startValentineCron } from './services/valentineCron.js';
@@ -193,6 +194,7 @@ app.use('/api/auth/passkey', passkeyRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/flags', flagsRoutes);
+app.use('/api/admin/chunked-upload', chunkedUploadRoutes);
 
 // Route de santé + version
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: APP_VERSION }));
@@ -284,6 +286,9 @@ connectMongoWithRetry()
   initSocket(httpServer);
   httpServer.listen(PORT, () => {
     console.log(`Serveur backend lancé sur le port ${PORT}`);
+
+    // Nettoyage des chunks d'upload abandonnés (voir chunkUploadService.js) — best-effort.
+    import('./services/chunkUploadService.js').then(({ cleanupStaleUploads }) => cleanupStaleUploads()).catch(() => {});
 
     // (patch perf) Préchargement au démarrage rendu optionnel — coûtait jusqu'à
     // ~70 appels Google Books (7 catégories × jusqu'à 10 livres) à CHAQUE

@@ -47,7 +47,7 @@ router.get('/', requireAuth, async (req, res) => {
     if (status && status !== 'all') filter.status = status;
 
     const books = await ReadingList.find(filter)
-      .populate('requestId', 'downloadLink filePath status author')
+      .populate('requestId', 'downloadLink filePath status author calibrePush')
       .sort({ createdAt: -1 });
     res.json(books);
   } catch (error) {
