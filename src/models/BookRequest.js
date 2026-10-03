@@ -23,10 +23,17 @@ const bookRequestSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
-  link: { 
-    type: String, 
+  link: {
+    type: String,
     default: ''
   },
+  // URL de la fiche connecteur (Valentine/Fourtoutici) quand la demande vient de la
+  // recherche directe (bypass Google Books) — distincte de `link`, qui ne doit
+  // contenir QUE le lien Google Books, jamais écrasé par la recherche directe.
+  // Voir directDownloadRequest : auparavant `link` recevait l'URL Valentine, ce qui
+  // cassait le lien "Voir sur Google Books" pour ces demandes.
+  sourceLink: { type: String, default: '' },
+  sourceConnector: { type: String, enum: ['', 'valentine', 'fourtoutici'], default: '' },
   thumbnail: {
     type: String,
     default: ''

@@ -498,7 +498,11 @@ export const directDownloadRequest = async (req, res) => {
       ...(submittedByAdmin && { submittedByAdmin }),
       author,
       title,
-      link: link || '',
+      // `link` reste vide ici (pas de Google Books dans ce flux) : rempli plus tard
+      // par applyMetadataCandidate si l'admin/l'utilisateur récupère les métadonnées.
+      // L'URL de la fiche connecteur va dans sourceLink, jamais dans `link`.
+      sourceLink: link || '',
+      sourceConnector: isFourtoutici ? 'fourtoutici' : 'valentine',
       publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),

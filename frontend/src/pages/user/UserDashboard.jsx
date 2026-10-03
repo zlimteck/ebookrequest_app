@@ -12,6 +12,7 @@ import DownloadModal from '../../components/DownloadModal';
 import SendEmailModal from '../../components/SendEmailModal';
 import CommentThread from '../../components/CommentThread';
 import { compressImage, isImage } from '../../utils/imageCompressor';
+import { infoLinkSourceLabel, buildGoogleBooksLink } from '../../utils/infoLinkSource';
 
 function frToIso(str) {
   const s = (str || '').trim();
@@ -26,6 +27,36 @@ function isoToFr(str) {
   if (parts.length === 1) return parts[0];
   if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+// Détermine le lien "en savoir plus" à afficher côté utilisateur : Valentine/
+// Fourtoutici uniquement si pertinent (Valentine seulement si l'utilisateur a
+// un compte perso configuré, sinon il ne peut rien y faire — sauf un admin,
+// qui voit toujours tout, compte perso ou pas : le compte "admin partagé" est
+// potentiellement le sien), sinon le lien Google Books/Hardcover/Open Library.
+function getUserInfoLink(request, hasValentineAccount, isAdmin) {
+  if (request.sourceConnector === 'fourtoutici' && request.sourceLink) {
+    return { url: request.sourceLink, label: 'Fourtoutici' };
+  }
+  if (request.sourceConnector === 'valentine' && request.sourceLink && (hasValentineAccount || isAdmin)) {
+    return { url: request.sourceLink, label: 'Valentine' };
+  }
+  if (request.link) {
+    return { url: request.link, label: infoLinkSourceLabel(request.link) };
+  }
+  // Demande directe Valentine sans compte perso, sans lien Google Books
+  // récupéré encore : plutôt que rien, une recherche Google Books.
+  return { url: buildGoogleBooksLink(request), label: 'Google Books' };
+}
+
+// Même filtrage que getUserInfoLink, mais pour l'objet passé à BookPreviewModal
+// (partagé avec AdminPage, qui lui affiche sourceLink sans restriction) — on
+// retire sourceLink/sourceConnector si l'utilisateur ne doit pas les voir.
+function toPreviewBook(request, hasValentineAccount, isAdmin) {
+  const canSeeSource = request.sourceConnector === 'fourtoutici'
+    || (request.sourceConnector === 'valentine' && (hasValentineAccount || isAdmin));
+  if (canSeeSource) return request;
+  return { ...request, sourceLink: '', sourceConnector: '' };
 }
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
@@ -121,6 +152,7 @@ const UserDashboard = () => {
   const [editForm, setEditForm]     = useState({ title: '', author: '', format: '', link: '', publishedDate: '', thumbnail: '', description: '', pageCount: '', category: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [calibreEnabled, setCalibreEnabled] = useState(false);
+  const [hasValentineAccount, setHasValentineAccount] = useState(false);
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
   const [shelfModalRequest, setShelfModalRequest] = useState(null); // request object
   const [shelfModalSelection, setShelfModalSelection] = useState([]);
@@ -676,6 +708,9 @@ const UserDashboard = () => {
   useEffect(() => {
     fetchCalibreConfig();
     if (isAdmin) fetchShelfTargets();
+    axiosAdmin.get('/api/users/me')
+      .then(res => setHasValentineAccount(Boolean(res.data?.user?.hasValentineAccount)))
+      .catch(() => setHasValentineAccount(false));
   }, []);
 
   useEffect(() => {
@@ -944,15 +979,15 @@ const UserDashboard = () => {
                         <td className={styles.tableTd} onClick={e => e.stopPropagation()}>
                           <div className={styles.actionIcons}>
                             {(request.thumbnail || request.description) && (
-                              <button className={styles.iconBtn} onClick={() => setPreviewBook(request)} title="Aperçu du livre">
+                              <button className={styles.iconBtn} onClick={() => setPreviewBook(toPreviewBook(request, hasValentineAccount, isAdmin))} title="Aperçu du livre">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                                 </svg>
                               </button>
                             )}
-                            {request.link && (
-                              <a href={request.link} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title="Voir plus d'informations">
+                            {getUserInfoLink(request, hasValentineAccount, isAdmin) && (
+                              <a href={getUserInfoLink(request, hasValentineAccount, isAdmin).url} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title={`Voir sur ${getUserInfoLink(request, hasValentineAccount, isAdmin).label}`}>
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                                   <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
@@ -1132,7 +1167,7 @@ const UserDashboard = () => {
               styles.cardPending
             }`}>
               {/* Cover sidebar */}
-              <div className={styles.bookCover} onClick={() => setPreviewBook(request)}>
+              <div className={styles.bookCover} onClick={() => setPreviewBook(toPreviewBook(request, hasValentineAccount, isAdmin))}>
                 {request.thumbnail ? (
                   <img
                     src={request.thumbnail}
@@ -1269,8 +1304,8 @@ const UserDashboard = () => {
                 {/* Action strip */}
                 <div className={styles.actionStrip}>
                   <ActionIconsScroll className={styles.actionIcons}>
-                    {request.link && (
-                      <a href={request.link} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title="Voir plus d'informations">
+                    {getUserInfoLink(request, hasValentineAccount, isAdmin) && (
+                      <a href={getUserInfoLink(request, hasValentineAccount, isAdmin).url} className={styles.iconBtn} target="_blank" rel="noopener noreferrer" title={`Voir sur ${getUserInfoLink(request, hasValentineAccount, isAdmin).label}`}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                           <polyline points="15 3 21 3 21 9"/>

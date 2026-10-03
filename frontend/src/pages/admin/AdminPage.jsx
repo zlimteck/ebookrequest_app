@@ -20,9 +20,11 @@ function isKnownFormat(fmt) {
   return fmt && KNOWN_FORMATS.has(fmt.toLowerCase().replace(/[^a-z0-9]/g, ''));
 }
 
+
 import { useSearchParams } from 'react-router-dom';
 import axiosAdmin from '../../axiosAdmin';
 import { shouldChunk, uploadFileChunked } from '../../utils/chunkedUpload';
+import { infoLinkSourceLabel } from '../../utils/infoLinkSource';
 import styles from './AdminPage.module.css';
 import { toast } from 'react-toastify';
 import NotificationsConfig from '../../components/admin/NotificationsConfig';
@@ -1179,7 +1181,12 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                         <td className={styles.adminTd} onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                             {request.link && (
-                              <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.aIconBtn} title="Voir le livre">
+                              <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.aIconBtn} title={`Voir sur ${infoLinkSourceLabel(request.link)}`}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                              </a>
+                            )}
+                            {request.sourceLink && (
+                              <a href={request.sourceLink} target="_blank" rel="noopener noreferrer" className={styles.aIconBtn} title={`Voir sur ${request.sourceConnector === 'fourtoutici' ? 'Fourtoutici' : 'Valentine'}`}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                               </a>
                             )}
@@ -1543,7 +1550,12 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                       </span>
                     )}
                     {request.link && (
-                      <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.adminMetaLink} onClick={e => e.stopPropagation()} title="Voir le livre">
+                      <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.adminMetaLink} onClick={e => e.stopPropagation()} title={`Voir sur ${infoLinkSourceLabel(request.link)}`}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      </a>
+                    )}
+                    {request.sourceLink && (
+                      <a href={request.sourceLink} target="_blank" rel="noopener noreferrer" className={styles.adminMetaLink} onClick={e => e.stopPropagation()} title={`Voir sur ${request.sourceConnector === 'fourtoutici' ? 'Fourtoutici' : 'Valentine'}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                       </a>
                     )}

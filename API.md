@@ -285,7 +285,7 @@ curl "https://app.ndd.fr/api/requests/direct-search-books?type=author&url=/auteu
 ```
 
 ### `POST /api/requests/direct-download`
-Crée la demande et télécharge immédiatement le livre choisi (réponse synchrone), avec choix optionnel des étagères Calibre-Web cibles. Pour Valentine, utiliser `ebookId` ; pour Fourtoutici, ajouter `"source": "fourtoutici"` et utiliser `fileId` à la place.
+Crée la demande et télécharge immédiatement le livre choisi (réponse synchrone), avec choix optionnel des étagères Calibre-Web cibles. Pour Valentine, utiliser `ebookId` ; pour Fourtoutici, ajouter `"source": "fourtoutici"` et utiliser `fileId` à la place. Le champ `link` fourni (URL de la fiche Valentine/Fourtoutici) est stocké dans `sourceLink`/`sourceConnector`, jamais dans `link` (réservé au lien Google Books, rempli séparément si les métadonnées sont récupérées après coup) — évite qu'un lien "Voir sur Google Books" pointe en réalité vers le connecteur.
 ```bash
 curl -X POST https://app.ndd.fr/api/requests/direct-download \
   -H "Authorization: Bearer <token>" \

@@ -193,6 +193,7 @@ export const getCurrentUser = async (req, res) => {
         updatedAt: user.updatedAt,
         twoFactor: { enabled: user.twoFactor?.enabled || false },
         showProfileTitle: user.showProfileTitle ?? true,
+        hasValentineAccount: Boolean(user.valentine?.username),
       }
     });
   } catch (error) {

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import styles from './BookPreviewModal.module.css';
+import { infoLinkSourceLabel, buildGoogleBooksLink, buildHardcoverLink, isCoveredByDedicatedButton } from '../utils/infoLinkSource';
 
 const BookPreviewModal = ({ book, onClose }) => {
   useEffect(() => {
@@ -77,11 +78,22 @@ const BookPreviewModal = ({ book, onClose }) => {
             )}
 
             <div className={styles.actions}>
-              {book.link && (
-                <a href={book.link} target="_blank" rel="noopener noreferrer" className={styles.linkBtn}>
-                  Voir sur Google Books
+              {book.sourceLink && (
+                <a href={book.sourceLink} target="_blank" rel="noopener noreferrer" className={styles.linkBtn}>
+                  Voir sur {book.sourceConnector === 'fourtoutici' ? 'Fourtoutici' : 'Valentine'}
                 </a>
               )}
+              {book.link && !isCoveredByDedicatedButton(book.link) && (
+                <a href={book.link} target="_blank" rel="noopener noreferrer" className={styles.linkBtn}>
+                  Voir sur {infoLinkSourceLabel(book.link)}
+                </a>
+              )}
+              <a href={buildGoogleBooksLink(book)} target="_blank" rel="noopener noreferrer" className={styles.linkBtn}>
+                Voir sur Google Books
+              </a>
+              <a href={buildHardcoverLink(book)} target="_blank" rel="noopener noreferrer" className={styles.linkBtn}>
+                Voir sur Hardcover
+              </a>
             </div>
           </div>
         </div>
