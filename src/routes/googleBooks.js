@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { parseStringPromise } from 'xml2js';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
 import { getHardcoverApiKey, takeHardcoverQuota } from '../services/hardcoverConfig.js';
 import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
@@ -552,6 +553,48 @@ async function fetchFromOpenLibraryAuthor(author, limit = 40) {
   return [];
 }
 
+// ─── Résolution ISBN via la BNF (dernier recours) ─────────────────────────────
+// L'opérateur isbn: de Google Books (et les champs isbn_10/13 de Hardcover,
+// l'index Open Library) sont peu fiables sur les rééditions poche/Babelio
+// françaises — le livre existe bien chez Google Books, juste pas relié à cet
+// ISBN précis dans leur index. La BNF, elle, a quasiment tous les ISBN
+// français de façon fiable (dépôt légal). On s'en sert uniquement pour
+// retrouver titre/auteur, puis on relance une recherche titre classique
+// (qui elle fonctionne, voir le cas "Les feux de Cibola").
+const BNF_TIMEOUT = 8000;
+
+async function resolveIsbnViaBNF(isbn) {
+  return withRetry(async () => {
+    const res = await axiosGetWithProxy('https://catalogue.bnf.fr/api/SRU', {
+      params: {
+        version: '1.2',
+        operation: 'searchRetrieve',
+        query: `bib.isbn all "${isbn}"`,
+        recordSchema: 'unimarcxchange',
+        maximumRecords: 1,
+      },
+      timeout: BNF_TIMEOUT,
+      responseType: 'text',
+    }, `BNF ISBN "${isbn}"`);
+
+    const parsed = await parseStringPromise(res.data);
+    const record = parsed?.['srw:searchRetrieveResponse']?.['srw:records']?.[0]?.['srw:record']?.[0];
+    const fields = record?.['srw:recordData']?.[0]?.['mxc:record']?.[0]?.['mxc:datafield'] || [];
+
+    const titleField = fields.find(f => f.$.tag === '200');
+    const title = titleField?.['mxc:subfield']?.find(s => s.$.code === 'a')?._;
+    if (!title) return null;
+
+    const authorField = fields.find(f => f.$.tag === '700' || f.$.tag === '701');
+    const authorSubfields = authorField?.['mxc:subfield'] || [];
+    const authorB = authorSubfields.find(s => s.$.code === 'b')?._; // prénom
+    const authorA = authorSubfields.find(s => s.$.code === 'a')?._; // nom
+    const author = [authorB, authorA].filter(Boolean).join(' ');
+
+    return { title: title.trim(), author: author.trim() };
+  }, { label: `BNF ISBN "${isbn}"`, retries: 1 });
+}
+
 function formatPool(items) {
   return items.map(book => {
     const imageLinks = book.volumeInfo.imageLinks || {};
@@ -858,6 +901,47 @@ router.get('/search', async (req, res) => {
         }
       } catch (olErr) {
         console.warn('[Books] Open Library fallback échoué:', olErr.message);
+      }
+
+      // Dernier recours pour un ISBN introuvable sur les 3 sources ci-dessus :
+      // résoudre titre/auteur via la BNF, puis relancer une recherche titre
+      // classique (voir le commentaire au-dessus de resolveIsbnViaBNF).
+      if (isISBN) {
+        try {
+          const resolved = await resolveIsbnViaBNF(isbnClean);
+          if (resolved?.title) {
+            const label = `BNF→"${resolved.title}"${resolved.author ? ` (${resolved.author})` : ''}`;
+            const titleQueries = resolved.author
+              ? [`intitle:"${resolved.title}" inauthor:"${resolved.author}"`, `${resolved.title} ${resolved.author}`, resolved.title]
+              : [resolved.title];
+
+            if (googleEnabled) {
+              const result = await firstNonEmptyGoogleResult(titleQueries, limit, 0);
+              if (result.items.length > 0) {
+                console.log(`[Books] Repli BNF → Google (${label})`);
+                return res.json({ results: formatPool(result.items), totalItems: result.totalItems, ...debugSourceField('bnf-resolved-google') });
+              }
+            }
+
+            try {
+              const hcResults = await fetchFromHardcoverSearch(resolved.title, limit);
+              if (hcResults.length > 0) {
+                console.log(`[Books] Repli BNF → Hardcover (${label})`);
+                return res.json({ results: hcResults, totalItems: hcResults.length, ...debugSourceField('bnf-resolved-hardcover') });
+              }
+            } catch (hcBnfErr) {
+              console.warn('[Books] Repli BNF → Hardcover échoué:', hcBnfErr.message);
+            }
+
+            const olResults = await fetchFromOpenLibrarySearch(resolved.title, limit);
+            if (olResults.length > 0) {
+              console.log(`[Books] Repli BNF → Open Library (${label})`);
+              return res.json({ results: olResults, totalItems: olResults.length, ...debugSourceField('bnf-resolved-openlibrary') });
+            }
+          }
+        } catch (bnfErr) {
+          console.warn('[Books] Repli BNF échoué:', bnfErr.message);
+        }
       }
     }
 
