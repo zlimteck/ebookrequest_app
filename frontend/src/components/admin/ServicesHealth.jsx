@@ -170,6 +170,30 @@ const SERVICE_DEFS = [
     error: (s) => s.error,
   },
   {
+    key: 'fourtoutici',
+    label: () => 'Fourtoutici',
+    icon: (
+      <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: "'Arial Black', Arial, Helvetica, sans-serif", color: 'var(--color-text-muted)', lineHeight: 1, letterSpacing: '-0.03em', width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>F</span>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => s.url ? [`URL : ${s.url}`] : [],
+    error: (s) => s.error,
+  },
+  {
+    key: 'ultimZone',
+    label: () => 'Ultim-Zone',
+    icon: (
+      <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: "'Arial Black', Arial, Helvetica, sans-serif", color: 'var(--color-text-muted)', lineHeight: 1, letterSpacing: '-0.03em', width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>U</span>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => s.url ? [`URL : ${s.url}`] : [],
+    error: (s) => s.error,
+  },
+  {
     key: 'mcp',
     label: () => 'Serveur MCP',
     icon: (

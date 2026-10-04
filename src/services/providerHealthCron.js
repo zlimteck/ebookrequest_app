@@ -122,10 +122,30 @@ async function checkHardcoverIssue(force = false) {
   }
 }
 
+// UZ n'a pas d'API clé mais un cookie de session manuel (voir
+// uzService.js) — pas de login programmatique possible (hCaptcha sur
+// login.php), donc contrairement à Google Books/Hardcover ce n'est pas une
+// coupure de service qui se résout seule : l'admin doit recoller un cookie
+// frais depuis son navigateur. Même mécanisme d'alerte/cooldown que les
+// providers ci-dessus, pour ne pas le découvrir seulement en tentant une recherche.
+async function checkUltimZoneIssue(force = false) {
+  const doc = await ConnectorSettings.findOne({ service: 'ultimzone' }).lean();
+  if (!doc?.enabled || !doc?.apiKey) return;
+
+  try {
+    const { pingUltimZone } = await import('./uzService.js');
+    await pingUltimZone();
+  } catch (err) {
+    await maybeAlert('ultimzone', 'Ultim-Zone',
+      `${err.message} — recherche indisponible tant que le cookie n'est pas renouvelé.`, force);
+  }
+}
+
 export async function runProviderHealthCron(force = false) {
   try {
     await checkGoogleBooksIssue(force);
     await checkHardcoverIssue(force);
+    await checkUltimZoneIssue(force);
   } catch (e) {
     console.error('[ProviderHealthCron] Erreur:', e.message);
   }

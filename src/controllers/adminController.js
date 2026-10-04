@@ -71,6 +71,37 @@ async function checkAnnasArchiveConnector() {
   }
 }
 
+async function checkFourtouticiConnector() {
+  try {
+    const { getFourtouticiConfig, pingFourtoutici } = await import('../services/fourtouticiService.js');
+    const config = await getFourtouticiConfig();
+    if (!config?.enabled) return { enabled: false, connected: false, url: null, error: null };
+    const { baseUrl } = await pingFourtoutici();
+    return { enabled: true, connected: true, url: baseUrl, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
+
+// UZ : pas de login programmatique (hCaptcha), session dépendante d'un
+// cookie collé à la main par l'admin — contrairement aux autres connecteurs,
+// une déconnexion ici n'est jamais transitoire (elle ne se résout pas seule au
+// prochain essai), d'où le message différent pour guider l'action corrective.
+async function checkUltimZoneConnector() {
+  try {
+    const { getUltimZoneConfig, pingUltimZone } = await import('../services/uzService.js');
+    const config = await getUltimZoneConfig();
+    if (!config?.enabled) return { enabled: false, connected: false, url: null, error: null };
+    if (!config.apiKey || !config.password) {
+      return { enabled: true, connected: false, url: config.url || null, error: 'Cookie de session non configuré' };
+    }
+    const { baseUrl } = await pingUltimZone();
+    return { enabled: true, connected: true, url: baseUrl, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
+
 async function checkGoogleBooks() {
   // `enabled` doit refléter isGoogleBooksSearchEnabled() (ce qui gouverne réellement
   // /api/books/search), pas seulement "une clé API est disponible" — getGoogleBooksApiKey()
@@ -400,7 +431,7 @@ function withTimeout(promise, ms, fallback) {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone] = await Promise.all([
       withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
       withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
       withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
@@ -411,6 +442,8 @@ export const getServicesHealth = async (req, res) => {
       withTimeout(checkGoogleBooks(), 6000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkHardcover(), 6000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkProxy(), 8000, { enabled: false, connected: false, mode: null, error: 'timeout' }),
+      withTimeout(checkFourtouticiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkUltimZoneConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
     ]);
 
     res.json({
@@ -476,6 +509,18 @@ export const getServicesHealth = async (req, res) => {
           mode: proxy.mode || null,
           exitIp: proxy.exitIp || null,
           error: proxy.error || null,
+        },
+        fourtoutici: {
+          enabled: fourtoutici.enabled,
+          connected: fourtoutici.connected,
+          url: fourtoutici.url || null,
+          error: fourtoutici.error || null,
+        },
+        ultimZone: {
+          enabled: ultimZone.enabled,
+          connected: ultimZone.connected,
+          url: ultimZone.url || null,
+          error: ultimZone.error || null,
         },
       },
     });

@@ -159,6 +159,9 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [fourtouticiLoading, setFourtouticiLoading] = useState(false);
   const [fourtouticiState, setFourtouticiState] = useState(null); // { disabled, unavailable }
   const [fourtouticiDownloading, setFourtouticiDownloading] = useState(null);
+  const [ultimZoneResults, setUltimZoneResults] = useState(null);
+  const [ultimZoneLoading, setUltimZoneLoading] = useState(false);
+  const [ultimZoneState, setUltimZoneState] = useState(null); // { disabled, unavailable }
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_admin') || 'cards');
@@ -319,6 +322,9 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     setFourtouticiLoading(false);
     setFourtouticiState(null);
     setFourtouticiDownloading(null);
+    setUltimZoneResults(null);
+    setUltimZoneLoading(false);
+    setUltimZoneState(null);
   };
 
   const runConnectorsSearch = async (query) => {
@@ -384,6 +390,20 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         setFourtouticiState({ unavailable: true });
       })
       .finally(() => setFourtouticiLoading(false));
+
+    setUltimZoneResults(null);
+    setUltimZoneState(null);
+    setUltimZoneLoading(true);
+    axiosAdmin.get(`/api/connectors/ultimzone/search?q=${encodeURIComponent(query)}`)
+      .then(res => {
+        setUltimZoneResults(res.data.results || []);
+        setUltimZoneState({ disabled: res.data.disabled, unavailable: res.data.unavailable });
+      })
+      .catch(() => {
+        setUltimZoneResults([]);
+        setUltimZoneState({ unavailable: true });
+      })
+      .finally(() => setUltimZoneLoading(false));
   };
 
   const downloadFromValentine = async (ebookId) => {
@@ -2642,6 +2662,40 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                   : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                                 }
                               </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={styles.connectorsSection}>
+                    <div className={styles.connectorsSectionHeader}>
+                      <span className={styles.connectorsSectionLogoAnnas}>U</span>
+                      <span>Ultim-Zone</span>
+                      {ultimZoneLoading && <span className={styles.spinner} style={{marginLeft:'auto'}} />}
+                    </div>
+                    {ultimZoneResults === null ? null : ultimZoneResults.length === 0 ? (
+                      <div className={styles.fileBrowserEmpty}>
+                        {ultimZoneState?.disabled
+                          ? 'Connecteur désactivé'
+                          : ultimZoneState?.unavailable
+                            ? 'Source inaccessible'
+                            : 'Aucun résultat'}
+                      </div>
+                    ) : (
+                      <div className={styles.valentineResultsList}>
+                        {ultimZoneResults.map(r => (
+                          <div key={r.topicId} className={styles.valentineResultRow}>
+                            <div className={styles.valentineResultInfo}>
+                              <span className={styles.valentineResultTitle}>{r.title}</span>
+                              {r.category && <span className={styles.valentineResultSize}>{r.category}</span>}
+                            </div>
+                            <div className={styles.valentineResultActions}>
+                              <a href={r.annaUrl} target="_blank" rel="noopener noreferrer"
+                                className={styles.aIconBtn} title="Ouvrir le topic sur Ultim-Zone" onClick={e => e.stopPropagation()}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                              </a>
                             </div>
                           </div>
                         ))}

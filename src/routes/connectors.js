@@ -321,6 +321,84 @@ router.post('/fourtoutici/download', requireAuth, requireAdmin, async (req, res)
   }
 });
 
+// ── GET /api/connectors/ultimzone ────────────────────────────────────────────
+router.get('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { getUltimZoneConfig } = await import('../services/uzService.js');
+    const doc = await getUltimZoneConfig();
+    res.json({
+      enabled: doc.enabled,
+      url: doc.url,
+      phpsessid: doc.apiKey ? '••••••••' : '',
+      _hasPhpsessid: !!doc.apiKey,
+      fluxCookie: doc.password ? '••••••••' : '',
+      _hasFluxCookie: !!doc.password,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/ultimzone ────────────────────────────────────────────
+// Deux valeurs de session distinctes, chacune chiffrée séparément : `apiKey`
+// pour PHPSESSID, `password` réutilisé pour __Host-flux_cookie (même principe
+// que les autres secrets de ce schéma) — fournies par l'admin depuis son
+// navigateur, pas de login programmatique géré ici.
+router.put('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, url, phpsessid, _hasPhpsessid, fluxCookie, _hasFluxCookie } = req.body;
+    const update = enabled !== undefined ? { enabled: !!enabled } : {};
+    if (url !== undefined) update.url = url?.trim() || 'https://ultim-zone.in';
+    if (phpsessid && phpsessid !== '••••••••') update.apiKey = encrypt(phpsessid);
+    if (!phpsessid && !_hasPhpsessid) update.apiKey = '';
+    if (fluxCookie && fluxCookie !== '••••••••') update.password = encrypt(fluxCookie);
+    if (!fluxCookie && !_hasFluxCookie) update.password = '';
+
+    const doc = await ConnectorSettings.findOneAndUpdate(
+      { service: 'ultimzone' }, update, { upsert: true, new: true, runValidators: true }
+    );
+    if (enabled !== undefined) logSettingsToggle(req, 'Ultim-Zone', doc.enabled);
+    res.json({
+      enabled: doc.enabled,
+      url: doc.url,
+      phpsessid: doc.apiKey ? '••••••••' : '',
+      _hasPhpsessid: !!doc.apiKey,
+      fluxCookie: doc.password ? '••••••••' : '',
+      _hasFluxCookie: !!doc.password,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── GET /api/connectors/ultimzone/search?q=... ───────────────────────────────
+router.get('/ultimzone/search', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre q requis' });
+  try {
+    const { getUltimZoneConfig, searchOnUltimZone } = await import('../services/uzService.js');
+    if (!(await getUltimZoneConfig()).enabled) {
+      return res.json({ results: [], baseUrl: null, disabled: true });
+    }
+    const { results, baseUrl } = await searchOnUltimZone(q);
+    res.json({ results, baseUrl });
+  } catch (err) {
+    // 200 volontaire : le front distingue « aucun résultat » de « source injoignable »
+    res.json({ results: [], baseUrl: null, unavailable: true, error: err.message });
+  }
+});
+
+// ── GET /api/connectors/ultimzone/ping ────────────────────────────────────────
+router.get('/ultimzone/ping', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { pingUltimZone } = await import('../services/uzService.js');
+    const { baseUrl } = await pingUltimZone();
+    res.json({ ok: true, baseUrl });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
+  }
+});
+
 // ── GET /api/connectors/annasarchive ─────────────────────────────────────────
 router.get('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
   try {

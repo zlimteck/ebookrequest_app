@@ -256,7 +256,7 @@ function ValentineCard() {
             </button>
           </div>
           {config._hasPassword && !config.password && (
-            <p className={styles.fieldHint}>Mot de passe déjà enregistré — laisser vide pour conserver.</p>
+            <p className={styles.fieldHint}>Mot de passe déjà enregistré, laisser vide pour conserver.</p>
           )}
         </div>
 
@@ -583,6 +583,187 @@ function LibgenCard() {
   );
 }
 
+function UltimZoneCard() {
+  const [config, setConfig] = useState({
+    enabled: false, url: 'https://ultim-zone.in',
+    phpsessid: '', _hasPhpsessid: false,
+    fluxCookie: '', _hasFluxCookie: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [showPhpsessid, setShowPhpsessid] = useState(false);
+  const [showFluxCookie, setShowFluxCookie] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const [status, setStatus] = useState(null); // 'ok' | 'error' | null
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/ultimzone')
+      .then(res => {
+        const cfg = {
+          enabled: res.data.enabled ?? false,
+          url: res.data.url || 'https://ultim-zone.in',
+          phpsessid: res.data.phpsessid || '',
+          _hasPhpsessid: res.data._hasPhpsessid ?? false,
+          fluxCookie: res.data.fluxCookie || '',
+          _hasFluxCookie: res.data._hasFluxCookie ?? false,
+        };
+        setConfig(cfg);
+        if (cfg.enabled && cfg._hasPhpsessid && cfg._hasFluxCookie) {
+          axiosAdmin.get('/api/connectors/ultimzone/ping')
+            .then(() => setStatus('ok'))
+            .catch(() => setStatus('error'));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setAlert(null);
+    try {
+      await axiosAdmin.put('/api/connectors/ultimzone', config);
+      showAlertMsg('success', 'Configuration enregistrée.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setAlert(null);
+    try {
+      await axiosAdmin.put('/api/connectors/ultimzone', config);
+      await axiosAdmin.get('/api/connectors/ultimzone/ping');
+      setStatus('ok');
+      showAlertMsg('success', 'Session valide.');
+    } catch (err) {
+      setStatus('error');
+      showAlertMsg('error', err.response?.data?.error || 'Session invalide ou expirée.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={`${styles.cardLogoWrap} ${styles.cardLogoWrapAnnas}`}>
+            <span className={styles.annasLogoLetter}>U</span>
+          </div>
+          <div>
+            <p className={styles.cardName}>
+              Ultim-Zone
+              {status && (
+                <span className={status === 'ok' ? styles.statusDotOk : styles.statusDotError} title={status === 'ok' ? 'Session valide' : 'Session invalide/expirée'} />
+              )}
+            </p>
+            <p className={styles.cardDesc}>Recherche dans les forums BD/Comics/Mangas/Romans/Livres. Le forum ne fait que lister des liens vers des hébergeurs tiers (1fichier, etc.), pas de téléchargement automatique, uniquement un lien vers le topic à ouvrir manuellement.</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={e => setConfig(c => ({ ...c, enabled: e.target.checked }))}
+          />
+          <span className={styles.slider} />
+        </label>
+      </div>
+
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>URL</label>
+          <input
+            className={styles.fieldInput}
+            type="url"
+            placeholder="https://ultim-zone.in"
+            value={config.url}
+            onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
+          />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>PHPSESSID</label>
+          <div className={styles.fieldInputWrap}>
+            <input
+              className={styles.fieldInput}
+              type={showPhpsessid ? 'text' : 'password'}
+              placeholder={config._hasPhpsessid ? '••••••••' : 'Valeur du cookie PHPSESSID'}
+              value={config.phpsessid}
+              autoComplete="new-password"
+              onChange={e => setConfig(c => ({ ...c, phpsessid: e.target.value }))}
+            />
+            <button type="button" className={styles.eyeBtn} onClick={() => setShowPhpsessid(s => !s)}>
+              <EyeIcon open={showPhpsessid} />
+            </button>
+          </div>
+          {config._hasPhpsessid && !config.phpsessid && (
+            <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+          )}
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>__Host-flux_cookie</label>
+          <div className={styles.fieldInputWrap}>
+            <input
+              className={styles.fieldInput}
+              type={showFluxCookie ? 'text' : 'password'}
+              placeholder={config._hasFluxCookie ? '••••••••' : 'Valeur du cookie __Host-flux_cookie'}
+              value={config.fluxCookie}
+              autoComplete="new-password"
+              onChange={e => setConfig(c => ({ ...c, fluxCookie: e.target.value }))}
+            />
+            <button type="button" className={styles.eyeBtn} onClick={() => setShowFluxCookie(s => !s)}>
+              <EyeIcon open={showFluxCookie} />
+            </button>
+          </div>
+          {config._hasFluxCookie && !config.fluxCookie && (
+            <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+          )}
+          <p className={styles.fieldHint}>
+            Les deux valeurs viennent de votre propre session, récupérées depuis le navigateur (outils de
+            dév → onglet Application/Stockage → Cookies). Elles expirent avec votre session, à renouveler
+            si le statut passe en erreur.
+          </p>
+        </div>
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="button" className={styles.btnTest} onClick={handleTest} disabled={testing || saving}>
+            {testing ? 'Test…' : 'Tester la session'}
+          </button>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function FourtouticiCard() {
   const [config, setConfig] = useState({ enabled: false, url: 'https://fourtoutici.cc' });
   const [loading, setLoading] = useState(true);
@@ -646,7 +827,7 @@ function FourtouticiCard() {
                 <span className={status === 'ok' ? styles.statusDotOk : styles.statusDotError} title={status === 'ok' ? 'Joignable' : 'Inaccessible'} />
               )}
             </p>
-            <p className={styles.cardDesc}>Bibliothèque communautaire francophone, API JSON directe : pas de login, pas de quota, pas de protection anti-bot connue. Le domaine change régulièrement au gré des blocages FAI — à ajuster ici si besoin.</p>
+            <p className={styles.cardDesc}>Bibliothèque communautaire francophone, API JSON directe : pas de login, pas de quota, pas de protection anti-bot connue. Le domaine change régulièrement au gré des blocages FAI, à ajuster ici si besoin.</p>
           </div>
         </div>
         <label className={styles.switch}>
@@ -756,6 +937,7 @@ export default function ConnectorsPanel() {
       <AnnasArchiveCard />
       <LibgenCard />
       <FourtouticiCard />
+      <UltimZoneCard />
       <TrendingCard />
     </div>
   );
