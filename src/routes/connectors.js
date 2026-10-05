@@ -403,7 +403,13 @@ router.get('/ultimzone/ping', requireAuth, requireAdmin, async (req, res) => {
 router.get('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
   try {
     const doc = await getAnnasArchiveConfig();
-    res.json({ enabled: doc.enabled, url: doc.url, lang: doc.lang || '' });
+    res.json({
+      enabled: doc.enabled,
+      url: doc.url,
+      lang: doc.lang || '',
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }
@@ -413,7 +419,7 @@ router.get('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
 router.put('/annasarchive', requireAuth, requireAdmin, async (req, res) => {
   try {
     const doc = await saveAnnasArchiveConfig(req.body);
-    res.json({ enabled: doc.enabled, url: doc.url });
+    res.json({ enabled: doc.enabled, url: doc.url, apiKey: doc.apiKey ? '••••••••' : '', _hasApiKey: !!doc.apiKey });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
   }

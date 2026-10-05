@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import ConnectorSettings from '../models/ConnectorSettings.js';
+import { encrypt, decrypt } from './cryptoService.js';
 import BookRequest from '../models/BookRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
@@ -445,6 +446,28 @@ function extractFileUrlFromHtml(html) {
   return null;
 }
 
+// ─── API membre (fast_download.json) ───────────────────────────────────────────
+// Réservée aux comptes Anna's Archive payants ("Lucky Librarian" et au-dessus).
+// Contrairement au scraping ci-dessus (slow_download/ads/partner, fragile et
+// bloqué par DDoS-Guard), c'est une vraie API documentée : un lien direct en un
+// seul appel, sans challenge navigateur. Ne couvre PAS la recherche (qui reste
+// derrière DDoS-Guard même abonné — leur FAQ recommande leurs dumps
+// ElasticSearch/MariaDB pour ça) : seulement le téléchargement, à partir d'un
+// MD5 déjà connu (recherche faite via LibGen, qui partage les mêmes MD5).
+async function fetchFastDownloadUrl(baseUrl, md5, apiKey) {
+  const res = await axios.get(`${baseUrl}/dyn/api/fast_download.json`, {
+    params: { md5, key: apiKey },
+    timeout: 15000,
+    headers: HEADERS,
+    validateStatus: () => true,
+  });
+  // Doc officielle (champ "///download_url" de la réponse elle-même, 10/2026) :
+  // succès → download_url rempli ; échec → download_url: null + error: "<raison>"
+  // (ex: "Invalid md5").
+  if (!res.data?.download_url) throw new Error(res.data?.error || 'fast_download.json : aucune URL retournée');
+  return res.data.download_url;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -496,7 +519,25 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
     let fileBuffer = null;
     let filename = null;
 
-    {
+    // ── API membre fast_download.json en priorité (si clé configurée) ─────────
+    // Beaucoup plus fiable que le scraping ci-dessous : un seul appel, pas de
+    // challenge DDoS-Guard. Le scraping reste le repli si la clé est absente,
+    // invalide, ou si l'appel échoue pour une raison quelconque.
+    if (config.apiKey) {
+      try {
+        const apiKey = decrypt(config.apiKey) ?? config.apiKey;
+        const directUrl = await fetchFastDownloadUrl(baseUrl, md5, apiKey);
+        console.log(`[Annas] fast_download.json → ${directUrl}`);
+        const { buffer, filename: fn } = await directDownload(directUrl, HEADERS['User-Agent']);
+        fileBuffer = buffer;
+        if (fn) filename = fn;
+        console.log(`[Annas] ✓ Téléchargé via API membre (${fileBuffer.length} octets)`);
+      } catch (err) {
+        console.warn(`[Annas] API membre échouée (${err.message}), repli sur le scraping`);
+      }
+    }
+
+    if (!fileBuffer) {
       // ── Fetch MD5 page : direct d'abord, FlareSolverr en fallback ────────────
       let html = '';
       try {
@@ -752,10 +793,17 @@ export async function getAnnasArchiveConfig() {
   return doc || { service: 'annasarchive', enabled: false, url: FALLBACK_URLS[0], lang: '' };
 }
 
-export async function saveAnnasArchiveConfig({ enabled, url, lang }) {
+// `apiKey` : clé secrète du compte membre (menu "Mon compte" sur Anna's Archive),
+// utilisée uniquement par fetchFastDownloadUrl ci-dessus — optionnelle, le
+// connecteur fonctionne sans (repli sur le scraping existant).
+export async function saveAnnasArchiveConfig({ enabled, url, lang, apiKey, _hasApiKey }) {
+  const update = { enabled: !!enabled, url: url?.trim() || FALLBACK_URLS[0], lang: lang || '' };
+  if (apiKey && apiKey !== '••••••••') update.apiKey = encrypt(apiKey);
+  if (!apiKey && !_hasApiKey) update.apiKey = '';
+
   const doc = await ConnectorSettings.findOneAndUpdate(
     { service: 'annasarchive' },
-    { enabled: !!enabled, url: url?.trim() || FALLBACK_URLS[0], lang: lang || '' },
+    update,
     { upsert: true, new: true, runValidators: true }
   );
   return doc;

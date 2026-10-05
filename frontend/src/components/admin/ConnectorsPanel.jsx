@@ -337,9 +337,10 @@ function ValentineCard() {
 }
 
 function AnnasArchiveCard() {
-  const [config, setConfig] = useState({ enabled: false, url: 'https://annas-archive.pk', lang: '' });
+  const [config, setConfig] = useState({ enabled: false, url: 'https://annas-archive.pk', lang: '', apiKey: '', _hasApiKey: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [alert, setAlert] = useState(null);
   const [annasStatus, setAnnasStatus] = useState(null); // 'ok' | 'error' | null
   const [annasSearchable, setAnnasSearchable] = useState(true);
@@ -351,6 +352,8 @@ function AnnasArchiveCard() {
           enabled: res.data.enabled ?? false,
           url: res.data.url || 'https://annas-archive.pk',
           lang: res.data.lang || '',
+          apiKey: res.data.apiKey || '',
+          _hasApiKey: res.data._hasApiKey ?? false,
         };
         setConfig(cfg);
         if (cfg.enabled) {
@@ -458,6 +461,32 @@ function AnnasArchiveCard() {
             <option value="fr">Français uniquement</option>
             <option value="en">Anglais uniquement</option>
           </select>
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Clé API membre (facultatif)</label>
+          <div className={styles.fieldInputWrap}>
+            <input
+              className={styles.fieldInput}
+              type={showApiKey ? 'text' : 'password'}
+              placeholder={config._hasApiKey ? '••••••••' : 'Clé secrète du compte membre'}
+              value={config.apiKey}
+              autoComplete="new-password"
+              onChange={e => setConfig(c => ({ ...c, apiKey: e.target.value }))}
+            />
+            <button type="button" className={styles.eyeBtn} onClick={() => setShowApiKey(s => !s)}>
+              <EyeIcon open={showApiKey} />
+            </button>
+          </div>
+          {config._hasApiKey && !config.apiKey && (
+            <p className={styles.fieldHint}>Déjà enregistrée, laissez vide pour conserver.</p>
+          )}
+          <p className={styles.fieldHint}>
+            Pour un compte membre payant (Brilliant Bookworm ou plus) : trouvable sur la page
+            "Mon compte" du site. Permet un téléchargement direct via leur API officielle (fiable),
+            au lieu du scraping habituel, ne débloque pas la recherche, toujours bloquée par leur
+            protection anti-bot quel que soit l'abonnement.
+          </p>
         </div>
 
         {alert && (
