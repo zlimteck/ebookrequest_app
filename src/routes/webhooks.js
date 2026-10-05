@@ -1,13 +1,29 @@
 import express from 'express';
 import crypto from 'crypto';
 import EmailLog from '../models/EmailLog.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
+import { decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
 
+// Résout le secret de signature SVIX : priorité à la config DB (admin ->
+// Réglages -> Resend), repli sur la variable d'env pour compat ascendante.
+async function getResendWebhookSecret() {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'emailProvider' }).lean();
+    if (doc?.resendWebhookSecret) {
+      return decrypt(doc.resendWebhookSecret) ?? doc.resendWebhookSecret;
+    }
+  } catch {
+    // MongoDB indisponible → repli sur l'env
+  }
+  return process.env.RESEND_WEBHOOK_SECRET || '';
+}
+
 // Resend signe ses webhooks avec SVIX
 // https://resend.com/docs/dashboard/webhooks/introduction
-function verifyResendSignature(req) {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
+async function verifyResendSignature(req) {
+  const secret = await getResendWebhookSecret();
   if (!secret) return false; // Fail closed — rejeter si secret non configuré
 
   const svixId        = req.headers['svix-id'];
@@ -54,7 +70,7 @@ router.post('/resend', express.raw({ type: 'application/json' }), async (req, re
     const rawBody = req.body instanceof Buffer ? req.body.toString() : JSON.stringify(req.body);
     req.rawBody = rawBody;
 
-    if (!verifyResendSignature(req)) {
+    if (!(await verifyResendSignature(req))) {
       return res.status(401).json({ error: 'Signature invalide' });
     }
 

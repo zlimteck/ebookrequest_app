@@ -996,11 +996,13 @@ function EmailProviderCard() {
   const [config, setConfig] = useState({
     enabled: false, provider: 'smtp', smtpHost: '', smtpPort: 465, smtpSecure: false,
     username: '', fromAddress: '', fromName: '', apiKey: '', _hasApiKey: false,
+    resendWebhookSecret: '', _hasResendWebhookSecret: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [testTo, setTestTo] = useState('');
   const [alert, setAlert] = useState(null);
 
@@ -1018,6 +1020,8 @@ function EmailProviderCard() {
           fromName: res.data.fromName || '',
           apiKey: res.data.apiKey || '',
           _hasApiKey: res.data._hasApiKey ?? false,
+          resendWebhookSecret: res.data.resendWebhookSecret || '',
+          _hasResendWebhookSecret: res.data._hasResendWebhookSecret ?? false,
         });
       })
       .catch(() => {})
@@ -1036,7 +1040,7 @@ function EmailProviderCard() {
     try {
       const { enabled, ...rest } = config;
       const res = await axiosAdmin.put('/api/connectors/emailprovider', rest);
-      setConfig(c => ({ ...c, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+      setConfig(c => ({ ...c, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey, resendWebhookSecret: res.data.resendWebhookSecret, _hasResendWebhookSecret: res.data._hasResendWebhookSecret }));
       showAlertMsg('success', 'Configuration enregistrée.');
     } catch (err) {
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
@@ -1050,7 +1054,7 @@ function EmailProviderCard() {
     setConfig(c => ({ ...c, enabled }));
     try {
       const res = await axiosAdmin.put('/api/connectors/emailprovider', { ...config, enabled });
-      setConfig(c => ({ ...c, enabled: res.data.enabled, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey }));
+      setConfig(c => ({ ...c, enabled: res.data.enabled, apiKey: res.data.apiKey, _hasApiKey: res.data._hasApiKey, resendWebhookSecret: res.data.resendWebhookSecret, _hasResendWebhookSecret: res.data._hasResendWebhookSecret }));
     } catch (err) {
       setConfig(c => ({ ...c, enabled: !enabled }));
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
@@ -1202,6 +1206,29 @@ function EmailProviderCard() {
             {config._hasApiKey && !config.apiKey && (
               <p className={styles.fieldHint}>Clé déjà enregistrée : laisser vide pour conserver.</p>
             )}
+          </div>
+        )}
+
+        {config.provider === 'resend' && (
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Secret webhook Resend</label>
+            <div className={styles.fieldInputWrap}>
+              <input
+                className={styles.fieldInput}
+                type={showWebhookSecret ? 'text' : 'password'}
+                placeholder={config._hasResendWebhookSecret ? '••••••••' : 'whsec_...'}
+                value={config.resendWebhookSecret}
+                autoComplete="off"
+                onChange={e => setConfig(c => ({ ...c, resendWebhookSecret: e.target.value }))}
+              />
+              <button type="button" className={styles.eyeBtn} onClick={() => setShowWebhookSecret(v => !v)} title={showWebhookSecret ? 'Masquer' : 'Afficher'}>
+                <EyeIcon open={showWebhookSecret} />
+              </button>
+            </div>
+            {config._hasResendWebhookSecret && !config.resendWebhookSecret && (
+              <p className={styles.fieldHint}>Secret déjà enregistré : laisser vide pour conserver.</p>
+            )}
+            <p className={styles.fieldHint}>Signature SVIX du webhook (Resend → Webhooks → Signing Secret). Vérifie l'authenticité des événements reçus sur /api/webhooks/resend.</p>
           </div>
         )}
 

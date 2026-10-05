@@ -1196,6 +1196,7 @@ router.get('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
       }
       seed.fromAddress = process.env.EMAIL_FROM_ADDRESS || '';
       seed.fromName = process.env.EMAIL_FROM_NAME || '';
+      if (process.env.RESEND_WEBHOOK_SECRET) seed.resendWebhookSecret = encrypt(process.env.RESEND_WEBHOOK_SECRET);
       if (seed.enabled) {
         doc = await ConnectorSettings.findOneAndUpdate(
           { service: 'emailProvider' },
@@ -1216,6 +1217,8 @@ router.get('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
       fromName: doc?.fromName || '',
       apiKey: doc?.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc?.apiKey,
+      resendWebhookSecret: doc?.resendWebhookSecret ? '••••••••' : '',
+      _hasResendWebhookSecret: !!doc?.resendWebhookSecret,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -1225,7 +1228,7 @@ router.get('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
 // ── PUT /api/connectors/emailprovider ──────────────────────────────────────────
 router.put('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { enabled, provider, smtpHost, smtpPort, smtpSecure, username, fromAddress, fromName, apiKey, _hasApiKey } = req.body;
+    const { enabled, provider, smtpHost, smtpPort, smtpSecure, username, fromAddress, fromName, apiKey, _hasApiKey, resendWebhookSecret, _hasResendWebhookSecret } = req.body;
     if (!['smtp', 'resend'].includes(provider)) {
       return res.status(400).json({ error: 'Provider invalide' });
     }
@@ -1245,6 +1248,12 @@ router.put('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
     }
     if (!apiKey && !_hasApiKey) {
       update.apiKey = '';
+    }
+    if (resendWebhookSecret && resendWebhookSecret !== '••••••••') {
+      update.resendWebhookSecret = encrypt(resendWebhookSecret);
+    }
+    if (!resendWebhookSecret && !_hasResendWebhookSecret) {
+      update.resendWebhookSecret = '';
     }
 
     const doc = await ConnectorSettings.findOneAndUpdate(
@@ -1266,6 +1275,8 @@ router.put('/emailprovider', requireAuth, requireAdmin, async (req, res) => {
       fromName: doc.fromName,
       apiKey: doc.apiKey ? '••••••••' : '',
       _hasApiKey: !!doc.apiKey,
+      resendWebhookSecret: doc.resendWebhookSecret ? '••••••••' : '',
+      _hasResendWebhookSecret: !!doc.resendWebhookSecret,
     });
   } catch {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde' });

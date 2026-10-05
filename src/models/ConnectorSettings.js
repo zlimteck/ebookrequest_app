@@ -22,6 +22,10 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   smtpSecure: { type: Boolean, default: false },
   fromAddress:{ type: String, default: '' },
   fromName:   { type: String, default: '' },
+  // Secret de signature des webhooks Resend (SVIX) — chiffré via cryptoService,
+  // remplace process.env.RESEND_WEBHOOK_SECRET pour pouvoir être changé sans
+  // redéploiement.
+  resendWebhookSecret: { type: String, default: '' },
   cronInterval: { type: Number, default: 6 },
   valentineFallbackToAdmin: { type: Boolean, default: false },
   // Recherche directe Valentine (bypass Google Books) — off/on admin, avec
