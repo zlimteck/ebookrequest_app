@@ -162,6 +162,9 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [ultimZoneResults, setUltimZoneResults] = useState(null);
   const [ultimZoneLoading, setUltimZoneLoading] = useState(false);
   const [ultimZoneState, setUltimZoneState] = useState(null); // { disabled, unavailable }
+  const [prowlarrResults, setProwlarrResults] = useState(null);
+  const [prowlarrLoading, setProwlarrLoading] = useState(false);
+  const [prowlarrState, setProwlarrState] = useState(null); // { disabled, unavailable }
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_admin') || 'cards');
@@ -325,6 +328,9 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     setUltimZoneResults(null);
     setUltimZoneLoading(false);
     setUltimZoneState(null);
+    setProwlarrResults(null);
+    setProwlarrLoading(false);
+    setProwlarrState(null);
   };
 
   const runConnectorsSearch = async (query) => {
@@ -404,6 +410,20 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         setUltimZoneState({ unavailable: true });
       })
       .finally(() => setUltimZoneLoading(false));
+
+    setProwlarrResults(null);
+    setProwlarrState(null);
+    setProwlarrLoading(true);
+    axiosAdmin.get(`/api/connectors/prowlarr/search?q=${encodeURIComponent(query)}`)
+      .then(res => {
+        setProwlarrResults(res.data.results || []);
+        setProwlarrState({ disabled: res.data.disabled, unavailable: res.data.unavailable });
+      })
+      .catch(() => {
+        setProwlarrResults([]);
+        setProwlarrState({ unavailable: true });
+      })
+      .finally(() => setProwlarrLoading(false));
   };
 
   const downloadFromValentine = async (ebookId) => {
@@ -1060,6 +1080,13 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     if (!filename) return '';
     const ext = filename.split('.').pop().toLowerCase();
     return ext.toUpperCase();
+  };
+
+  const formatBytes = (bytes) => {
+    if (!bytes) return null;
+    return bytes >= 1073741824
+      ? `${(bytes / 1073741824).toFixed(1)} Go`
+      : `${(bytes / 1048576).toFixed(0)} Mo`;
   };
 
   const renderRequestsList = () => {
@@ -2696,6 +2723,50 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                 className={styles.aIconBtn} title="Ouvrir le topic sur Ultim-Zone" onClick={e => e.stopPropagation()}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                               </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={styles.connectorsSection}>
+                    <div className={styles.connectorsSectionHeader}>
+                      <span className={styles.connectorsSectionLogoAnnas}>P</span>
+                      <span>Prowlarr</span>
+                      {prowlarrLoading && <span className={styles.spinner} style={{marginLeft:'auto'}} />}
+                    </div>
+                    {prowlarrResults === null ? null : prowlarrResults.length === 0 ? (
+                      <div className={styles.fileBrowserEmpty}>
+                        {prowlarrState?.disabled
+                          ? 'Connecteur désactivé'
+                          : prowlarrState?.unavailable
+                            ? 'Source inaccessible'
+                            : 'Aucun résultat'}
+                      </div>
+                    ) : (
+                      <div className={styles.valentineResultsList}>
+                        {prowlarrResults.map((r, idx) => (
+                          <div key={`${r.indexerId}-${idx}`} className={styles.valentineResultRow}>
+                            <div className={styles.valentineResultInfo}>
+                              <span className={styles.valentineResultTitle}>{r.title}</span>
+                              <span className={styles.valentineResultSize}>
+                                {[r.indexer, formatBytes(r.size), r.seeders != null ? `${r.seeders} seeds` : null].filter(Boolean).join(' · ')}
+                              </span>
+                            </div>
+                            <div className={styles.valentineResultActions}>
+                              {r.infoUrl && (
+                                <a href={r.infoUrl} target="_blank" rel="noopener noreferrer"
+                                  className={styles.aIconBtn} title="Ouvrir la fiche" onClick={e => e.stopPropagation()}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                </a>
+                              )}
+                              {r.downloadUrl && (
+                                <a href={r.downloadUrl} target="_blank" rel="noopener noreferrer"
+                                  className={styles.aIconBtn} title="Télécharger (torrent/magnet)" onClick={e => e.stopPropagation()}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                </a>
+                              )}
                             </div>
                           </div>
                         ))}

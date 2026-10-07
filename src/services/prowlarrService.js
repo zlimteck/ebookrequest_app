@@ -145,6 +145,58 @@ export async function saveIndexerSearchEnabled(indexerId, enabled) {
 }
 
 /**
+ * Recherche sur les indexeurs activés pour la recherche EbookRequest
+ * (searchEnabled !== false) ET actifs côté Prowlarr. Un appel par indexeur
+ * (pas un seul appel multi-indexeurs) car la sélection de catégories est
+ * propre à chacun, alors que l'API /search de Prowlarr applique un seul
+ * jeu de catégories pour tout l'appel — pas de granularité par indexeur.
+ * Recherche seulement : pas de téléchargement (voir issue roadmap #42, V1).
+ */
+export async function searchProwlarr(query) {
+  const config = await getProwlarrConfig();
+  if (!config.enabled) throw new Error('Connecteur Prowlarr désactivé');
+  if (!config.url || !config.apiKey) throw new Error('Prowlarr non configuré');
+
+  const apiKey = decrypt(config.apiKey) ?? config.apiKey;
+  const indexers = await fetchProwlarrIndexers();
+  const targets = indexers.filter(i => i.enabled && i.searchEnabled);
+  if (targets.length === 0) return { results: [] };
+
+  const perIndexer = await Promise.allSettled(targets.map(async idx => {
+    const params = new URLSearchParams();
+    params.append('query', query);
+    params.append('indexerIds', idx.id);
+    params.append('type', 'search');
+    for (const catId of idx.selectedCategories) params.append('categories', catId);
+
+    const res = await axios.get(`${config.url}/api/v1/search?${params.toString()}`, {
+      headers: { 'X-Api-Key': apiKey },
+      timeout: 20000,
+      validateStatus: () => true,
+    });
+    if (res.status !== 200 || !Array.isArray(res.data)) return [];
+
+    return res.data.map(r => ({
+      title: r.title,
+      indexerId: idx.id,
+      indexer: idx.name,
+      protocol: idx.protocol,
+      size: r.size ?? null,
+      seeders: r.seeders ?? null,
+      publishDate: r.publishDate || null,
+      // guid = lien de la fiche sur l'indexeur (torrent) ou l'article (NZB) ;
+      // downloadUrl/magnetUrl = lien direct vers le fichier .torrent/magnet/NZB.
+      downloadUrl: r.downloadUrl || r.magnetUrl || null,
+      infoUrl: r.infoUrl || r.guid || null,
+    }));
+  }));
+
+  const results = perIndexer.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+  results.sort((a, b) => new Date(b.publishDate || 0) - new Date(a.publishDate || 0));
+  return { results };
+}
+
+/**
  * Liste les clients de téléchargement (qBittorrent, SABnzbd, etc.) configurés
  * dans Prowlarr.
  */

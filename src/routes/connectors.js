@@ -402,6 +402,22 @@ router.get('/prowlarr/download-clients', requireAuth, requireAdmin, async (req, 
   }
 });
 
+// ── GET /api/connectors/prowlarr/search?q=... ────────────────────────────────
+router.get('/prowlarr/search', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre q requis' });
+  try {
+    const { getProwlarrConfig, searchProwlarr } = await import('../services/prowlarrService.js');
+    if (!(await getProwlarrConfig()).enabled) {
+      return res.json({ results: [], disabled: true });
+    }
+    const { results } = await searchProwlarr(q);
+    res.json({ results });
+  } catch (err) {
+    res.json({ results: [], unavailable: true, error: err.message });
+  }
+});
+
 // ── GET /api/connectors/ultimzone ────────────────────────────────────────────
 router.get('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
   try {
