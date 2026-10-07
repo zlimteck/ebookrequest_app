@@ -194,6 +194,24 @@ const SERVICE_DEFS = [
     error: (s) => s.error,
   },
   {
+    key: 'prowlarr',
+    label: () => 'Prowlarr',
+    icon: (
+      <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: "'Arial Black', Arial, Helvetica, sans-serif", color: 'var(--color-text-muted)', lineHeight: 1, letterSpacing: '-0.03em', width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>P</span>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => {
+      const lines = [];
+      if (s.version) lines.push(`Version : ${s.version}`);
+      if (s.indexersTotal != null) lines.push(`Indexeurs : ${s.indexersActive}/${s.indexersTotal} actifs`);
+      if (s.downloadClientsTotal != null) lines.push(`Client de téléchargement : ${s.downloadClientsActive}/${s.downloadClientsTotal} actifs`);
+      return lines;
+    },
+    error: (s) => s.error,
+  },
+  {
     key: 'mcp',
     label: () => 'Serveur MCP',
     icon: (

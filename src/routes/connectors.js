@@ -321,6 +321,68 @@ router.post('/fourtoutici/download', requireAuth, requireAdmin, async (req, res)
   }
 });
 
+// ── GET /api/connectors/prowlarr ─────────────────────────────────────────────
+router.get('/prowlarr', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { getProwlarrConfig } = await import('../services/prowlarrService.js');
+    const doc = await getProwlarrConfig();
+    res.json({
+      enabled: doc.enabled,
+      url: doc.url || '',
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/prowlarr ─────────────────────────────────────────────
+router.put('/prowlarr', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { saveProwlarrConfig } = await import('../services/prowlarrService.js');
+    const doc = await saveProwlarrConfig(req.body);
+    const { enabled } = req.body;
+    if (enabled !== undefined) logSettingsToggle(req, 'Prowlarr', doc.enabled);
+    res.json({ enabled: doc.enabled, url: doc.url || '', apiKey: doc.apiKey ? '••••••••' : '', _hasApiKey: !!doc.apiKey });
+  } catch {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── GET /api/connectors/prowlarr/ping ────────────────────────────────────────
+router.get('/prowlarr/ping', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { pingProwlarr } = await import('../services/prowlarrService.js');
+    const result = await pingProwlarr();
+    res.json(result);
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
+  }
+});
+
+// ── GET /api/connectors/prowlarr/indexers ────────────────────────────────────
+router.get('/prowlarr/indexers', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { fetchProwlarrIndexers } = await import('../services/prowlarrService.js');
+    const indexers = await fetchProwlarrIndexers();
+    res.json({ indexers });
+  } catch (err) {
+    res.status(503).json({ indexers: [], error: err.message });
+  }
+});
+
+// ── GET /api/connectors/prowlarr/download-clients ───────────────────────────
+router.get('/prowlarr/download-clients', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { fetchProwlarrDownloadClients } = await import('../services/prowlarrService.js');
+    const downloadClients = await fetchProwlarrDownloadClients();
+    res.json({ downloadClients });
+  } catch (err) {
+    res.status(503).json({ downloadClients: [], error: err.message });
+  }
+});
+
 // ── GET /api/connectors/ultimzone ────────────────────────────────────────────
 router.get('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
   try {

@@ -793,6 +793,222 @@ function UltimZoneCard() {
   );
 }
 
+function ProwlarrCard() {
+  const [config, setConfig] = useState({ enabled: false, url: '', apiKey: '', _hasApiKey: false });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const [status, setStatus] = useState(null); // 'ok' | 'error' | null
+  const [version, setVersion] = useState(null);
+  const [indexers, setIndexers] = useState(null);
+  const [downloadClients, setDownloadClients] = useState(null);
+
+  const fetchIndexersAndClients = () => {
+    axiosAdmin.get('/api/connectors/prowlarr/indexers')
+      .then(res => setIndexers(res.data.indexers || []))
+      .catch(() => setIndexers([]));
+    axiosAdmin.get('/api/connectors/prowlarr/download-clients')
+      .then(res => setDownloadClients(res.data.downloadClients || []))
+      .catch(() => setDownloadClients([]));
+  };
+
+  useEffect(() => {
+    axiosAdmin.get('/api/connectors/prowlarr')
+      .then(res => {
+        const cfg = {
+          enabled: res.data.enabled ?? false,
+          url: res.data.url || '',
+          apiKey: res.data.apiKey || '',
+          _hasApiKey: res.data._hasApiKey ?? false,
+        };
+        setConfig(cfg);
+        if (cfg.enabled && cfg._hasApiKey) {
+          axiosAdmin.get('/api/connectors/prowlarr/ping')
+            .then(r => { setStatus('ok'); setVersion(r.data.version); })
+            .catch(() => setStatus('error'));
+          fetchIndexersAndClients();
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setAlert(null);
+    try {
+      await axiosAdmin.put('/api/connectors/prowlarr', config);
+      showAlertMsg('success', 'Configuration enregistrée.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setAlert(null);
+    try {
+      await axiosAdmin.put('/api/connectors/prowlarr', config);
+      const res = await axiosAdmin.get('/api/connectors/prowlarr/ping');
+      setStatus('ok');
+      setVersion(res.data.version);
+      showAlertMsg('success', 'Connexion réussie.');
+      fetchIndexersAndClients();
+    } catch (err) {
+      setStatus('error');
+      showAlertMsg('error', err.response?.data?.error || 'Connexion impossible.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={`${styles.cardLogoWrap} ${styles.cardLogoWrapAnnas}`}>
+            <span className={styles.annasLogoLetter}>P</span>
+          </div>
+          <div>
+            <p className={styles.cardName}>
+              Prowlarr
+              {status && (
+                <span className={status === 'ok' ? styles.statusDotOk : styles.statusDotError} title={status === 'ok' ? 'Connecté' : 'Connexion échouée'} />
+              )}
+            </p>
+            <p className={styles.cardDesc}>
+              Recherche via les indexeurs torrent/NZB configurés dans votre instance Prowlarr.
+              Connexion uniquement pour le moment (recherche et téléchargement à venir).
+            </p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={e => setConfig(c => ({ ...c, enabled: e.target.checked }))}
+          />
+          <span className={styles.slider} />
+        </label>
+      </div>
+
+      {status === 'ok' && (
+        <div className={styles.nextScan}>
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Connecté{version ? `, Prowlarr ${version}` : ''}
+        </div>
+      )}
+
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>URL</label>
+          <input
+            className={styles.fieldInput}
+            type="url"
+            placeholder="http://prowlarr:9696"
+            value={config.url}
+            onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
+          />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Clé API</label>
+          <div className={styles.fieldInputWrap}>
+            <input
+              className={styles.fieldInput}
+              type={showApiKey ? 'text' : 'password'}
+              placeholder={config._hasApiKey ? '••••••••' : 'Clé API Prowlarr (Réglages → Général)'}
+              value={config.apiKey}
+              autoComplete="new-password"
+              onChange={e => setConfig(c => ({ ...c, apiKey: e.target.value }))}
+            />
+            <button type="button" className={styles.eyeBtn} onClick={() => setShowApiKey(s => !s)}>
+              <EyeIcon open={showApiKey} />
+            </button>
+          </div>
+          {config._hasApiKey && !config.apiKey && (
+            <p className={styles.fieldHint}>Déjà enregistrée, laissez vide pour conserver.</p>
+          )}
+        </div>
+
+        {indexers !== null && (
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Indexeurs ({indexers.filter(i => i.enabled).length}/{indexers.length} actifs)</label>
+            {indexers.length === 0 ? (
+              <p className={styles.fieldHint}>Aucun indexeur configuré dans Prowlarr.</p>
+            ) : (
+              <div className={styles.miniCardGrid}>
+                {indexers.map(i => (
+                  <div key={i.id} className={`${styles.miniCard} ${!i.enabled ? styles.miniCardDisabled : ''}`}>
+                    <span className={`${styles.miniCardDot} ${i.enabled ? styles.miniCardDotOn : ''}`} />
+                    <div className={styles.miniCardBody}>
+                      <div className={styles.miniCardName} title={i.name}>{i.name}</div>
+                      <div className={styles.miniCardMeta}>{i.protocol}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {downloadClients !== null && (
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Clients de téléchargement ({downloadClients.filter(c => c.enabled).length}/{downloadClients.length} actifs)</label>
+            {downloadClients.length === 0 ? (
+              <p className={styles.fieldHint}>Aucun client de téléchargement configuré dans Prowlarr.</p>
+            ) : (
+              <div className={styles.miniCardGrid}>
+                {downloadClients.map(c => (
+                  <div key={c.id} className={`${styles.miniCard} ${!c.enabled ? styles.miniCardDisabled : ''}`}>
+                    <span className={`${styles.miniCardDot} ${c.enabled ? styles.miniCardDotOn : ''}`} />
+                    <div className={styles.miniCardBody}>
+                      <div className={styles.miniCardName} title={c.name}>{c.name}</div>
+                      <div className={styles.miniCardMeta}>{c.implementation}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="button" className={styles.btnTest} onClick={handleTest} disabled={testing || saving}>
+            {testing ? 'Test…' : 'Tester la connexion'}
+          </button>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function FourtouticiCard() {
   const [config, setConfig] = useState({ enabled: false, url: 'https://fourtoutici.cc' });
   const [loading, setLoading] = useState(true);
@@ -967,6 +1183,7 @@ export default function ConnectorsPanel() {
       <LibgenCard />
       <FourtouticiCard />
       <UltimZoneCard />
+      <ProwlarrCard />
       <TrendingCard />
     </div>
   );

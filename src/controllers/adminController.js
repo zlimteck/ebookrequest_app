@@ -102,6 +102,35 @@ async function checkUltimZoneConnector() {
   }
 }
 
+async function checkProwlarrConnector() {
+  try {
+    const { getProwlarrConfig, pingProwlarr, fetchProwlarrIndexers, fetchProwlarrDownloadClients } = await import('../services/prowlarrService.js');
+    const config = await getProwlarrConfig();
+    if (!config?.enabled) return { enabled: false, connected: false, url: null, error: null };
+    if (!config.url || !config.apiKey) {
+      return { enabled: true, connected: false, url: config.url || null, error: 'URL ou clé API non configurée' };
+    }
+    const { version } = await pingProwlarr();
+    const [indexers, downloadClients] = await Promise.all([
+      fetchProwlarrIndexers().catch(() => []),
+      fetchProwlarrDownloadClients().catch(() => []),
+    ]);
+    return {
+      enabled: true,
+      connected: true,
+      url: config.url,
+      version,
+      indexersActive: indexers.filter(i => i.enabled).length,
+      indexersTotal: indexers.length,
+      downloadClientsActive: downloadClients.filter(c => c.enabled).length,
+      downloadClientsTotal: downloadClients.length,
+      error: null,
+    };
+  } catch (err) {
+    return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
+
 async function checkGoogleBooks() {
   // `enabled` doit refléter isGoogleBooksSearchEnabled() (ce qui gouverne réellement
   // /api/books/search), pas seulement "une clé API est disponible" — getGoogleBooksApiKey()
@@ -431,7 +460,7 @@ function withTimeout(promise, ms, fallback) {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr] = await Promise.all([
       withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
       withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
       withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
@@ -444,6 +473,7 @@ export const getServicesHealth = async (req, res) => {
       withTimeout(checkProxy(), 8000, { enabled: false, connected: false, mode: null, error: 'timeout' }),
       withTimeout(checkFourtouticiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkUltimZoneConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkProwlarrConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
     ]);
 
     res.json({
@@ -521,6 +551,17 @@ export const getServicesHealth = async (req, res) => {
           connected: ultimZone.connected,
           url: ultimZone.url || null,
           error: ultimZone.error || null,
+        },
+        prowlarr: {
+          enabled: prowlarr.enabled,
+          connected: prowlarr.connected,
+          url: prowlarr.url || null,
+          version: prowlarr.version || null,
+          indexersActive: prowlarr.indexersActive ?? null,
+          indexersTotal: prowlarr.indexersTotal ?? null,
+          downloadClientsActive: prowlarr.downloadClientsActive ?? null,
+          downloadClientsTotal: prowlarr.downloadClientsTotal ?? null,
+          error: prowlarr.error || null,
         },
       },
     });
