@@ -804,6 +804,38 @@ function ProwlarrCard() {
   const [version, setVersion] = useState(null);
   const [indexers, setIndexers] = useState(null);
   const [downloadClients, setDownloadClients] = useState(null);
+  const [categoryModal, setCategoryModal] = useState(null); // indexer object
+  const [categorySelection, setCategorySelection] = useState([]);
+  const [searchEnabledSelection, setSearchEnabledSelection] = useState(true);
+  const [savingCategories, setSavingCategories] = useState(false);
+
+  const openCategoryModal = (indexer) => {
+    setCategoryModal(indexer);
+    setCategorySelection(indexer.selectedCategories || []);
+    setSearchEnabledSelection(indexer.searchEnabled !== false);
+  };
+
+  const toggleCategory = (catId) => {
+    setCategorySelection(prev => prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]);
+  };
+
+  const saveCategorySelection = async () => {
+    setSavingCategories(true);
+    try {
+      await axiosAdmin.put(`/api/connectors/prowlarr/indexers/${categoryModal.id}/categories`, {
+        categoryIds: categorySelection,
+        searchEnabled: searchEnabledSelection,
+      });
+      setIndexers(prev => prev.map(i => i.id === categoryModal.id
+        ? { ...i, selectedCategories: categorySelection, searchEnabled: searchEnabledSelection }
+        : i));
+      setCategoryModal(null);
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSavingCategories(false);
+    }
+  };
 
   const fetchIndexersAndClients = () => {
     axiosAdmin.get('/api/connectors/prowlarr/indexers')
@@ -893,8 +925,9 @@ function ProwlarrCard() {
               )}
             </p>
             <p className={styles.cardDesc}>
-              Recherche via les indexeurs torrent/NZB configurés dans votre instance Prowlarr.
-              Connexion uniquement pour le moment (recherche et téléchargement à venir).
+              Recherche via les indexeurs torrent/NZB configurés dans votre instance Prowlarr
+              (cliquez un indexeur ci-dessous pour le configurer). Connexion uniquement pour le
+              moment, recherche et téléchargement à venir.
             </p>
           </div>
         </div>
@@ -955,16 +988,72 @@ function ProwlarrCard() {
             ) : (
               <div className={styles.miniCardGrid}>
                 {indexers.map(i => (
-                  <div key={i.id} className={`${styles.miniCard} ${!i.enabled ? styles.miniCardDisabled : ''}`}>
+                  <div
+                    key={i.id}
+                    className={`${styles.miniCard} ${styles.miniCardClickable} ${(!i.enabled || i.searchEnabled === false) ? styles.miniCardDisabled : ''}`}
+                    onClick={() => openCategoryModal(i)}
+                    title="Choisir les catégories recherchées sur cet indexeur"
+                  >
                     <span className={`${styles.miniCardDot} ${i.enabled ? styles.miniCardDotOn : ''}`} />
                     <div className={styles.miniCardBody}>
                       <div className={styles.miniCardName} title={i.name}>{i.name}</div>
-                      <div className={styles.miniCardMeta}>{i.protocol}</div>
+                      <div className={styles.miniCardMeta}>
+                        {i.searchEnabled === false ? 'Recherche désactivée' : i.protocol}
+                        {i.selectedCategories?.length ? ` · ${i.selectedCategories.length} catégorie(s)` : ''}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {categoryModal && (
+          <div className={styles.catModalOverlay} onClick={() => setCategoryModal(null)}>
+            <div className={styles.catModal} onClick={e => e.stopPropagation()}>
+              <div className={styles.catModalHeader}>
+                <div>
+                  <p className={styles.catModalTitle}>{categoryModal.name}</p>
+                  <p className={styles.catModalSubtitle}>
+                    Catégories recherchées sur cet indexeur, rien sélectionné = toutes.
+                  </p>
+                </div>
+                <button type="button" className={styles.catModalClose} onClick={() => setCategoryModal(null)}>×</button>
+              </div>
+              <div className={styles.catModalBody}>
+                <label className={styles.catCheckboxRow} style={{ fontWeight: 600, borderBottom: '1px solid var(--color-border)', paddingBottom: '0.6rem', marginBottom: '0.4rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={searchEnabledSelection}
+                    onChange={e => setSearchEnabledSelection(e.target.checked)}
+                  />
+                  Utiliser cet indexeur pour la recherche EbookRequest
+                </label>
+                {(categoryModal.availableCategories || []).length === 0 ? (
+                  <p className={styles.fieldHint}>Aucune catégorie annoncée par cet indexeur.</p>
+                ) : (
+                  categoryModal.availableCategories.map(cat => (
+                    <label key={cat.id} className={styles.catCheckboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={categorySelection.includes(cat.id)}
+                        onChange={() => toggleCategory(cat.id)}
+                      />
+                      {cat.name}
+                    </label>
+                  ))
+                )}
+              </div>
+              <div className={styles.catModalFooter}>
+                <button type="button" className={styles.btnTest} onClick={() => setCategorySelection([])}>
+                  Tout désélectionner
+                </button>
+                <button type="button" className={styles.btnPrimary} onClick={saveCategorySelection} disabled={savingCategories}>
+                  {savingCategories ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

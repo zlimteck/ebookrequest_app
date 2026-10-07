@@ -970,6 +970,86 @@ curl -X POST https://app.ndd.fr/api/connectors/fourtoutici/download \
   -d '{"fileId": "12345", "requestId": "ID"}'
 ```
 
+### `GET /api/connectors/ultimzone`
+```bash
+curl https://app.ndd.fr/api/connectors/ultimzone \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/ultimzone`
+Cookie de session (pas de login programmatique possible, captcha sur leur page de
+connexion) : `phpsessid` et `fluxCookie`, chiffrés séparément.
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/ultimzone \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "url": "https://ultim-zone.in", "phpsessid": "...", "fluxCookie": "..."}'
+```
+
+### `GET /api/connectors/ultimzone/search?q=Dune`
+Recherche dans les forums BD/Comics/Mangas/Romans/Livres. Résultats dédupliqués par topic
+(`annaUrl` pointe vers le topic à ouvrir manuellement, pas de téléchargement automatique,
+le forum ne fait que lister des liens vers des hébergeurs tiers).
+```bash
+curl "https://app.ndd.fr/api/connectors/ultimzone/search?q=Dune" \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/connectors/ultimzone/ping`
+Vérifie la validité de la session (cookie expiré → erreur explicite).
+```bash
+curl https://app.ndd.fr/api/connectors/ultimzone/ping \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/connectors/prowlarr`
+```bash
+curl https://app.ndd.fr/api/connectors/prowlarr \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/prowlarr`
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/prowlarr \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "url": "http://prowlarr:9696", "apiKey": "clé"}'
+```
+
+### `GET /api/connectors/prowlarr/ping`
+Vérifie la joignabilité et la validité de la clé API. Retourne `{ ok, version }`.
+```bash
+curl https://app.ndd.fr/api/connectors/prowlarr/ping \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/connectors/prowlarr/indexers`
+Liste les indexeurs configurés dans Prowlarr, avec leurs catégories Torznab/Newznab
+disponibles (`availableCategories`) et la sélection retenue côté EbookRequest
+(`selectedCategories`, `searchEnabled`), ne modifie jamais la config Prowlarr elle-même.
+```bash
+curl https://app.ndd.fr/api/connectors/prowlarr/indexers \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/connectors/prowlarr/download-clients`
+Liste les clients de téléchargement (qBittorrent, SABnzbd, etc.) configurés dans Prowlarr.
+```bash
+curl https://app.ndd.fr/api/connectors/prowlarr/download-clients \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/prowlarr/indexers/:id/categories`
+Sélection des catégories à rechercher sur cet indexeur (`categoryIds`, vide = toutes) et
+activation pour la recherche EbookRequest (`searchEnabled`, indépendant du toggle Prowlarr).
+Stocké uniquement côté EbookRequest.
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/prowlarr/indexers/3/categories \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"categoryIds": [7020, 7030], "searchEnabled": true}'
+```
+
 ### `GET /api/connectors/predb`
 ```bash
 curl https://app.ndd.fr/api/connectors/predb \

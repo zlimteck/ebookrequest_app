@@ -62,6 +62,14 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   apnsMode:        { type: String, enum: ['direct', 'relay'], default: 'direct' },
   apnsRelayUrl:    { type: String, default: '' },
   apnsRelayToken:  { type: String, default: '' },
+  // Catégories Torznab/Newznab sélectionnées par indexeur (service: 'prowlarr') —
+  // { [indexerId]: [categoryId, ...] }. Par défaut vide = toutes les catégories
+  // ebook/BD/manga proposées par l'indexeur (voir prowlarrService.js).
+  prowlarrIndexerCategories: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Indexeurs désactivés pour la recherche EbookRequest — { [indexerId]: false },
+  // indépendant du toggle "enable" propre à Prowlarr (jamais modifié par nous).
+  // Absent = activé par défaut.
+  prowlarrIndexerSearchEnabled: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

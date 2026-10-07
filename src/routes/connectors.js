@@ -372,6 +372,25 @@ router.get('/prowlarr/indexers', requireAuth, requireAdmin, async (req, res) => 
   }
 });
 
+// ── PUT /api/connectors/prowlarr/indexers/:id/categories ────────────────────
+// Sélection des catégories Torznab/Newznab + activation pour la recherche
+// EbookRequest sur CET indexeur quand la recherche sera branchée (issue #42) —
+// catégories vides = toutes, searchEnabled indépendant du toggle Prowlarr.
+router.put('/prowlarr/indexers/:id/categories', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { saveIndexerCategorySelection, saveIndexerSearchEnabled } = await import('../services/prowlarrService.js');
+    const { categoryIds, searchEnabled } = req.body;
+    const id = Number(req.params.id);
+    const [selectedCategories, resolvedSearchEnabled] = await Promise.all([
+      saveIndexerCategorySelection(id, categoryIds),
+      searchEnabled !== undefined ? saveIndexerSearchEnabled(id, !!searchEnabled) : Promise.resolve(undefined),
+    ]);
+    res.json({ selectedCategories, searchEnabled: resolvedSearchEnabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la sauvegarde' });
+  }
+});
+
 // ── GET /api/connectors/prowlarr/download-clients ───────────────────────────
 router.get('/prowlarr/download-clients', requireAuth, requireAdmin, async (req, res) => {
   try {
