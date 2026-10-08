@@ -1033,7 +1033,10 @@ curl https://app.ndd.fr/api/connectors/prowlarr/indexers \
 ```
 
 ### `GET /api/connectors/prowlarr/download-clients`
-Liste les clients de téléchargement (qBittorrent, SABnzbd, etc.) configurés dans Prowlarr.
+Liste les clients de téléchargement configurés dans Prowlarr (tels que Prowlarr les
+renvoie, y compris des clients usenet comme SABnzbd). Seuls les clients torrent
+(qBittorrent, Transmission, Deluge, rTorrent/ruTorrent) sont réellement pris en
+charge pour le suivi/récupération côté EbookRequest pour le moment.
 ```bash
 curl https://app.ndd.fr/api/connectors/prowlarr/download-clients \
   -H "Authorization: Bearer <token>"
@@ -1052,7 +1055,9 @@ curl -X PUT https://app.ndd.fr/api/connectors/prowlarr/indexers/3/categories \
 
 ### `GET /api/connectors/prowlarr/search?q=Dune`
 Un appel par indexeur activé (catégories propres à chacun), résultats torrent/NZB fusionnés
-et triés par date de publication.
+et triés par date de publication. Seuls les résultats torrent sont téléchargeables
+automatiquement pour le moment, les résultats NZB/usenet sont affichés à titre
+informatif uniquement.
 ```bash
 curl "https://app.ndd.fr/api/connectors/prowlarr/search?q=Dune" \
   -H "Authorization: Bearer <token>"
