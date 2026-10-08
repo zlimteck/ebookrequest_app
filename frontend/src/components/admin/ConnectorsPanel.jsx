@@ -999,6 +999,7 @@ function ProwlarrCard() {
           <div>
             <p className={styles.cardName}>
               Prowlarr
+              <span className={styles.betaBadge} title="Connecteur récent, encore en rodage">Bêta</span>
               {status && (
                 <span className={status === 'ok' ? styles.statusDotOk : styles.statusDotError} title={status === 'ok' ? 'Connecté' : 'Connexion échouée'} />
               )}

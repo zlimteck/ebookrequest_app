@@ -147,6 +147,19 @@
   gap: 0.5rem;
 }
 
+.betaBadge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+}
+
 .statusDotOk,
 .statusDotError {
   display: inline-block;
