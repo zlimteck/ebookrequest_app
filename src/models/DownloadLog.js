@@ -7,13 +7,13 @@ const downloadLogSchema = new Schema({
   title:         { type: String, default: '' },
   author:        { type: String, default: '' },
   username:      { type: String, default: '' },
-  connector:     { type: String, enum: ['valentine', 'annasarchive', 'libgen', 'fourtoutici', 'ultimzone', 'manual'], required: true },
+  connector:     { type: String, enum: ['valentine', 'annasarchive', 'libgen', 'fourtoutici', 'ultimzone', 'prowlarr', 'manual'], required: true },
   success:       { type: Boolean, required: true },
   error:         { type: String, default: null },
   triggeredBy:   { type: String, enum: ['auto', 'admin'], default: 'auto' },
   // Distingue le chemin de recherche ayant mené au téléchargement — indépendant
   // de triggeredBy (qui dit *qui* a déclenché, pas *par quelle recherche*).
-  searchMode:    { type: String, enum: ['detailed', 'direct-valentine', 'direct-fourtoutici', 'admin-manual'], default: 'detailed' },
+  searchMode:    { type: String, enum: ['detailed', 'direct-valentine', 'direct-fourtoutici', 'direct-prowlarr', 'admin-manual'], default: 'detailed' },
 }, {
   timestamps: true,
 });

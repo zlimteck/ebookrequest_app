@@ -2218,6 +2218,7 @@ body {
   border-radius: 14px;
   width: 100%;
   max-width: 540px;
+  max-height: 90vh;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -2230,6 +2231,7 @@ body {
   justify-content: space-between;
   padding: 1.25rem 1.5rem 1rem;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .uploadModalTitle {
@@ -2271,6 +2273,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Drop zone */

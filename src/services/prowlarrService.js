@@ -178,14 +178,15 @@ export async function searchProwlarr(query) {
 
     return res.data.map(r => ({
       title: r.title,
+      guid: r.guid,
       indexerId: idx.id,
       indexer: idx.name,
       protocol: idx.protocol,
       size: r.size ?? null,
       seeders: r.seeders ?? null,
       publishDate: r.publishDate || null,
-      // guid = lien de la fiche sur l'indexeur (torrent) ou l'article (NZB) ;
-      // downloadUrl/magnetUrl = lien direct vers le fichier .torrent/magnet/NZB.
+      // downloadUrl/magnetUrl = lien direct vers le fichier .torrent/magnet/NZB ;
+      // infoUrl = lien de la fiche sur l'indexeur, pour consultation humaine.
       downloadUrl: r.downloadUrl || r.magnetUrl || null,
       infoUrl: r.infoUrl || r.guid || null,
     }));
@@ -196,18 +197,101 @@ export async function searchProwlarr(query) {
   return { results };
 }
 
+// Extrait le hash BitTorrent d'un lien magnet (xt=urn:btih:<hash>) — seule
+// façon fiable de suivre le téléchargement ensuite auprès du client torrent,
+// qui identifie toujours ses torrents par ce hash, jamais par le guid Prowlarr.
+function extractMagnetHash(magnetUrl) {
+  const match = (magnetUrl || '').match(/xt=urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+/**
+ * Déclenche le téléchargement d'un résultat (POST /api/v1/search avec
+ * guid+indexerId, Prowlarr relaie vers le client configuré de son côté pour
+ * cet indexeur). Retourne le hash à suivre ensuite auprès du client torrent
+ * (voir downloadClients/) — extrait directement du lien magnet s'il y en a
+ * un, sinon calculé en téléchargeant le fichier .torrent lui-même et en
+ * hashant son dictionnaire "info" (seule façon fiable d'obtenir le même hash
+ * que celui utilisé par les clients torrent, qui n'ont jamais connaissance
+ * du guid Prowlarr).
+ * Non vérifié en conditions réelles (endpoint déduit du comportement connu
+ * de l'UI Prowlarr "Recherche manuelle", pas documenté explicitement).
+ */
+export async function grabRelease({ guid, indexerId, downloadUrl }) {
+  const config = await getProwlarrConfig();
+  if (!config.enabled) throw new Error('Connecteur Prowlarr désactivé');
+  const apiKey = decrypt(config.apiKey) ?? config.apiKey;
+
+  const res = await axios.post(`${config.url}/api/v1/search`, { guid, indexerId }, {
+    headers: { 'X-Api-Key': apiKey },
+    timeout: 20000,
+    validateStatus: () => true,
+  });
+  if (res.status !== 200 && res.status !== 201) {
+    throw new Error(`Prowlarr a refusé le téléchargement (HTTP ${res.status})`);
+  }
+
+  const magnetHash = extractMagnetHash(downloadUrl);
+  if (magnetHash) return { hash: magnetHash };
+
+  if (downloadUrl) {
+    try {
+      const { getInfoHashFromTorrentFile } = await import('./torrentFileUtil.js');
+      const fileRes = await axios.get(downloadUrl, {
+        headers: { 'X-Api-Key': apiKey },
+        responseType: 'arraybuffer',
+        timeout: 20000,
+        validateStatus: () => true,
+      });
+      if (fileRes.status === 200) {
+        return { hash: getInfoHashFromTorrentFile(Buffer.from(fileRes.data)) };
+      }
+      console.warn(`[Prowlarr] Téléchargement du .torrent pour calcul du hash échoué (HTTP ${fileRes.status})`);
+    } catch (err) {
+      console.warn(`[Prowlarr] Calcul du hash depuis le .torrent échoué: ${err.message}`);
+    }
+  }
+
+  return { hash: null };
+}
+
 /**
  * Liste les clients de téléchargement (qBittorrent, SABnzbd, etc.) configurés
  * dans Prowlarr.
  */
+// Correspondance entre le nom d'implémentation Prowlarr et notre propre
+// type d'adaptateur (src/services/downloadClients/) — null si pas supporté
+// (ex: SABnzbd, usenet, hors scope de ce téléchargement torrent).
+const IMPLEMENTATION_TO_TYPE = {
+  QBittorrent: 'qbittorrent',
+  Transmission: 'transmission',
+  Deluge: 'deluge',
+  RTorrent: 'rtorrent',
+};
+
 export async function fetchProwlarrDownloadClients() {
   const data = await prowlarrGet('/api/v1/downloadclient');
   if (!Array.isArray(data)) return [];
-  return data.map(c => ({
-    id: c.id,
-    name: c.name,
-    implementation: c.implementation, // ex: 'QBittorrent', 'Sabnzbd'
-    protocol: c.protocol,
-    enabled: !!c.enable,
-  }));
+  return data.map(c => {
+    const fields = c.fields || [];
+    const getField = (name) => fields.find(f => f.name === name)?.value;
+    // Prowlarr ne renvoie JAMAIS le mot de passe via l'API (champ masqué côté
+    // serveur, comme Sonarr/Radarr) — seules les infos non sensibles sont
+    // exploitables pour pré-remplir notre propre config.
+    const host = getField('host');
+    const port = getField('port');
+    const useSsl = getField('useSsl');
+    const urlBase = getField('urlBase') || '';
+    const suggestedUrl = host ? `${useSsl ? 'https' : 'http'}://${host}${port ? `:${port}` : ''}${urlBase}` : null;
+    return {
+      id: c.id,
+      name: c.name,
+      implementation: c.implementation, // ex: 'QBittorrent', 'Sabnzbd'
+      protocol: c.protocol,
+      enabled: !!c.enable,
+      suggestedType: IMPLEMENTATION_TO_TYPE[c.implementation] || null,
+      suggestedUrl,
+      suggestedUsername: getField('username') || '',
+    };
+  });
 }

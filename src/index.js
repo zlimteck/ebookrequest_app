@@ -54,6 +54,7 @@ import { startValentineCron } from './services/valentineCron.js';
 import { initializeTrendingBooksCache, isTrendingPreloadEnabled } from './services/trendingBooksService.js';
 import { startHardcoverSyncCron } from './services/hardcoverSyncCron.js';
 import { startProviderHealthCron } from './services/providerHealthCron.js';
+import { checkPendingProwlarrDownloads } from './services/prowlarrDownloadService.js';
 import { startReleaseCheckCron } from './services/releaseCheckCron.js';
 import { startRecommendationsCron } from './services/recommendationsCron.js';
 import { startBestsellerCron } from './services/bestsellerCron.js';
@@ -323,6 +324,10 @@ connectMongoWithRetry()
     // Cron d'alerte proactive : Google Books/Hardcover activés mais en échec, ou clé
     // Hardcover proche de l'expiration — notifie les admins (email + Apprise)
     startProviderHealthCron();
+
+    // Cron de suivi des téléchargements Prowlarr (issue #42) : vérifie l'état
+    // auprès du client torrent configuré et finalise les demandes terminées.
+    setInterval(() => checkPendingProwlarrDownloads().catch(e => console.error('[ProwlarrDownloadCron]', e.message)), 5 * 60 * 1000);
 
     // Cron de notification "date de sortie atteinte" : prévient l'utilisateur
     // quand publishedDate est dépassée sur une demande encore en attente

@@ -418,6 +418,104 @@ router.get('/prowlarr/search', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ── POST /api/connectors/prowlarr/download ───────────────────────────────────
+// Lance le téléchargement d'un résultat pour une demande existante — asynchrone
+// (torrent), la demande reste en attente, finalisée par le cron de suivi.
+router.post('/prowlarr/download', requireAuth, requireAdmin, async (req, res) => {
+  const { requestId, guid, indexerId, downloadUrl, title } = req.body;
+  try {
+    const { startProwlarrDownload } = await import('../services/prowlarrDownloadService.js');
+    if (!requestId || !guid || indexerId == null) {
+      return res.status(400).json({ error: 'requestId, guid et indexerId requis' });
+    }
+    const { hash } = await startProwlarrDownload(requestId, { guid, indexerId, downloadUrl, title });
+    const br = await BookRequest.findById(requestId).lean();
+    // success ici = "envoyé avec succès au client torrent", pas "livre obtenu"
+    // (ça, c'est le cron de suivi qui le détermine séparément à la complétion).
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'prowlarr', success: true, triggeredBy: 'admin', searchMode: 'admin-manual' });
+    res.json({ success: true, hash });
+  } catch (err) {
+    const br = await BookRequest.findById(requestId).lean().catch(() => null);
+    await DownloadLog.create({ bookRequestId: requestId, title: br?.title || '', author: br?.author || '', username: br?.username || '', connector: 'prowlarr', success: false, error: err.message.slice(0, 500), triggeredBy: 'admin', searchMode: 'admin-manual' }).catch(() => {});
+    res.status(500).json({ error: err.message || 'Erreur lors du lancement du téléchargement' });
+  }
+});
+
+// ── GET /api/connectors/downloadclient ────────────────────────────────────────
+router.get('/downloadclient', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { getDownloadClientConfig } = await import('../services/downloadClients/index.js');
+    const doc = await getDownloadClientConfig();
+    res.json({
+      downloadClientType: doc.downloadClientType || '',
+      url: doc.url || '',
+      downloadClientUsername: doc.downloadClientUsername || '',
+      password: doc.password ? '••••••••' : '',
+      _hasPassword: !!doc.password,
+      fileAccessMode: doc.fileAccessMode || 'local',
+      fileAccessLocalPath: doc.fileAccessLocalPath || '',
+      fileAccessWebdavUrl: doc.fileAccessWebdavUrl || '',
+      fileAccessWebdavUsername: doc.fileAccessWebdavUsername || '',
+      fileAccessWebdavBasePath: doc.fileAccessWebdavBasePath || '',
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/connectors/downloadclient ────────────────────────────────────────
+router.put('/downloadclient', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { saveDownloadClientConfig } = await import('../services/downloadClients/index.js');
+    const doc = await saveDownloadClientConfig(req.body);
+    res.json({
+      downloadClientType: doc.downloadClientType || '',
+      url: doc.url || '',
+      downloadClientUsername: doc.downloadClientUsername || '',
+      password: doc.password ? '••••••••' : '',
+      _hasPassword: !!doc.password,
+      fileAccessMode: doc.fileAccessMode || 'local',
+      fileAccessLocalPath: doc.fileAccessLocalPath || '',
+      fileAccessWebdavUrl: doc.fileAccessWebdavUrl || '',
+      fileAccessWebdavUsername: doc.fileAccessWebdavUsername || '',
+      fileAccessWebdavBasePath: doc.fileAccessWebdavBasePath || '',
+      apiKey: doc.apiKey ? '••••••••' : '',
+      _hasApiKey: !!doc.apiKey,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la sauvegarde' });
+  }
+});
+
+// ── POST /api/connectors/downloadclient/test ─────────────────────────────────
+// Teste la connexion avec un hash arbitraire (généralement absent) juste pour
+// vérifier que l'authentification passe — un hash inconnu renvoie null
+// (succès de connexion) plutôt qu'une erreur, une vraie erreur d'auth lève.
+router.post('/downloadclient/test', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { getTorrentStatus } = await import('../services/downloadClients/index.js');
+    await getTorrentStatus('0000000000000000000000000000000000000000');
+    res.json({ success: true, message: 'Connexion réussie.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible' });
+  }
+});
+
+// ── POST /api/connectors/prowlarr/check-downloads-now ────────────────────────
+// Force une passe du cron de suivi immédiatement (sans attendre les 5 min),
+// pour voir en direct ce qui se passe sur chaque téléchargement en cours.
+router.post('/prowlarr/check-downloads-now', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { checkPendingProwlarrDownloads } = await import('../services/prowlarrDownloadService.js');
+    const report = await checkPendingProwlarrDownloads();
+    res.json({ report });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la vérification' });
+  }
+});
+
 // ── GET /api/connectors/ultimzone ────────────────────────────────────────────
 router.get('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
   try {

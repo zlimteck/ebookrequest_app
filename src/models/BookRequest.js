@@ -133,6 +133,11 @@ const bookRequestSchema = new mongoose.Schema({
   // ET ayant utilisé le compte admin partagé (pas le compte perso de
   // l'utilisateur) — sert au quota par utilisateur sur ce compte partagé (#26).
   viaValentineAdminAccount: { type: Boolean, default: false },
+  // Suivi d'un téléchargement torrent lancé via Prowlarr (issue #42) — rempli au
+  // "grab", lu par le cron de suivi (prowlarrDownloadCron.js) jusqu'à complétion
+  // ou échec, puis vidé. Pas de sous-schéma strict : la forme exacte dépend du
+  // client torrent (qBittorrent/rTorrent/ruTorrent/Deluge/Transmission).
+  prowlarrDownload: { type: mongoose.Schema.Types.Mixed, default: null },
   statusHistory: [{
     status: { type: String },
     changedAt: { type: Date, default: Date.now },

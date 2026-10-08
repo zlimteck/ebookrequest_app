@@ -70,6 +70,23 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // indépendant du toggle "enable" propre à Prowlarr (jamais modifié par nous).
   // Absent = activé par défaut.
   prowlarrIndexerSearchEnabled: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Connexion directe au client torrent (service: 'downloadClient') — distincte
+  // de ce que Prowlarr connaît lui-même (il ne redonne jamais les identifiants
+  // du client vers l'extérieur) : nécessaire pour interroger l'état du
+  // téléchargement et récupérer le fichier une fois terminé.
+  downloadClientType: { type: String, enum: ['', 'qbittorrent', 'rtorrent', 'deluge', 'transmission'], default: '' },
+  downloadClientUsername: { type: String, default: '' },
+  // Récupération du fichier terminé : 'local' (volume Docker partagé, lecture
+  // directe) ou 'webdav' (serveur distant, HTTP pur) — voir issue #42.
+  fileAccessMode: { type: String, enum: ['local', 'webdav'], default: 'local' },
+  fileAccessLocalPath: { type: String, default: '' },
+  fileAccessWebdavUrl: { type: String, default: '' },
+  fileAccessWebdavUsername: { type: String, default: '' },
+  // Préfixe à ajouter devant le chemin relatif du fichier sous la racine
+  // WebDAV, si le dossier de téléchargement du client n'est pas exposé à la
+  // racine (ex: seedbox où /webdav pointe sur le home entier, torrents dans
+  // un sous-dossier). Vide par défaut = racine WebDAV = dossier de téléchargement.
+  fileAccessWebdavBasePath: { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

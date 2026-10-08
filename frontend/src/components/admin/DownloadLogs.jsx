@@ -8,6 +8,7 @@ const CONNECTOR_LABELS = {
   libgen: 'LibGen',
   fourtoutici: 'Fourtoutici',
   ultimzone: 'Ultim-Zone',
+  prowlarr: 'Prowlarr',
   manual: 'Manuel',
 };
 
@@ -17,6 +18,7 @@ const CONNECTOR_CHIP_CLASS = {
   libgen: 'chipAnnas',
   fourtoutici: 'chipManual',
   ultimzone: 'chipManual',
+  prowlarr: 'chipManual',
   manual: 'chipManual',
 };
 
@@ -77,6 +79,7 @@ const DownloadLogs = () => {
           <option value="libgen">LibGen</option>
           <option value="fourtoutici">Fourtoutici</option>
           <option value="ultimzone">Ultim-Zone</option>
+          <option value="prowlarr">Prowlarr</option>
         </select>
         <select className={styles.select} value={filterSuccess} onChange={e => setFilterSuccess(e.target.value)}>
           <option value="">Tous les résultats</option>

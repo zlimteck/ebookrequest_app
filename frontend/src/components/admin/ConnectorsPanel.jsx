@@ -808,6 +808,85 @@ function ProwlarrCard() {
   const [categorySelection, setCategorySelection] = useState([]);
   const [searchEnabledSelection, setSearchEnabledSelection] = useState(true);
   const [savingCategories, setSavingCategories] = useState(false);
+  const [clientConfigModal, setClientConfigModal] = useState(null); // client Prowlarr cliqué
+  const [clientConfig, setClientConfig] = useState(null);
+  const [clientConfigLoading, setClientConfigLoading] = useState(false);
+  const [savingClientConfig, setSavingClientConfig] = useState(false);
+  const [testingClientConfig, setTestingClientConfig] = useState(false);
+  const [showClientPassword, setShowClientPassword] = useState(false);
+  const [showClientWebdavPassword, setShowClientWebdavPassword] = useState(false);
+  const [clientConfigAlert, setClientConfigAlert] = useState(null);
+  const [checkingDownloads, setCheckingDownloads] = useState(false);
+  const [downloadsReport, setDownloadsReport] = useState(null);
+
+  const checkDownloadsNow = async () => {
+    setCheckingDownloads(true);
+    setDownloadsReport(null);
+    try {
+      const res = await axiosAdmin.post('/api/connectors/prowlarr/check-downloads-now');
+      setDownloadsReport(res.data.report || []);
+    } catch (err) {
+      setDownloadsReport([{ title: '', result: `Erreur : ${err.response?.data?.error || err.message}` }]);
+    } finally {
+      setCheckingDownloads(false);
+    }
+  };
+
+  const openClientConfigModal = async (client) => {
+    setClientConfigModal(client);
+    setClientConfigLoading(true);
+    try {
+      const res = await axiosAdmin.get('/api/connectors/downloadclient');
+      const saved = res.data;
+      // Pré-remplit uniquement si rien n'est déjà enregistré pour ce champ,
+      // pour ne jamais écraser une config existante en rouvrant la modale.
+      setClientConfig({
+        ...saved,
+        downloadClientType: saved.downloadClientType || client.suggestedType || '',
+        url: saved.url || client.suggestedUrl || '',
+        downloadClientUsername: saved.downloadClientUsername || client.suggestedUsername || '',
+      });
+    } catch {
+      setClientConfig({
+        downloadClientType: client.suggestedType || '', url: client.suggestedUrl || '',
+        downloadClientUsername: client.suggestedUsername || '', password: '', _hasPassword: false,
+        fileAccessMode: 'local', fileAccessLocalPath: '',
+        fileAccessWebdavUrl: '', fileAccessWebdavUsername: '', fileAccessWebdavBasePath: '',
+        apiKey: '', _hasApiKey: false,
+      });
+    } finally {
+      setClientConfigLoading(false);
+    }
+  };
+
+  const saveClientConfig = async (e) => {
+    e.preventDefault();
+    setSavingClientConfig(true);
+    setClientConfigAlert(null);
+    try {
+      const res = await axiosAdmin.put('/api/connectors/downloadclient', clientConfig);
+      setClientConfig(res.data);
+      setClientConfigAlert({ type: 'success', message: 'Configuration enregistrée.' });
+    } catch (err) {
+      setClientConfigAlert({ type: 'error', message: err.response?.data?.error || 'Erreur lors de la sauvegarde.' });
+    } finally {
+      setSavingClientConfig(false);
+    }
+  };
+
+  const testClientConfig = async () => {
+    setTestingClientConfig(true);
+    setClientConfigAlert(null);
+    try {
+      await axiosAdmin.put('/api/connectors/downloadclient', clientConfig);
+      await axiosAdmin.post('/api/connectors/downloadclient/test');
+      setClientConfigAlert({ type: 'success', message: 'Connexion réussie.' });
+    } catch (err) {
+      setClientConfigAlert({ type: 'error', message: err.response?.data?.error || 'Connexion impossible.' });
+    } finally {
+      setTestingClientConfig(false);
+    }
+  };
 
   const openCategoryModal = (indexer) => {
     setCategoryModal(indexer);
@@ -1065,7 +1144,12 @@ function ProwlarrCard() {
             ) : (
               <div className={styles.miniCardGrid}>
                 {downloadClients.map(c => (
-                  <div key={c.id} className={`${styles.miniCard} ${!c.enabled ? styles.miniCardDisabled : ''}`}>
+                  <div
+                    key={c.id}
+                    className={`${styles.miniCard} ${styles.miniCardClickable} ${!c.enabled ? styles.miniCardDisabled : ''}`}
+                    onClick={() => openClientConfigModal(c)}
+                    title={c.suggestedType ? 'Configurer la connexion EbookRequest à ce client' : `${c.implementation} non supporté`}
+                  >
                     <span className={`${styles.miniCardDot} ${c.enabled ? styles.miniCardDotOn : ''}`} />
                     <div className={styles.miniCardBody}>
                       <div className={styles.miniCardName} title={c.name}>{c.name}</div>
@@ -1078,6 +1162,183 @@ function ProwlarrCard() {
           </div>
         )}
 
+        {clientConfigModal && (
+          <div className={styles.catModalOverlay} onClick={() => setClientConfigModal(null)}>
+            <div className={styles.catModal} onClick={e => e.stopPropagation()}>
+              <div className={styles.catModalHeader}>
+                <div>
+                  <p className={styles.catModalTitle}>{clientConfigModal.name}</p>
+                  <p className={styles.catModalSubtitle}>
+                    Connexion EbookRequest à ce client (identifiants distincts de ceux connus
+                    par Prowlarr, jamais redonnés par son API).
+                  </p>
+                </div>
+                <button type="button" className={styles.catModalClose} onClick={() => setClientConfigModal(null)}>×</button>
+              </div>
+              <div className={styles.catModalBody}>
+                {clientConfigLoading || !clientConfig ? (
+                  <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+                ) : (
+                  <>
+                    <div className={styles.fieldRow}>
+                      <label className={styles.fieldLabel}>Type de client</label>
+                      <select
+                        className={styles.fieldInput}
+                        value={clientConfig.downloadClientType}
+                        onChange={e => setClientConfig(c => ({ ...c, downloadClientType: e.target.value }))}
+                      >
+                        {DOWNLOAD_CLIENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+
+                    <div className={styles.fieldRow}>
+                      <label className={styles.fieldLabel}>URL</label>
+                      <input
+                        className={styles.fieldInput}
+                        type="url"
+                        placeholder="http://qbittorrent:8080"
+                        value={clientConfig.url}
+                        onChange={e => setClientConfig(c => ({ ...c, url: e.target.value }))}
+                      />
+                      {clientConfig.downloadClientType === 'rtorrent' && (
+                        <p className={styles.fieldHint}>Endpoint RPC complet (ex: pont SCGI-HTTP ou ruTorrent httprpc), pas l'interface web.</p>
+                      )}
+                    </div>
+
+                    <div className={styles.fieldRow}>
+                      <label className={styles.fieldLabel}>Identifiant</label>
+                      <input
+                        className={styles.fieldInput}
+                        type="text"
+                        autoComplete="off"
+                        value={clientConfig.downloadClientUsername}
+                        onChange={e => setClientConfig(c => ({ ...c, downloadClientUsername: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className={styles.fieldRow}>
+                      <label className={styles.fieldLabel}>Mot de passe</label>
+                      <div className={styles.fieldInputWrap}>
+                        <input
+                          className={styles.fieldInput}
+                          type={showClientPassword ? 'text' : 'password'}
+                          placeholder={clientConfig._hasPassword ? '••••••••' : ''}
+                          value={clientConfig.password}
+                          autoComplete="new-password"
+                          onChange={e => setClientConfig(c => ({ ...c, password: e.target.value }))}
+                        />
+                        <button type="button" className={styles.eyeBtn} onClick={() => setShowClientPassword(s => !s)}>
+                          <EyeIcon open={showClientPassword} />
+                        </button>
+                      </div>
+                      {clientConfig._hasPassword && !clientConfig.password && (
+                        <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+                      )}
+                    </div>
+
+                    <div className={styles.fieldRow}>
+                      <label className={styles.fieldLabel}>Récupération du fichier terminé</label>
+                      <select
+                        className={styles.fieldInput}
+                        value={clientConfig.fileAccessMode}
+                        onChange={e => setClientConfig(c => ({ ...c, fileAccessMode: e.target.value }))}
+                      >
+                        <option value="local">Volume partagé (même serveur)</option>
+                        <option value="webdav">WebDAV (serveur distant)</option>
+                      </select>
+                    </div>
+
+                    {clientConfig.fileAccessMode === 'local' ? (
+                      <div className={styles.fieldRow}>
+                        <label className={styles.fieldLabel}>Chemin local</label>
+                        <input
+                          className={styles.fieldInput}
+                          type="text"
+                          placeholder="/downloads"
+                          value={clientConfig.fileAccessLocalPath}
+                          onChange={e => setClientConfig(c => ({ ...c, fileAccessLocalPath: e.target.value }))}
+                        />
+                        <p className={styles.fieldHint}>Point de montage, dans ce conteneur, du dossier de téléchargement du client.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className={styles.fieldRow}>
+                          <label className={styles.fieldLabel}>URL WebDAV</label>
+                          <input
+                            className={styles.fieldInput}
+                            type="url"
+                            placeholder="https://serveur-distant/webdav/downloads"
+                            value={clientConfig.fileAccessWebdavUrl}
+                            onChange={e => setClientConfig(c => ({ ...c, fileAccessWebdavUrl: e.target.value }))}
+                          />
+                        </div>
+                        <div className={styles.fieldRow}>
+                          <label className={styles.fieldLabel}>Identifiant WebDAV</label>
+                          <input
+                            className={styles.fieldInput}
+                            type="text"
+                            autoComplete="off"
+                            value={clientConfig.fileAccessWebdavUsername}
+                            onChange={e => setClientConfig(c => ({ ...c, fileAccessWebdavUsername: e.target.value }))}
+                          />
+                        </div>
+                        <div className={styles.fieldRow}>
+                          <label className={styles.fieldLabel}>Chemin de base (facultatif)</label>
+                          <input
+                            className={styles.fieldInput}
+                            type="text"
+                            placeholder="/torrents"
+                            value={clientConfig.fileAccessWebdavBasePath}
+                            onChange={e => setClientConfig(c => ({ ...c, fileAccessWebdavBasePath: e.target.value }))}
+                          />
+                          <p className={styles.fieldHint}>
+                            Si la racine WebDAV ne correspond pas directement au dossier de téléchargement
+                            (ex: seedbox exposant tout le compte), indiquez le sous-dossier ici.
+                          </p>
+                        </div>
+                        <div className={styles.fieldRow}>
+                          <label className={styles.fieldLabel}>Mot de passe WebDAV</label>
+                          <div className={styles.fieldInputWrap}>
+                            <input
+                              className={styles.fieldInput}
+                              type={showClientWebdavPassword ? 'text' : 'password'}
+                              placeholder={clientConfig._hasApiKey ? '••••••••' : ''}
+                              value={clientConfig.apiKey}
+                              autoComplete="new-password"
+                              onChange={e => setClientConfig(c => ({ ...c, apiKey: e.target.value }))}
+                            />
+                            <button type="button" className={styles.eyeBtn} onClick={() => setShowClientWebdavPassword(s => !s)}>
+                              <EyeIcon open={showClientWebdavPassword} />
+                            </button>
+                          </div>
+                          {clientConfig._hasApiKey && !clientConfig.apiKey && (
+                            <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {clientConfigAlert && (
+                      <div className={`${styles.alert} ${clientConfigAlert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+                        {clientConfigAlert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+                        {clientConfigAlert.message}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className={styles.catModalFooter}>
+                <button type="button" className={styles.btnTest} onClick={testClientConfig} disabled={testingClientConfig || savingClientConfig || clientConfigLoading}>
+                  {testingClientConfig ? 'Test…' : 'Tester la connexion'}
+                </button>
+                <button type="button" className={styles.btnPrimary} onClick={saveClientConfig} disabled={savingClientConfig || clientConfigLoading}>
+                  {savingClientConfig ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
             {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
@@ -1085,7 +1346,25 @@ function ProwlarrCard() {
           </div>
         )}
 
+        {downloadsReport !== null && (
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Résultat de la vérification</label>
+            {downloadsReport.length === 0 ? (
+              <p className={styles.fieldHint}>Aucune demande en attente avec un téléchargement en cours.</p>
+            ) : (
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {downloadsReport.map((r, i) => (
+                  <li key={i}>{r.title ? `"${r.title}" : ` : ''}{r.result}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div className={styles.cardActions}>
+          <button type="button" className={styles.btnTest} onClick={checkDownloadsNow} disabled={checkingDownloads}>
+            {checkingDownloads ? 'Vérification…' : 'Vérifier les téléchargements maintenant'}
+          </button>
           <button type="button" className={styles.btnTest} onClick={handleTest} disabled={testing || saving}>
             {testing ? 'Test…' : 'Tester la connexion'}
           </button>
@@ -1097,6 +1376,14 @@ function ProwlarrCard() {
     </div>
   );
 }
+
+const DOWNLOAD_CLIENT_TYPES = [
+  { value: '', label: 'Choisir...' },
+  { value: 'qbittorrent', label: 'qBittorrent' },
+  { value: 'transmission', label: 'Transmission' },
+  { value: 'deluge', label: 'Deluge' },
+  { value: 'rtorrent', label: 'rTorrent / ruTorrent' },
+];
 
 function FourtouticiCard() {
   const [config, setConfig] = useState({ enabled: false, url: 'https://fourtoutici.cc' });
