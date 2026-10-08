@@ -41,16 +41,23 @@ async function runValentineCron() {
   nextScanAt = new Date(Date.now() + currentIntervalHours * 60 * 60 * 1000);
 
   try {
-    // Le cron tourne si Valentine OU Anna's Archive est activé
-    const [valentineConfig, annasConfig] = await Promise.all([
+    // Le cron tourne si au moins un connecteur auto est activé (downloadWithFallback
+    // les essaie tous dans l'ordre, pas seulement Valentine/Anna's — Fourtoutici et
+    // Prowlarr étaient oubliés ici, le cron s'arrêtait avant même de les tenter si
+    // Valentine/Anna's étaient désactivés).
+    const [valentineConfig, annasConfig, fourtouticiConfig, prowlarrConfig] = await Promise.all([
       ConnectorSettings.findOne({ service: 'valentine' }).lean(),
       ConnectorSettings.findOne({ service: 'annasarchive' }).lean(),
+      ConnectorSettings.findOne({ service: 'fourtoutici' }).lean(),
+      ConnectorSettings.findOne({ service: 'prowlarr' }).lean(),
     ]);
 
     const valentineActive = valentineConfig?.enabled && valentineConfig?.username && valentineConfig?.password;
     const annasActive = annasConfig?.enabled;
+    const fourtouticiActive = fourtouticiConfig?.enabled;
+    const prowlarrActive = prowlarrConfig?.enabled;
 
-    if (!valentineActive && !annasActive) return;
+    if (!valentineActive && !annasActive && !fourtouticiActive && !prowlarrActive) return;
 
     const cooldown = new Date(Date.now() - currentIntervalHours * 2 * 60 * 60 * 1000);
     const pending = await BookRequest.find({
