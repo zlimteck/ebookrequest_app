@@ -7,6 +7,8 @@ import { downloadFromValentine } from './valentineService.js';
 import { searchOnAnnasArchive, downloadFromAnnas, getAnnasArchiveConfig } from './annasArchiveService.js';
 import { searchOnLibgen, getLibgenConfig } from './libgenService.js';
 import { searchOnFourtoutici, downloadFromFourtoutici, getFourtouticiConfig } from './fourtouticiService.js';
+import { searchProwlarr, getProwlarrConfig } from './prowlarrService.js';
+import { startProwlarrDownload } from './prowlarrDownloadService.js';
 import appriseService from './appriseService.js';
 import { sendDownloadFailedToAdminsEmail, sendBookCompletedToAdminsEmail, sendKindleDelivery } from './emailService.js';
 import path from 'path';
@@ -471,6 +473,67 @@ export async function downloadWithFallback(title, author, requestId, category = 
             lastErr = err;
             console.log(`[Orchestrateur] LibGen échec pour "${q}": ${err.message}`);
           }
+        }
+      }
+    }
+
+    // ── 4. Dernier recours : Prowlarr (torrent) ─────────────────────────────
+    // Placé tout en dernier (pas avant Fourtoutici/Anna's/LibGen) : la couverture
+    // dépend entièrement des indexeurs que l'admin a lui-même configurés, aucune
+    // garantie de fiabilité comparable aux autres sources. Contrairement à elles,
+    // le téléchargement reste ASYNCHRONE même ici (un torrent prend du temps) — on
+    // se contente de lancer le "grab" et de laisser la demande en attente, le cron
+    // de suivi (prowlarrDownloadService.js) la complétera plus tard tout seul.
+    if (!results.length) {
+      const prowlarrCfg = await getProwlarrConfig().catch(() => ({ enabled: false }));
+      if (prowlarrCfg.enabled) {
+        console.log(`[Orchestrateur] Anna's Archive/LibGen sans résultat, essai Prowlarr…`);
+        let prowlarrResults = [];
+        for (const q of searchQueries) {
+          try {
+            const { results: prResults } = await searchProwlarr(q);
+            if (prResults.length) {
+              prowlarrResults = prResults;
+              console.log(`[Orchestrateur] Prowlarr : ${prResults.length} résultat(s) pour "${q}"`);
+              break;
+            }
+          } catch (err) {
+            console.log(`[Orchestrateur] Prowlarr échec pour "${q}": ${err.message}`);
+          }
+        }
+
+        // Seul le protocole torrent est géré en bout de chaîne (téléchargement +
+        // suivi) — un résultat usenet (NZB) serait trouvé mais jamais téléchargeable.
+        const titleNormPr = normalizeForMatch(title);
+        const reqVolumePr = extractVolumeNumber(title);
+        const scoredPr = prowlarrResults
+          .filter(r => r.protocol === 'torrent' && r.guid)
+          .map(r => {
+            const resVolume = extractVolumeNumber(r.title);
+            return {
+              ...r,
+              authorScore: authorMatchScore(author, r.title), // pas de champ auteur distinct côté Prowlarr, le titre complet du release le contient souvent
+              titleMatch: normalizeForMatch(r.title).includes(titleNormPr) || titleNormPr.includes(normalizeForMatch(r.title)),
+              volumeOk: reqVolumePr === null || resVolume === reqVolumePr,
+            };
+          })
+          .filter(r => r.titleMatch && r.volumeOk)
+          .sort((a, b) => b.authorScore - a.authorScore);
+
+        if (scoredPr.length) {
+          const bestPr = scoredPr[0];
+          console.log(`[Orchestrateur] Prowlarr → "${bestPr.title}" (indexeur: ${bestPr.indexer})`);
+          try {
+            await startProwlarrDownload(requestId, bestPr);
+            await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'prowlarr', success: true, searchMode: 'detailed' });
+            console.log(`[Orchestrateur] Prowlarr : téléchargement lancé pour "${title}", suivi par le cron`);
+            return; // Asynchrone : ni succès ni échec immédiat, la demande reste en attente.
+          } catch (err) {
+            console.log(`[Orchestrateur] Lancement Prowlarr échoué pour "${title}": ${err.message}`);
+            await logDownload({ bookRequest: bookRequest || { title, author }, connector: 'prowlarr', success: false, error: err.message, searchMode: 'detailed' });
+          }
+        } else {
+          console.log(`[Orchestrateur] Prowlarr : aucun résultat torrent avec titre compatible pour "${title}"`);
         }
       }
     }
