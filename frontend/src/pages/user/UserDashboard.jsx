@@ -13,6 +13,7 @@ import SendEmailModal from '../../components/SendEmailModal';
 import CommentThread from '../../components/CommentThread';
 import { compressImage, isImage } from '../../utils/imageCompressor';
 import { infoLinkSourceLabel, buildGoogleBooksLink } from '../../utils/infoLinkSource';
+import { formatDisplayTitle } from '../../utils/formatTitle';
 
 function frToIso(str) {
   const s = (str || '').trim();
@@ -527,7 +528,7 @@ const UserDashboard = () => {
   // Ouvrir le modal d'édition
   const openEditModal = (request) => {
     setEditForm({
-      title:         request.title         || '',
+      title:         formatDisplayTitle(request.title) || '',
       author:        request.author        || '',
       format:        request.format        || '',
       link:          request.link          || '',
@@ -1191,7 +1192,7 @@ const UserDashboard = () => {
               <div className={styles.requestContent}>
                 {/* Header */}
                 <div className={styles.requestHeader}>
-                  <h3 className={styles.requestTitle}>{request.title}</h3>
+                  <h3 className={styles.requestTitle}>{formatDisplayTitle(request.title)}</h3>
                   <span className={`${styles.statusBadge} ${
                     request.status === 'completed' ? styles.completedBadge :
                     request.status === 'canceled' ? styles.canceledBadge :
@@ -1459,7 +1460,7 @@ const UserDashboard = () => {
         <div className={styles.modalOverlay} onClick={() => setMetadataModal(null)}>
           <div className={styles.modalContent} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Choisir les métadonnées">
             <h2>Métadonnées Google Books</h2>
-            <p className={styles.modalBookTitle}>« {metadataModal.request?.title} »</p>
+            <p className={styles.modalBookTitle}>« {formatDisplayTitle(metadataModal.request?.title)} »</p>
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>
               Choisis le bon livre — rien n'est appliqué tant que tu n'as pas cliqué sur un résultat.
             </p>

@@ -48,6 +48,7 @@ import DownloadModal from '../../components/DownloadModal';
 import SendEmailModal from '../../components/SendEmailModal';
 import CommentThread from '../../components/CommentThread';
 import ExtraShelvesModal from '../../components/admin/ExtraShelvesModal';
+import { formatDisplayTitle } from '../../utils/formatTitle';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
@@ -165,6 +166,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [prowlarrResults, setProwlarrResults] = useState(null);
   const [prowlarrLoading, setProwlarrLoading] = useState(false);
   const [prowlarrState, setProwlarrState] = useState(null); // { disabled, unavailable }
+  const [prowlarrGrabbing, setProwlarrGrabbing] = useState(null); // clé du résultat en cours
+  const [prowlarrGrabbed, setProwlarrGrabbed] = useState(new Set()); // clés déjà lancées
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_view_admin') || 'cards');
@@ -211,7 +214,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
 
   const openEditModal = (request) => {
     setEditForm({
-      title:         request.title         || '',
+      title:         formatDisplayTitle(request.title) || '',
       author:        request.author        || '',
       category:      request.category      || 'ebook',
       format:        request.format        || '',
@@ -465,6 +468,26 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors du téléchargement');
       setFourtouticiDownloading(null);
+    }
+  };
+
+  const downloadFromProwlarr = async (key, release) => {
+    if (!connectorsModal) return;
+    setProwlarrGrabbing(key);
+    try {
+      await axiosAdmin.post('/api/connectors/prowlarr/download', {
+        requestId: connectorsModal._id,
+        guid: release.guid,
+        indexerId: release.indexerId,
+        downloadUrl: release.downloadUrl,
+        title: release.title,
+      });
+      toast.success('Téléchargement torrent lancé, suivi automatique en arrière-plan.');
+      setProwlarrGrabbed(prev => new Set(prev).add(key));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors du lancement du téléchargement');
+    } finally {
+      setProwlarrGrabbing(null);
     }
   };
 
@@ -1513,7 +1536,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                 <div className={styles.adminContent}>
                   {/* Header */}
                   <div className={styles.adminHeader}>
-                    <div className={styles.bookTitle}>{request.title}</div>
+                    <div className={styles.bookTitle}>{formatDisplayTitle(request.title)}</div>
                     <span className={`${styles.status} ${
                       request.status === 'completed' ? styles.completed :
                       request.status === 'canceled' ? styles.canceled :
@@ -2235,7 +2258,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
             <div className={styles.uploadModalHeader}>
               <div>
                 <h3 className={styles.uploadModalTitle}>Modifier la demande</h3>
-                <p className={styles.uploadModalBook}>{editModal.title}</p>
+                <p className={styles.uploadModalBook}>{formatDisplayTitle(editModal.title)}</p>
               </div>
               <button className={styles.uploadModalClose} onClick={() => !editSaving && setEditModal(null)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2307,7 +2330,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
             <div className={styles.uploadModalHeader}>
               <div>
                 <h3 className={styles.uploadModalTitle}>Métadonnées Google Books</h3>
-                <p className={styles.uploadModalBook}>{metadataModal.request?.title}</p>
+                <p className={styles.uploadModalBook}>{formatDisplayTitle(metadataModal.request?.title)}</p>
               </div>
               <button className={styles.uploadModalClose} onClick={() => setMetadataModal(null)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2746,8 +2769,11 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                       </div>
                     ) : (
                       <div className={styles.valentineResultsList}>
-                        {prowlarrResults.map((r, idx) => (
-                          <div key={`${r.indexerId}-${idx}`} className={styles.valentineResultRow}>
+                        {prowlarrResults.map((r, idx) => {
+                          const key = `${r.indexerId}-${idx}`;
+                          const grabbed = prowlarrGrabbed.has(key);
+                          return (
+                          <div key={key} className={styles.valentineResultRow}>
                             <div className={styles.valentineResultInfo}>
                               <span className={styles.valentineResultTitle}>{r.title}</span>
                               <span className={styles.valentineResultSize}>
@@ -2761,15 +2787,31 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                                 </a>
                               )}
+                              {r.protocol === 'torrent' && r.guid && (
+                                <button
+                                  className={`${styles.aIconBtn} ${styles.aIconBtnSuccess}`}
+                                  disabled={prowlarrGrabbing !== null || grabbed}
+                                  onClick={() => downloadFromProwlarr(key, r)}
+                                  title={grabbed ? 'Déjà lancé, suivi en arrière-plan' : 'Télécharger (suivi automatique)'}
+                                >
+                                  {prowlarrGrabbing === key
+                                    ? <span className={styles.spinner} />
+                                    : grabbed
+                                      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                  }
+                                </button>
+                              )}
                               {r.downloadUrl && (
                                 <a href={r.downloadUrl} target="_blank" rel="noopener noreferrer"
-                                  className={styles.aIconBtn} title="Télécharger (torrent/magnet)" onClick={e => e.stopPropagation()}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                  className={styles.aIconBtn} title="Ouvrir le lien magnet/torrent" onClick={e => e.stopPropagation()}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                                 </a>
                               )}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
