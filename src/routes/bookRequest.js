@@ -227,6 +227,57 @@ router.get('/fourtoutici-source-status', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/requests/prowlarr-source-status — pareil, pour l'onglet "Prowlarr".
+router.get('/prowlarr-source-status', requireAuth, async (req, res) => {
+  try {
+    const ConnectorSettings = (await import('../models/ConnectorSettings.js')).default;
+    const doc = await ConnectorSettings.findOne({ service: 'prowlarr' }).lean();
+    res.json({ enabled: doc?.enabled ?? false });
+  } catch {
+    res.json({ enabled: false });
+  }
+});
+
+// GET /api/requests/prowlarr-search?q=... — recherche directe, un seul champ
+// plat comme Fourtoutici (pas de notion d'auteur/série exploitable côté
+// indexeurs torrent). Résultats limités au protocole torrent (seul pris en
+// charge par le téléchargement, voir prowlarrDownloadService.js) — un
+// résultat NZB serait trouvé mais jamais exploitable ensuite.
+router.get('/prowlarr-search', requireAuth, async (req, res) => {
+  try {
+    const { getProwlarrConfig, searchProwlarr } = await import('../services/prowlarrService.js');
+    const cfg = await getProwlarrConfig();
+    if (!cfg.enabled) {
+      return res.json({ results: [], unavailable: true, error: 'Prowlarr est désactivé par un administrateur.' });
+    }
+
+    const query = (req.query.q || '').trim();
+    if (query.length < 2) {
+      return res.status(400).json({ error: 'Requête trop courte (2 caractères minimum).' });
+    }
+
+    const { results } = await searchProwlarr(query);
+    const mapped = results
+      .filter(r => r.protocol === 'torrent' && r.guid)
+      .map(r => ({
+        id: r.guid,
+        title: r.title,
+        author: '',
+        guid: r.guid,
+        indexerId: r.indexerId,
+        indexer: r.indexer,
+        downloadUrl: r.downloadUrl,
+        size: r.size,
+        seeders: r.seeders,
+      }));
+
+    res.json({ results: mapped });
+  } catch (err) {
+    console.error(`[prowlarr-search] q=${req.query.q} :`, err.message);
+    res.json({ results: [], unavailable: true, error: err.message });
+  }
+});
+
 // GET /api/requests/direct-search?mode=title|author|series&q=...
 router.get('/direct-search', requireAuth, async (req, res) => {
   try {

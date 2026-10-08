@@ -155,7 +155,7 @@ function UserForm() {
   // voir GET /api/users/valentine/quota) : affiché uniquement en recherche
   // directe ET quand le sous-mode actif est bien Valentine, pas Fourtoutici.
   useEffect(() => {
-    if (searchMode !== 'direct' || directSubMode === 'fourtoutici') { setValentineQuota(null); return; }
+    if (searchMode !== 'direct' || directSubMode === 'fourtoutici' || directSubMode === 'prowlarr') { setValentineQuota(null); return; }
     let cancelled = false;
     axiosAdmin.get('/api/users/valentine/quota')
       .then(res => { if (!cancelled) setValentineQuota(res.data); })
@@ -170,6 +170,7 @@ function UserForm() {
   const [manualModeAllowed, setManualModeAllowed] = useState(true); // optimiste, corrigé après fetch
   const [valentineSourceEnabled, setValentineSourceEnabled] = useState(true); // optimiste, corrigé après fetch
   const [fourtouticiSourceEnabled, setFourtouticiSourceEnabled] = useState(true); // optimiste, corrigé après fetch
+  const [prowlarrSourceEnabled, setProwlarrSourceEnabled] = useState(false); // désactivé tant que la config n'est pas confirmée (contrairement aux autres sources, Prowlarr a souvent zéro indexeur au départ)
   const [calibreShelves, setCalibreShelves] = useState([]); // [{ name, isDefault }]
   const [selectedShelves, setSelectedShelves] = useState([]);
   // Multishelf multi-utilisateurs (admin) — comptes Calibre-Web ciblables en
@@ -254,6 +255,9 @@ function UserForm() {
             .catch(() => {});
           axiosAdmin.get('/api/requests/fourtoutici-source-status')
             .then(r => { if (isMounted) setFourtouticiSourceEnabled(r.data?.enabled !== false); })
+            .catch(() => {});
+          axiosAdmin.get('/api/requests/prowlarr-source-status')
+            .then(r => { if (isMounted) setProwlarrSourceEnabled(r.data?.enabled === true); })
             .catch(() => {});
           await Promise.all(promises);
 
@@ -985,6 +989,7 @@ function UserForm() {
           extraShelfSelections={extraShelfSelections}
           valentineEnabled={valentineSourceEnabled}
           fourtouticiEnabled={fourtouticiSourceEnabled}
+          prowlarrEnabled={prowlarrSourceEnabled}
         />
       )}
 

@@ -19,6 +19,14 @@ function randomDelay() {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+// Taille brute en octets (Prowlarr) -> affichage lisible, contrairement à
+// Valentine/Fourtoutici qui renvoient déjà une chaîne formatée côté serveur.
+function formatBytes(bytes) {
+  if (!bytes) return null;
+  return bytes >= 1073741824
+    ? `${(bytes / 1073741824).toFixed(1)} Go`
+    : `${(bytes / 1048576).toFixed(0)} Mo`;
+}
 function estimateBatchMinutes(n, hasDelay = true) {
   if (n <= 1) return null;
   const perBookMs = hasDelay ? (DELAY_MIN_MS + DELAY_MAX_MS) / 2 : 0;
@@ -64,6 +72,7 @@ const MODE_ICONS = {
   author: <IconAuthor size={14} />,
   series: <IconSeries size={14} />,
   fourtoutici: <IconFlat size={14} />,
+  prowlarr: <IconFlat size={14} />,
 };
 
 const MODES = [
@@ -71,6 +80,7 @@ const MODES = [
   { value: 'author', label: 'Auteur'  },
   { value: 'series', label: 'Série'   },
   { value: 'fourtoutici', label: 'Fourtoutici' },
+  { value: 'prowlarr', label: 'Prowlarr' },
 ];
 
 const VALID_MODES = MODES.map(m => m.value);
@@ -80,7 +90,15 @@ const PLACEHOLDERS = {
   author: "Nom de l'auteur…",
   series: 'Nom de la série…',
   fourtoutici: 'Titre, auteur, mots-clés…',
+  prowlarr: 'Titre, auteur, mots-clés…',
 };
+
+// Prowlarr est "à plat" comme Fourtoutici (pas de fiche auteur/série), mais en
+// plus le téléchargement reste ASYNCHRONE (torrent) : pas de pause
+// anti-détection comme Valentine (aucun risque de ban équivalent), et le
+// message de résultat diffère ("téléchargement lancé" plutôt que "téléchargé",
+// voir handleDownload/handleBatchDownload).
+const FLAT_MODES = ['fourtoutici', 'prowlarr'];
 
 /**
  * Recherche directe sur Valentine, sans passer par Google Books/Open
@@ -118,12 +136,18 @@ const DirectSourceSearch = ({
   extraShelfSelections = {},
   valentineEnabled = true,
   fourtouticiEnabled = true,
+  prowlarrEnabled = false,
 }) => {
-  const availableModes = MODES.filter(m => (m.value === 'fourtoutici' ? fourtouticiEnabled : valentineEnabled));
+  const isSourceEnabled = (m) => {
+    if (m === 'fourtoutici') return fourtouticiEnabled;
+    if (m === 'prowlarr') return prowlarrEnabled;
+    return valentineEnabled;
+  };
+  const availableModes = MODES.filter(m => isSourceEnabled(m.value));
 
   const [mode, setMode] = useState(() => {
     const stored = localStorage.getItem('ebookrequest_direct_mode');
-    if (VALID_MODES.includes(stored) && (stored === 'fourtoutici' ? fourtouticiEnabled : valentineEnabled)) return stored;
+    if (VALID_MODES.includes(stored) && isSourceEnabled(stored)) return stored;
     return availableModes[0]?.value || 'title';
   });
   // Notifie le parent (UserForm) du mode réellement actif — sert notamment à
@@ -180,13 +204,12 @@ const DirectSourceSearch = ({
   // (retour sur /api/requests/*-source-status), on bascule sur la première
   // source encore disponible plutôt que de laisser un onglet fantôme actif.
   useEffect(() => {
-    const currentStillAvailable = mode === 'fourtoutici' ? fourtouticiEnabled : valentineEnabled;
-    if (!currentStillAvailable) {
+    if (!isSourceEnabled(mode)) {
       const fallback = availableModes[0]?.value;
       if (fallback && fallback !== mode) switchMode(fallback);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valentineEnabled, fourtouticiEnabled]);
+  }, [valentineEnabled, fourtouticiEnabled, prowlarrEnabled]);
 
   const runSearch = async (e) => {
     e?.preventDefault();
@@ -198,10 +221,10 @@ const DirectSourceSearch = ({
     resetResults();
 
     try {
-      if (mode === 'fourtoutici') {
-        const res = await axiosAdmin.get('/api/requests/fourtoutici-search', { params: { q } });
+      if (FLAT_MODES.includes(mode)) {
+        const res = await axiosAdmin.get(`/api/requests/${mode}-search`, { params: { q } });
         if (res.data.unavailable) {
-          setError(res.data.error || 'Fourtoutici est injoignable pour le moment.');
+          setError(res.data.error || `${mode === 'prowlarr' ? 'Prowlarr' : 'Fourtoutici'} est injoignable pour le moment.`);
         } else {
           setTitleResults(res.data.results || []);
         }
@@ -281,9 +304,12 @@ const DirectSourceSearch = ({
       .map(([userId, shelves]) => ({ userId, shelves }));
 
     const isFourtoutici = mode === 'fourtoutici';
+    const isProwlarr = mode === 'prowlarr';
 
     return {
-      ...(isFourtoutici ? { fileId: book.id, source: 'fourtoutici' } : { ebookId: book.id }),
+      ...(isFourtoutici ? { fileId: book.id, source: 'fourtoutici' }
+        : isProwlarr ? { guid: book.guid, indexerId: book.indexerId, downloadUrl: book.downloadUrl, source: 'prowlarr' }
+        : { ebookId: book.id }),
       title: book.title,
       author: book.author || (selectedGroup?.type === 'author' ? selectedGroup.name : '') || '',
       link: book.valentineUrl || '',
@@ -299,7 +325,7 @@ const DirectSourceSearch = ({
   const performDownload = async (book) => {
     try {
       const res = await axiosAdmin.post('/api/requests/direct-download', buildPayload(book));
-      if (res.data.success) return { ok: true, request: res.data.request };
+      if (res.data.success) return { ok: true, async: !!res.data.async, request: res.data.request };
       return { ok: false, partial: true, error: res.data.error, request: res.data.request };
     } catch (err) {
       return { ok: false, error: err.response?.data?.error || 'Erreur lors de la création de la demande.' };
@@ -312,7 +338,11 @@ const DirectSourceSearch = ({
     setMessage({ text: '', type: '' });
 
     const result = await performDownload(book);
-    if (result.ok) {
+    if (result.ok && result.async) {
+      // Prowlarr (torrent) : le téléchargement est lancé mais pas terminé, la
+      // demande reste en attente, le cron de suivi la complétera plus tard.
+      setMessage({ text: `« ${book.title} » : téléchargement lancé, suivi automatique en arrière-plan.`, type: 'success' });
+    } else if (result.ok) {
       setMessage({ text: `« ${book.title} » téléchargé et ajouté à vos demandes.`, type: 'success' });
     } else if (result.partial) {
       setMessage({
@@ -332,21 +362,22 @@ const DirectSourceSearch = ({
 
     setBatchDownloading(true);
     setMessage({ text: '', type: '' });
-    let ok = 0, partial = 0, failed = 0;
+    let ok = 0, launched = 0, partial = 0, failed = 0;
 
     for (let i = 0; i < books.length; i++) {
       setBatchProgress({ current: i + 1, total: books.length, waiting: false });
       const result = await performDownload(books[i]);
-      if (result.ok) ok++;
+      if (result.ok && result.async) launched++;
+      else if (result.ok) ok++;
       else if (result.partial) partial++;
       else failed++;
 
       // Pause anti-détection entre deux livres (voir constantes en haut du
       // fichier) — n'a de sens que pour Valentine (risque de ban établi) ;
-      // Fourtoutici n'a ni quota ni protection anti-bot connue, donc pas de
-      // pause imposée pour ce mode.
+      // Fourtoutici/Prowlarr n'ont ni quota ni protection anti-bot connue,
+      // donc pas de pause imposée pour ces modes.
       if (i < books.length - 1) {
-        if (mode === 'fourtoutici') {
+        if (FLAT_MODES.includes(mode)) {
           setBatchProgress({ current: i + 1, total: books.length, waiting: false });
         } else {
           setBatchProgress({ current: i + 1, total: books.length, waiting: true });
@@ -361,9 +392,10 @@ const DirectSourceSearch = ({
 
     const parts = [];
     if (ok) parts.push(`${ok} téléchargé${ok > 1 ? 's' : ''}`);
+    if (launched) parts.push(`${launched} lancé${launched > 1 ? 's' : ''} (suivi automatique)`);
     if (partial) parts.push(`${partial} en attente (échec auto)`);
     if (failed) parts.push(`${failed} échoué${failed > 1 ? 's' : ''}`);
-    setMessage({ text: `Lot terminé — ${parts.join(', ')}.`, type: failed ? 'warning' : 'success' });
+    setMessage({ text: `Lot terminé, ${parts.join(', ')}.`, type: failed ? 'warning' : 'success' });
 
     if (onCompleted) onCompleted();
   };
@@ -392,7 +424,7 @@ const DirectSourceSearch = ({
             <>
               <span className={gStyles.batchCount}>{selectedBooks.size} livre{selectedBooks.size > 1 ? 's' : ''} sélectionné{selectedBooks.size > 1 ? 's' : ''}</span>
               <button className={gStyles.batchBtn} onClick={handleBatchDownload} disabled={batchDownloading}>
-                Télécharger les {selectedBooks.size} livres{estimateBatchMinutes(selectedBooks.size, mode !== 'fourtoutici') ? ` (~${estimateBatchMinutes(selectedBooks.size, mode !== 'fourtoutici')} min)` : ''}
+                Télécharger les {selectedBooks.size} livres{estimateBatchMinutes(selectedBooks.size, !FLAT_MODES.includes(mode)) ? ` (~${estimateBatchMinutes(selectedBooks.size, !FLAT_MODES.includes(mode))} min)` : ''}
               </button>
               <button className={gStyles.batchClear} onClick={() => setSelectedBooks(new Map())}>Tout désélectionner</button>
             </>
@@ -427,7 +459,13 @@ const DirectSourceSearch = ({
                   <h4>{book.title}</h4>
                 </div>
                 {book.author && <p className={gStyles.bookAuthor}>{book.author}</p>}
-                {book.size && <p className={gStyles.bookMeta}>{book.size}</p>}
+                {mode === 'prowlarr' ? (
+                  <p className={gStyles.bookMeta}>
+                    {[book.indexer, formatBytes(book.size), book.seeders != null ? `${book.seeders} seeds` : null].filter(Boolean).join(' · ')}
+                  </p>
+                ) : (
+                  book.size && <p className={gStyles.bookMeta}>{book.size}</p>
+                )}
               </div>
               <div className={styles.downloadCol}>
                 <button
@@ -461,28 +499,46 @@ const DirectSourceSearch = ({
     <div className={styles.directSearch}>
       <p className={styles.warningNote}>
         {mode === 'fourtoutici'
-          ? 'Recherche directe sur Fourtoutici — ignore Google Books/Open Library/Hardcover.'
-          : 'Recherche directe sur Valentine — ignore Google Books/Open Library/Hardcover.'}
-        {' '}Le résultat choisi est téléchargé immédiatement au clic sur "Télécharger",
-        sans passer par les champs du formulaire.
+          ? 'Recherche directe sur Fourtoutici, ignore Google Books/Open Library/Hardcover.'
+          : mode === 'prowlarr'
+            ? 'Recherche directe sur Prowlarr, ignore Google Books/Open Library/Hardcover.'
+            : 'Recherche directe sur Valentine, ignore Google Books/Open Library/Hardcover.'}
+        {' '}
+        {mode === 'prowlarr'
+          ? 'Le résultat choisi lance un téléchargement torrent au clic sur "Télécharger" (suivi automatique en arrière-plan, pas immédiat), sans passer par les champs du formulaire.'
+          : 'Le résultat choisi est téléchargé immédiatement au clic sur "Télécharger", sans passer par les champs du formulaire.'}
       </p>
 
       {availableModes.length === 0 ? (
         <p className={styles.errorNote}>Aucune source de recherche directe n'est activée pour le moment.</p>
       ) : (
-        <div className={styles.modeToggle}>
-          {availableModes.map(m => (
-            <button
-              key={m.value}
-              type="button"
-              className={`${styles.modeBtn} ${mode === m.value ? styles.modeBtnActive : ''}`}
-              onClick={() => switchMode(m.value)}
-            >
-              {MODE_ICONS[m.value]}
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Desktop/tablette : boutons côte à côte. Remplacé par un <select>
+              sur mobile (voir .modeSelect) — 5 onglets ne tiennent plus
+              proprement dans une barre de boutons sur un petit écran. */}
+          <div className={styles.modeToggle}>
+            {availableModes.map(m => (
+              <button
+                key={m.value}
+                type="button"
+                className={`${styles.modeBtn} ${mode === m.value ? styles.modeBtnActive : ''}`}
+                onClick={() => switchMode(m.value)}
+              >
+                {MODE_ICONS[m.value]}
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <select
+            className={styles.modeSelect}
+            value={mode}
+            onChange={(e) => switchMode(e.target.value)}
+          >
+            {availableModes.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </>
       )}
 
       <form onSubmit={runSearch} className={styles.searchRow}>

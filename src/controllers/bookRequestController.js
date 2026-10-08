@@ -6,7 +6,7 @@ import ReadingList from '../models/ReadingList.js';
 import axios from 'axios';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
 import { fetchFromGoogle } from '../routes/googleBooks.js';
-import { cleanSeriesTitle, extractVolumeSubtitle, extractBareVolumeSubtitle } from '../utils/titleCleaning.js';
+import { cleanSeriesTitle, extractVolumeSubtitle, extractBareVolumeSubtitle, cleanSceneReleaseTitle, parseSceneReleaseTitle } from '../utils/titleCleaning.js';
 import { authorMatchScore, titleMatchScore } from '../utils/textMatch.js';
 import { recordActivity } from '../services/streakService.js';
 import { getUserAchievements } from '../services/achievementsService.js';
@@ -15,6 +15,7 @@ import { sendPushToUser } from '../services/webPushService.js';
 import { downloadWithFallback, logDownload, notifyCompletion } from '../services/connectorOrchestrator.js';
 import { downloadFromValentineById, getConfigForUser } from '../services/valentineService.js';
 import { downloadFromFourtoutici } from '../services/fourtouticiService.js';
+import { startProwlarrDownload } from '../services/prowlarrDownloadService.js';
 import { emitToUser, emitToAdmins } from '../services/socketService.js';
 
 const logAdminAction = async (adminId, adminUsername, action, request, details = '') => {
@@ -371,17 +372,24 @@ export const createBookRequest = async (req, res) => {
 // lance downloadWithFallback en tâche de fond sans attendre le résultat.
 export const directDownloadRequest = async (req, res) => {
   try {
-    const { source, ebookId, fileId, title, author, link, publishedDate, category, targetUserId, selectedShelves, extraShelfTargets } = req.body;
+    const { source, ebookId, fileId, guid, indexerId, downloadUrl, title, author, link, publishedDate, category, targetUserId, selectedShelves, extraShelfTargets } = req.body;
     const isFourtoutici = source === 'fourtoutici';
+    const isProwlarr = source === 'prowlarr';
 
     // Le gate de recherche directe diffère selon la source : celui de Valentine
     // existe pour limiter le risque de ban (multiplie les échanges avec le
-    // site) — sans objet pour Fourtoutici, gardé simplement sur son propre
-    // interrupteur marche/arrêt (pas de risque équivalent, voir fourtouticiService.js).
+    // site) — sans objet pour Fourtoutici/Prowlarr, gardés simplement sur leur
+    // propre interrupteur marche/arrêt (pas de risque équivalent, voir
+    // fourtouticiService.js/prowlarrService.js).
     if (isFourtoutici) {
       const { getFourtouticiConfig } = await import('../services/fourtouticiService.js');
       if (!(await getFourtouticiConfig()).enabled) {
         return res.status(403).json({ error: 'Fourtoutici est désactivé par un administrateur.' });
+      }
+    } else if (isProwlarr) {
+      const { getProwlarrConfig } = await import('../services/prowlarrService.js');
+      if (!(await getProwlarrConfig()).enabled) {
+        return res.status(403).json({ error: 'Prowlarr est désactivé par un administrateur.' });
       }
     } else {
       const { isDirectSearchEnabled } = await import('../services/valentineService.js');
@@ -390,10 +398,24 @@ export const directDownloadRequest = async (req, res) => {
       }
     }
 
-    const sourceId = isFourtoutici ? fileId : ebookId;
-    if (!sourceId || !title || !author) {
-      return res.status(400).json({ error: `${isFourtoutici ? 'fileId' : 'ebookId'}, titre et auteur sont obligatoires.` });
+    const sourceId = isFourtoutici ? fileId : (isProwlarr ? guid : ebookId);
+    // Auteur facultatif pour Prowlarr : les releases torrent n'ont pas de champ
+    // auteur distinct et fiable (contrairement à EBOOK sur Fourtoutici), le
+    // titre complet du release contient déjà toute l'info disponible.
+    if (!sourceId || !title || (!author && !isProwlarr)) {
+      return res.status(400).json({ error: `${isFourtoutici ? 'fileId' : isProwlarr ? 'guid' : 'ebookId'} et titre sont obligatoires${isProwlarr ? '' : ', auteur aussi'}.` });
     }
+    if (isProwlarr && indexerId == null) {
+      return res.status(400).json({ error: 'indexerId obligatoire.' });
+    }
+    // `BookRequest.author` est `required: true` côté schéma (une chaîne vide
+    // échoue cette validation, contrairement à un nombre 0) — on tente de
+    // récupérer l'auteur depuis le titre de release lui-même (ex.
+    // "Stephen.King" dans "Ca.T02.Stephen.King.FR.[EPUB]-NOTAG") avant de
+    // retomber sur le placeholder.
+    const safeAuthor = isProwlarr
+      ? (author?.trim() || parseSceneReleaseTitle(title)?.author || 'Auteur inconnu')
+      : author;
 
     // Étagères choisies (même logique que createBookRequest)
     const cleanedSelectedShelves = Array.isArray(selectedShelves)
@@ -468,10 +490,11 @@ export const directDownloadRequest = async (req, res) => {
 
     // Quota par utilisateur sur le compte Valentine ADMIN partagé (#26) — ne
     // s'applique jamais si l'utilisateur a son propre compte Valentine (il ne
-    // partage alors le quota avec personne), ni à Fourtoutici (sans objet), ni
-    // à un admin (jamais limité, même règle que le quota de demandes ci-dessus).
+    // partage alors le quota avec personne), ni à Fourtoutici/Prowlarr (sans
+    // objet), ni à un admin (jamais limité, même règle que le quota de
+    // demandes ci-dessus).
     let viaValentineAdminAccount = false;
-    if (!isFourtoutici) {
+    if (!isFourtoutici && !isProwlarr) {
       const valentineConfig = await getConfigForUser(user._id.toString());
       viaValentineAdminAccount = valentineConfig.source === 'admin';
       if (viaValentineAdminAccount && user.role !== 'admin') {
@@ -496,20 +519,21 @@ export const directDownloadRequest = async (req, res) => {
       user: user._id,
       username: user.username,
       ...(submittedByAdmin && { submittedByAdmin }),
-      author,
+      author: safeAuthor,
       title,
       // `link` reste vide ici (pas de Google Books dans ce flux) : rempli plus tard
       // par applyMetadataCandidate si l'admin/l'utilisateur récupère les métadonnées.
-      // L'URL de la fiche connecteur va dans sourceLink, jamais dans `link`.
-      sourceLink: link || '',
-      sourceConnector: isFourtoutici ? 'fourtoutici' : 'valentine',
+      // L'URL de la fiche connecteur va dans sourceLink, jamais dans `link` — sans
+      // objet pour Prowlarr (pas de fiche "livre" à proprement parler, juste un
+      // résultat de recherche torrent), laissé vide plutôt que mal étiqueté.
+      ...(!isProwlarr && { sourceLink: link || '', sourceConnector: isFourtoutici ? 'fourtoutici' : 'valentine' }),
       publishedDate: (publishedDate && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(publishedDate)) ? publishedDate : '',
       category: ['ebook', 'comic', 'manga'].includes(category) ? category : 'ebook',
       ...(cleanedSelectedShelves !== undefined && { selectedShelves: cleanedSelectedShelves }),
       ...(resolvedExtraShelfTargets.length && { extraShelfTargets: resolvedExtraShelfTargets }),
       viaValentineAdminAccount,
       status: 'pending',
-      statusHistory: [{ status: 'pending', changedBy: user.username, note: `Demande créée — recherche directe ${isFourtoutici ? 'Fourtoutici' : 'Valentine'}` }],
+      statusHistory: [{ status: 'pending', changedBy: user.username, note: `Demande créée — recherche directe ${isFourtoutici ? 'Fourtoutici' : isProwlarr ? 'Prowlarr' : 'Valentine'}` }],
     });
 
     await newRequest.save();
@@ -526,6 +550,27 @@ export const directDownloadRequest = async (req, res) => {
       });
     } catch (readingErr) {
       console.error('Erreur ajout liste de lecture (direct-download):', readingErr.message);
+    }
+
+    // Prowlarr reste asynchrone même ici (un torrent prend du temps) : on se
+    // contente de lancer le "grab" et de renvoyer la demande encore en
+    // attente, le cron de suivi (prowlarrDownloadService.js) la complétera
+    // plus tard tout seul — contrairement à Valentine/Fourtoutici qui servent
+    // le fichier immédiatement et complètent la demande dans le même appel.
+    if (isProwlarr) {
+      try {
+        await startProwlarrDownload(newRequest._id.toString(), { guid, indexerId, downloadUrl, title });
+        const pending = await BookRequest.findById(newRequest._id).lean();
+        logDownload({ bookRequest: pending, connector: 'prowlarr', success: true, triggeredBy: 'auto', searchMode: 'direct-prowlarr' }).catch(() => {});
+        return res.status(201).json({ success: true, async: true, request: pending });
+      } catch (dlErr) {
+        const pendingRequest = await BookRequest.findById(newRequest._id).lean();
+        logDownload({
+          bookRequest: pendingRequest || { title, author },
+          connector: 'prowlarr', success: false, error: dlErr.message, triggeredBy: 'auto', searchMode: 'direct-prowlarr',
+        }).catch(() => {});
+        return res.status(200).json({ success: false, error: dlErr.message, request: pendingRequest });
+      }
     }
 
     try {
@@ -600,6 +645,11 @@ export const getMetadataCandidates = async (req, res) => {
     const authorWords = (request.author || '').trim().split(/\s+/).filter(Boolean);
     const authorReversed = authorWords.length > 1 ? [...authorWords].reverse().join(' ') : null;
 
+    // (patch) : les titres issus de releases scene/P2P (ex: Prowlarr, du type
+    // "Ca.T02.Stephen.King.1986.FR.[EPUB]-NOTAG") ne matchent jamais rien sur
+    // Google Books tels quels — on les nettoie avant de construire les requêtes.
+    const scrubbedTitle = cleanSceneReleaseTitle(request.title) || request.title;
+
     // (patch) : requêtes supplémentaires avec des titres "nettoyés" — deux
     // structures possibles selon le livre, donc deux extractions distinctes :
     // - "Série - Tome N" (rien après le numéro, ex. "Dune - Tome 1") :
@@ -609,20 +659,20 @@ export const getMetadataCandidates = async (req, res) => {
     //   souvent le seul titre sous lequel Google Books indexe le livre —
     //   sans ça, aucune requête ci-dessus ne peut matcher et on ne remonte
     //   que du bruit sans rapport.
-    const cleanTitle = cleanSeriesTitle(request.title);
-    const hasCleanTitle = cleanTitle && cleanTitle !== request.title.trim();
-    const subtitle = extractVolumeSubtitle(request.title);
+    const cleanTitle = cleanSeriesTitle(scrubbedTitle);
+    const hasCleanTitle = cleanTitle && cleanTitle !== scrubbedTitle.trim();
+    const subtitle = extractVolumeSubtitle(scrubbedTitle);
     // Troisième motif ("Série N Titre", numéro nu) — voir extractBareVolumeSubtitle
     // pour le raisonnement. N'est ajouté qu'en toute fin de liste ci-dessous.
-    const bareSubtitle = extractBareVolumeSubtitle(request.title);
+    const bareSubtitle = extractBareVolumeSubtitle(scrubbedTitle);
 
     const queries = [
-      `"${request.title}" "${request.author}"`,
-      ...(authorReversed ? [`"${request.title}" "${authorReversed}"`] : []),
+      `"${scrubbedTitle}" "${request.author}"`,
+      ...(authorReversed ? [`"${scrubbedTitle}" "${authorReversed}"`] : []),
       ...(subtitle ? [`"${subtitle}" "${request.author}"`] : []),
       ...(subtitle && authorReversed ? [`"${subtitle}" "${authorReversed}"`] : []),
       ...(hasCleanTitle ? [`"${cleanTitle}" "${request.author}"`] : []),
-      request.title,
+      scrubbedTitle,
       ...(subtitle ? [subtitle] : []),
       ...(hasCleanTitle ? [cleanTitle] : []),
       // Dernier recours absolu : risque de faux positif plus élevé que les

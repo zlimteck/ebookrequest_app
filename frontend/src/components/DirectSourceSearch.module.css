@@ -12,19 +12,10 @@
   margin: 0 0 0.75rem 0;
 }
 
-@media (max-width: 640px) {
-  .warningNote {
-    display: none;
-  }
-
-  /* Icône à côté du texte, sur une seule ligne, pour les 4 onglets. Pas de
-     répartition en quarts égaux (qui écrasait le gap icône/texte sur tous
-     les boutons pour laisser de la place à "Fourtoutici") : chaque bouton
-     garde sa taille naturelle et rétrécit proportionnellement si besoin. */
-  .modeBtn {
-    padding: 0.4rem 0.4rem;
-    font-size: 0.72rem;
-  }
+/* Masqué par défaut (desktop) — c'est la barre de boutons (.modeToggle) qui
+   est affichée, voir le bloc mobile ci-dessous pour l'inverse. */
+.modeSelect {
+  display: none;
 }
 
 .modeToggle {
@@ -233,4 +224,36 @@
 .swapBtn:hover {
   color: var(--color-accent, #a78bfa);
   border-color: var(--color-accent, #a78bfa);
+}
+
+/* Placé en fin de fichier volontairement : à spécificité égale, la règle de
+   base .modeToggle/.modeBtn plus haut gagnerait sinon sur ce media query
+   (c'est la règle la plus tardive dans le fichier qui l'emporte à égalité de
+   spécificité, peu importe l'ordre media query/règle normale). */
+@media (max-width: 640px) {
+  .warningNote {
+    display: none;
+  }
+
+  /* 5 onglets ne tiennent plus proprement dans une barre de boutons sur un
+     petit écran (texte écrasé, ou gros bloc sur 2 lignes) — remplacé par un
+     <select> natif, plus compact et familier sur mobile pour un choix parmi
+     plusieurs options. */
+  .modeToggle {
+    display: none;
+  }
+
+  .modeSelect {
+    display: block;
+    width: 100%;
+    height: 44px;
+    box-sizing: border-box;
+    padding: 0 0.8rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg3);
+    color: inherit;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
 }
