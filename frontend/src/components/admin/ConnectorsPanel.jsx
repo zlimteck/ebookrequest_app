@@ -1005,8 +1005,8 @@ function ProwlarrCard() {
             </p>
             <p className={styles.cardDesc}>
               Recherche via les indexeurs torrent/NZB configurés dans votre instance Prowlarr
-              (cliquez un indexeur ci-dessous pour le configurer). Connexion uniquement pour le
-              moment, recherche et téléchargement à venir.
+              (cliquez sur un indexeur ou un client de téléchargement ci-dessous pour le
+              configurer).
             </p>
           </div>
         </div>
