@@ -1050,6 +1050,61 @@ curl -X PUT https://app.ndd.fr/api/connectors/prowlarr/indexers/3/categories \
   -d '{"categoryIds": [7020, 7030], "searchEnabled": true}'
 ```
 
+### `GET /api/connectors/prowlarr/search?q=Dune`
+Un appel par indexeur activé (catégories propres à chacun), résultats torrent/NZB fusionnés
+et triés par date de publication.
+```bash
+curl "https://app.ndd.fr/api/connectors/prowlarr/search?q=Dune" \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/connectors/prowlarr/download`
+Lance le téléchargement d'un résultat pour une demande existante (grab via Prowlarr). Reste
+asynchrone : la demande reste en attente, finalisée par le cron de suivi une fois le torrent
+terminé (voir `GET /api/connectors/downloadclient`).
+```bash
+curl -X POST https://app.ndd.fr/api/connectors/prowlarr/download \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"requestId": "ID", "guid": "...", "indexerId": 3, "downloadUrl": "magnet:?..."}'
+```
+
+### `POST /api/connectors/prowlarr/check-downloads-now`
+Force une passe immédiate du cron de suivi des téléchargements Prowlarr en cours (au lieu
+d'attendre jusqu'à 5 min). Retourne un rapport par demande (`report: [{ title, result }]`).
+```bash
+curl -X POST https://app.ndd.fr/api/connectors/prowlarr/check-downloads-now \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/connectors/downloadclient`
+Config de connexion directe au client torrent (qBittorrent, Transmission, Deluge,
+rTorrent/ruTorrent), distincte de ce que Prowlarr connaît lui-même (son API ne redonne
+jamais le mot de passe). Nécessaire pour suivre l'état des téléchargements Prowlarr et
+récupérer le fichier terminé.
+```bash
+curl https://app.ndd.fr/api/connectors/downloadclient \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/connectors/downloadclient`
+`fileAccessMode` : `local` (volume Docker partagé, `fileAccessLocalPath`) ou `webdav`
+(serveur distant, `fileAccessWebdavUrl`/`fileAccessWebdavUsername`/`fileAccessWebdavBasePath`,
+mot de passe dans `apiKey`).
+```bash
+curl -X PUT https://app.ndd.fr/api/connectors/downloadclient \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"downloadClientType": "qbittorrent", "url": "http://qbittorrent:8080", "downloadClientUsername": "admin", "password": "...", "fileAccessMode": "local", "fileAccessLocalPath": "/downloads/prowlarr"}'
+```
+
+### `POST /api/connectors/downloadclient/test`
+Teste la connexion au client torrent configuré.
+```bash
+curl -X POST https://app.ndd.fr/api/connectors/downloadclient/test \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/connectors/predb`
 ```bash
 curl https://app.ndd.fr/api/connectors/predb \

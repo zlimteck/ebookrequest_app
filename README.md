@@ -60,7 +60,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Notifications :** Email (SMTP), Push web (VAPID), Push natif iOS (APNs, direct ou relais), Apprise
 - **IA :** OpenAI / Ollama / Claude (Anthropic) (recommandations, descriptions)
 - **APIs :** Google Books, Hardcover, Open Library (recherche et métadonnées, avec repli automatique entre les trois)
-- **Connecteurs :** V (téléchargement auto), Fourtoutici (bibliothèque communautaire francophone, API JSON directe sans quota ni anti-bot), Anna's Archive (recherche + téléchargement via solveur anti-bot [actuellement bloqué](#téléchargement)), LibGen (repli sans protection anti-bot), Calibre-Web (envoi + sync étagère Kobo), PreDB.fr (API de vérification de disponibilité)
+- **Connecteurs :** V (téléchargement auto), Fourtoutici (bibliothèque communautaire francophone, API JSON directe sans quota ni anti-bot), Anna's Archive (recherche + téléchargement via solveur anti-bot [actuellement bloqué](#téléchargement)), LibGen (repli sans protection anti-bot), UZ (forums BD/Comics/Mangas/Romans/Livres, recherche seule), Prowlarr (indexeurs torrent/NZB configurés par l'admin, téléchargement via qBittorrent/Transmission/Deluge/rTorrent-ruTorrent), Calibre-Web (envoi + sync étagère Kobo), PreDB.fr (API de vérification de disponibilité)
 - **Visionneuse :** PDF (navigateur natif), EPUB (epub.js via react-reader), CBZ/CBR (JSZip)
 - **Conversion :** Calibre (`ebook-convert`) intégré dans l'image Docker EPUB ↔ MOBI, AZW3, FB2 ; CBZ → PDF (JSZip + pdfkit, sans dépendance externe)
 - **Déploiement :** Docker, GitHub Actions, Docker Hub
@@ -81,9 +81,11 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - Soumission admin au nom d'un autre utilisateur
 
 **Téléchargement**
-- Téléchargement automatique via V, avec repli Fourtoutici puis Anna's Archive puis LibGen
-- Recherche manuelle sur les connecteurs depuis le panel admin une section par source (V, Fourtoutici, Anna's Archive, LibGen), interrogées en parallèle
+- Téléchargement automatique via V, avec repli Fourtoutici puis Anna's Archive puis LibGen puis Prowlarr (torrent, dernier recours)
+- Recherche manuelle sur les connecteurs depuis le panel admin une section par source (V, Fourtoutici, Anna's Archive, LibGen, UZ, Prowlarr), interrogées en parallèle
 - **Fourtoutici :** site communautaire francophone sans ordre fiable titre/auteur dans ses noms de fichiers, désambiguïsation automatique en plusieurs niveaux (règle des articles, vérification croisée Google Books, repli local), avec bouton d'inversion manuelle en dernier recours si le résultat reste incorrect
+- **UZ :** recherche seule (BD/Comics/Mangas/Romans/Livres), le forum ne liste que des liens vers des hébergeurs tiers, téléchargement manuel par l'admin depuis le lien du topic
+- **Prowlarr :** agrège les indexeurs torrent/NZB déjà configurés par l'admin ; catégories et activation réglables par indexeur (jamais écrit dans Prowlarr lui-même) ; téléchargement réel via qBittorrent/Transmission/Deluge/rTorrent-ruTorrent, fichier récupéré une fois terminé (volume Docker partagé ou WebDAV), suivi par un cron toutes les 5 minutes
 - Si aucune source n'aboutit, la demande est marquée « traitement manuel » côté utilisateur (mise à jour en direct via WebSocket) et les admins sont notifiés
 - Envoi automatique du fichier vers Calibre-Web à la complétion d'une demande
 - Synchronisation automatique de l'étagère Kobo dans Calibre-Web (le livre apparaît directement sur la liseuse)
@@ -325,7 +327,7 @@ Le mode **Relais** existe pour les instances qui n'ont pas de compte Apple Devel
 
 > `GOOGLE_BOOKS_API_KEY` et `RSS_FEED_URL` sont **optionnelles depuis la 1.5.2** configurables dans **Réglages**, avec la même migration automatique depuis le `.env` que l'email et l'IA. **Hardcover** (repli entre Google Books et Open Library) n'a pas de variable d'environnement : clé API et activation se configurent uniquement depuis **Réglages** (désactivé par défaut).
 >
-> Les connecteurs de téléchargement (**V**, **Fourtoutici**, **Anna's Archive**, **LibGen**, **Calibre-Web**) n'ont eux non plus aucune variable d'environnement : URL, identifiants et activation se règlent depuis **Admin → Connecteurs**, et les secrets sont chiffrés en base. Seule exception, `FLARESOLVERR_URL` ci-dessous, qui pointe vers le solveur anti-bot utilisé par Anna's Archive.
+> Les connecteurs de téléchargement (**V**, **Fourtoutici**, **Anna's Archive**, **LibGen**, **UZ**, **Prowlarr**, **Calibre-Web**) n'ont eux non plus aucune variable d'environnement : URL, identifiants et activation se règlent depuis **Admin → Connecteurs**, et les secrets sont chiffrés en base. Seule exception, `FLARESOLVERR_URL` ci-dessous, qui pointe vers le solveur anti-bot utilisé par Anna's Archive. Le client torrent utilisé par Prowlarr (qBittorrent/Transmission/Deluge/rTorrent-ruTorrent) se configure de la même façon, séparément (Prowlarr ne redonne jamais son mot de passe via son API).
 
 | Variable | Description |
 |---|---|
