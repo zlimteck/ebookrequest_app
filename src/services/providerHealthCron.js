@@ -141,11 +141,29 @@ async function checkUltimZoneIssue(force = false) {
   }
 }
 
+// Contrairement à Google Books/Hardcover, une coupure Prowlarr touche aussi
+// bien la recherche manuelle/directe que le fallback automatique et le grab
+// de torrents déjà en attente — mieux vaut la détecter avant qu'un admin la
+// découvre en constatant que les demandes restent bloquées.
+async function checkProwlarrIssue(force = false) {
+  const doc = await ConnectorSettings.findOne({ service: 'prowlarr' }).lean();
+  if (!doc?.enabled || !doc?.url || !doc?.apiKey) return;
+
+  try {
+    const { pingProwlarr } = await import('./prowlarrService.js');
+    await pingProwlarr();
+  } catch (err) {
+    await maybeAlert('prowlarr', 'Prowlarr',
+      `${err.message} — recherche et téléchargement automatique indisponibles tant que l'instance n'est pas de nouveau joignable.`, force);
+  }
+}
+
 export async function runProviderHealthCron(force = false) {
   try {
     await checkGoogleBooksIssue(force);
     await checkHardcoverIssue(force);
     await checkUltimZoneIssue(force);
+    await checkProwlarrIssue(force);
   } catch (e) {
     console.error('[ProviderHealthCron] Erreur:', e.message);
   }
