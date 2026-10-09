@@ -46,6 +46,18 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      # Pré-tire l'image de bootstrap de buildx avec retry : le pull fait par
+      # setup-buildx-action lui-même n'a pas de retry intégré, et l'appel à
+      # auth.docker.io pour cette image publique (toujours anonyme, même loggé)
+      # timeout parfois côté runners GitHub — une fois en cache local, le
+      # bootstrap de l'étape suivante devient instantané.
+      - name: Pré-tirer l'image buildkit (avec retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 3
+          command: docker pull moby/buildkit:buildx-stable-1
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -90,6 +102,18 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
+      # Pré-tire l'image de bootstrap de buildx avec retry : le pull fait par
+      # setup-buildx-action lui-même n'a pas de retry intégré, et l'appel à
+      # auth.docker.io pour cette image publique (toujours anonyme, même loggé)
+      # timeout parfois côté runners GitHub — une fois en cache local, le
+      # bootstrap de l'étape suivante devient instantané.
+      - name: Pré-tirer l'image buildkit (avec retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 3
+          command: docker pull moby/buildkit:buildx-stable-1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
