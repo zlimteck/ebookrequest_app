@@ -2514,8 +2514,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
 
                   <div className={styles.connectorsSection}>
                     <div className={styles.connectorsSectionHeader}>
-                      <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorsSectionLogo} />
-                      <span>Valentine.wtf</span>
+                      <span className={styles.connectorsSectionLogoAnnas}>V</span>
+                      <span>Valentine</span>
                       {valentineLoading
                         ? <span className={styles.spinner} style={{ marginLeft: 'auto' }} />
                         : valentineModalQuota && !valentineModalQuota.error && (

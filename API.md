@@ -294,7 +294,7 @@ curl -X POST https://app.ndd.fr/api/requests/direct-download \
     "ebookId": "12345",
     "title": "Dune",
     "author": "Frank Herbert",
-    "link": "https://valentine.wtf/...",
+    "link": "https://url_valentine/...",
     "publishedDate": "1965",
     "category": "ebook",
     "selectedShelves": ["Fantasy"]
@@ -983,7 +983,7 @@ connexion) : `phpsessid` et `fluxCookie`, chiffrés séparément.
 curl -X PUT https://app.ndd.fr/api/connectors/ultimzone \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"enabled": true, "url": "https://ultim-zone.in", "phpsessid": "...", "fluxCookie": "..."}'
+  -d '{"enabled": true, "url": "https://url_uz", "phpsessid": "...", "fluxCookie": "..."}'
 ```
 
 ### `GET /api/connectors/ultimzone/search?q=Dune`

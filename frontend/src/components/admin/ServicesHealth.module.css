@@ -272,19 +272,6 @@
   animation: spin 0.9s ease-in-out infinite;
 }
 
-.valentineIcon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  /* Dark mode : blanc à 45% opacité sur fond sombre ≈ #94a3b8 */
-  filter: brightness(0) invert(1) opacity(0.45);
-}
-
-:global(html[data-theme="light"]) .valentineIcon {
-  /* Light mode : gris moyen ≈ #64748b */
-  filter: brightness(0) invert(0.4);
-}
-
 .errorBox {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.2);

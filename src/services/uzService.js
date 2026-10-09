@@ -11,7 +11,10 @@ import { getProxyConfig, getProxyAgent } from './proxyConfig.js';
 // Authentification par cookie de session (PHPSESSID + __Host-flux_cookie), fourni
 // par l'admin depuis son navigateur (pas de login programmatique géré ici).
 
-const DEFAULT_URL = 'https://ultim-zone.in';
+// Pas d'URL par défaut : l'admin de l'instance doit la renseigner lui-même
+// dans Réglages → Connecteurs (anonymisation volontaire, par respect pour le
+// site, plutôt que de la publier en dur dans le code source).
+const DEFAULT_URL = '';
 // Forum IDs internes du site pour BD / Comics / Mangas / Livres / Romans /
 // Livre de Jeu de rôles (cf. search.php, fieldset "Lecture" du formulaire de
 // recherche avancée) — distincts des numéros utilisés dans les URLs de
@@ -86,8 +89,9 @@ export async function searchOnUltimZone(query) {
 
   const cookie = getSessionCookie(doc);
   if (!cookie) throw new Error('Cookie de session Ultim-Zone manquant');
+  if (!doc.url) throw new Error('URL Ultim-Zone non configurée');
 
-  const baseUrl = (doc.url || DEFAULT_URL).replace(/\/$/, '');
+  const baseUrl = doc.url.replace(/\/$/, '');
   const params = new URLSearchParams();
   params.append('action', 'search');
   params.append('keywords', query);
@@ -142,8 +146,9 @@ export async function pingUltimZone() {
   const doc = await getUltimZoneConfig();
   const cookie = getSessionCookie(doc);
   if (!cookie) throw new Error('Cookie de session Ultim-Zone manquant');
+  if (!doc.url) throw new Error('URL Ultim-Zone non configurée');
 
-  const baseUrl = (doc.url || DEFAULT_URL).replace(/\/$/, '');
+  const baseUrl = doc.url.replace(/\/$/, '');
   const res = await axiosWithProxy('get', `${baseUrl}/search.php`, {
     headers: { ...HEADERS, Cookie: cookie },
     timeout: 10000,

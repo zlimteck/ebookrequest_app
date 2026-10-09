@@ -873,8 +873,6 @@ function UserForm() {
           {valentineQuota && !valentineQuota.error && (
             <div className={styles.quotaLine}>
               <span className={styles.quotaBarLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine"
-                  style={{ height: '11px', width: 'auto', filter: 'brightness(0) saturate(100%) invert(48%) sepia(98%) saturate(400%) hue-rotate(200deg) brightness(80%)' }} />
                 Valentine
               </span>
               <div className={styles.quotaBarTrack}>

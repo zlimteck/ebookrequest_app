@@ -72,7 +72,7 @@ router.get('/valentine/next-scan', requireAuth, requireAdmin, (req, res) => {
 router.get('/valentine', requireAuth, requireAdmin, async (req, res) => {
   try {
     let doc = await ConnectorSettings.findOne({ service: 'valentine' }).lean();
-    if (!doc) doc = { service: 'valentine', enabled: false, url: 'https://valentine.wtf', username: '', password: '', cronInterval: 6, valentineFallbackToAdmin: false };
+    if (!doc) doc = { service: 'valentine', enabled: false, url: '', username: '', password: '', cronInterval: 6, valentineFallbackToAdmin: false };
     res.json({
       ...doc,
       password: doc.password ? '••••••••' : '',
@@ -93,7 +93,7 @@ router.put('/valentine', requireAuth, requireAdmin, async (req, res) => {
 
     const update = {
       enabled: !!enabled,
-      url: url?.trim() || 'https://valentine.wtf',
+      url: url?.trim() || '',
       username: username?.trim() || '',
       cronInterval: Number(cronInterval) || 6,
       valentineFallbackToAdmin: !!valentineFallbackToAdmin,
@@ -143,7 +143,7 @@ router.post('/valentine/test', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Mot de passe non renseigné' });
     }
     await testConnectionValentine(username.trim(), realPassword);
-    res.json({ success: true, message: 'Connexion réussie — valentine.wtf' });
+    res.json({ success: true, message: 'Connexion réussie.' });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible' });
   }
@@ -543,7 +543,7 @@ router.put('/ultimzone', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, url, phpsessid, _hasPhpsessid, fluxCookie, _hasFluxCookie } = req.body;
     const update = enabled !== undefined ? { enabled: !!enabled } : {};
-    if (url !== undefined) update.url = url?.trim() || 'https://ultim-zone.in';
+    if (url !== undefined) update.url = url?.trim() || '';
     if (phpsessid && phpsessid !== '••••••••') update.apiKey = encrypt(phpsessid);
     if (!phpsessid && !_hasPhpsessid) update.apiKey = '';
     if (fluxCookie && fluxCookie !== '••••••••') update.password = encrypt(fluxCookie);

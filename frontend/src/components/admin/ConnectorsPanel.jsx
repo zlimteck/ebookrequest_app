@@ -53,7 +53,7 @@ function useCountdown(targetDate) {
 function ValentineCard() {
   const [config, setConfig] = useState({
     enabled: false,
-    url: 'https://valentine.wtf',
+    url: '',
     username: '',
     password: '',
     _hasPassword: false,
@@ -77,7 +77,7 @@ function ValentineCard() {
       .then(res => {
         const cfg = {
           enabled: res.data.enabled ?? false,
-          url: res.data.url || 'https://valentine.wtf',
+          url: res.data.url || '',
           username: res.data.username || '',
           password: res.data.password || '',
           _hasPassword: res.data._hasPassword ?? false,
@@ -158,17 +158,17 @@ function ValentineCard() {
     <div className={styles.card}>
       <div className={styles.cardHeader}>
         <div className={styles.cardBrand}>
-          <div className={styles.cardLogoWrap}>
-            <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" className={styles.connectorLogoValentine} />
+          <div className={`${styles.cardLogoWrap} ${styles.cardLogoWrapAnnas}`}>
+            <span className={styles.annasLogoLetter}>V</span>
           </div>
           <div>
             <p className={styles.cardName}>
-              Valentine.wtf
+              Valentine
               {valentineStatus && (
                 <span className={valentineStatus === 'ok' ? styles.statusDotOk : styles.statusDotError} title={valentineStatus === 'ok' ? 'Connecté' : 'Connexion échouée'} />
               )}
             </p>
-            <p className={styles.cardDesc}>Télécharge automatiquement les ebooks demandés depuis valentine.wtf.</p>
+            <p className={styles.cardDesc}>Télécharge automatiquement les ebooks demandés depuis le site renseigné ci-dessous.</p>
           </div>
         </div>
         <label className={styles.switch}>
@@ -206,7 +206,7 @@ function ValentineCard() {
           <input
             className={styles.fieldInput}
             type="url"
-            placeholder="https://valentine.wtf"
+            placeholder="https://..."
             value={config.url}
             onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
           />
@@ -233,7 +233,7 @@ function ValentineCard() {
           <input
             className={styles.fieldInput}
             type="text"
-            placeholder="Votre login valentine.wtf"
+            placeholder="Votre identifiant"
             value={config.username}
             autoComplete="off"
             onChange={e => setConfig(c => ({ ...c, username: e.target.value }))}
@@ -246,7 +246,7 @@ function ValentineCard() {
             <input
               className={styles.fieldInput}
               type={showPass ? 'text' : 'password'}
-              placeholder={config._hasPassword ? '••••••••' : 'Votre mot de passe valentine.wtf'}
+              placeholder={config._hasPassword ? '••••••••' : 'Votre mot de passe'}
               value={config.password}
               autoComplete="new-password"
               onChange={e => setConfig(c => ({ ...c, password: e.target.value }))}
@@ -614,7 +614,7 @@ function LibgenCard() {
 
 function UltimZoneCard() {
   const [config, setConfig] = useState({
-    enabled: false, url: 'https://ultim-zone.in',
+    enabled: false, url: '',
     phpsessid: '', _hasPhpsessid: false,
     fluxCookie: '', _hasFluxCookie: false,
   });
@@ -631,7 +631,7 @@ function UltimZoneCard() {
       .then(res => {
         const cfg = {
           enabled: res.data.enabled ?? false,
-          url: res.data.url || 'https://ultim-zone.in',
+          url: res.data.url || '',
           phpsessid: res.data.phpsessid || '',
           _hasPhpsessid: res.data._hasPhpsessid ?? false,
           fluxCookie: res.data.fluxCookie || '',
@@ -722,7 +722,7 @@ function UltimZoneCard() {
           <input
             className={styles.fieldInput}
             type="url"
-            placeholder="https://ultim-zone.in"
+            placeholder="https://..."
             value={config.url}
             onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
           />

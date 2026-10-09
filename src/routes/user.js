@@ -760,7 +760,7 @@ router.post('/valentine/test', requireAuth, async (req, res) => {
     }
 
     await testConnectionValentine(username.trim(), password);
-    res.json({ success: true, message: 'Connexion réussie — valentine.wtf' });
+    res.json({ success: true, message: 'Connexion réussie.' });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible' });
   }

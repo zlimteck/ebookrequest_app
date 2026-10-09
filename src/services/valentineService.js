@@ -16,7 +16,10 @@ import { decrypt } from './cryptoService.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DEFAULT_URL = 'https://valentine.wtf';
+// Pas d'URL par défaut : l'admin de l'instance doit la renseigner lui-même
+// dans Réglages → Connecteurs (anonymisation volontaire, par respect pour le
+// site, plutôt que de la publier en dur dans le code source).
+const DEFAULT_URL = '';
 
 // Le texte brut renvoyé par Valentine (titres, auteurs, séries) contient
 // parfois du HTML littéral (ex: "<i>(contenu dans: ...)</i>" sur les revues) —
@@ -219,7 +222,7 @@ async function logCircuitEvent(reason) {
 
 // ─── Verrou global : sérialise tous les accès réseau vers Valentine ────────────
 // Empêche le cron, une création de demande utilisateur et une recherche admin
-// de taper valentine.wtf en même temps (plusieurs sessions concurrentes = signal suspect).
+// de taper Valentine en même temps (plusieurs sessions concurrentes = signal suspect).
 
 let lockChain = Promise.resolve();
 
@@ -321,7 +324,7 @@ function cookieHeader(cookies) {
 }
 
 /**
- * Login to valentine.wtf and return the session cookies.
+ * Login to Valentine and return the session cookies.
  * @param {string} baseUrl
  * @param {string} username
  * @param {string} password
@@ -642,7 +645,7 @@ function addValentineUrls(baseUrl, items) {
 export function searchValentineMatches(query, type, userId) {
   return withValentineLock(async () => {
     const config = await getConfigForUser(userId);
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
@@ -669,7 +672,7 @@ export function searchValentineMatches(query, type, userId) {
 export function getValentineListingBooks(pageUrl, type, fallbackName, userId) {
   return withValentineLock(async () => {
     const config = await getConfigForUser(userId);
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
@@ -769,27 +772,31 @@ async function getDownloadPath(baseUrl, cookies, bookId) {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Test the valentine.wtf connection with given credentials.
+ * Test the Valentine connection with given credentials.
  * @param {string} username
  * @param {string} password
  */
 export function testConnectionValentine(username, password) {
   return withValentineLock(async () => {
-    const baseUrl = DEFAULT_URL;
+    const config = await getConfig();
+    if (!config.url) throw new Error('URL Valentine non configurée.');
+    const baseUrl = config.url.replace(/\/$/, '');
     await login(baseUrl, username, password);
     return true;
   });
 }
 
 /**
- * Récupère le quota de téléchargements restants depuis la homepage valentine.wtf.
+ * Récupère le quota de téléchargements restants depuis la homepage Valentine.
  * @param {string} username
  * @param {string} password
  * @returns {{ remaining: number|null, total: number|null, label: string|null }}
  */
 export function getValentineQuota(username, password) {
   return withValentineLock(async () => {
-    const baseUrl = DEFAULT_URL;
+    const config = await getConfig();
+    if (!config.url) throw new Error('URL Valentine non configurée.');
+    const baseUrl = config.url.replace(/\/$/, '');
     const cookies = await getSession(baseUrl, username, password);
 
     await jitter();
@@ -819,7 +826,7 @@ export function getValentineQuota(username, password) {
 }
 
 /**
- * Search valentine.wtf for a book and download it automatically.
+ * Search Valentine for a book and download it automatically.
  * Completes the BookRequest when done.
  * Non-blocking — never throws.
  *
@@ -854,12 +861,12 @@ export async function downloadFromValentine(title, author, requestId, category =
     const username = userCredentials?.username || config.username;
     const password = userCredentials?.password || config.password;
 
-    if (!username || !password) {
-      console.log('[Valentine] Config incomplète (pas de credentials), skip.');
+    if (!username || !password || !config.url) {
+      console.log('[Valentine] Config incomplète (pas de credentials/URL), skip.');
       return;
     }
 
-    const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
+    const baseUrl = config.url.replace(/\/$/, '');
     const accountLabel = userCredentials ? `[compte user]` : `[compte admin]`;
 
     // ── Login ──────────────────────────────────────────────────────────────
@@ -1030,7 +1037,7 @@ export async function downloadFromValentine(title, author, requestId, category =
 }
 
 /**
- * Search valentine.wtf and return enriched results (for admin UI — retry
+ * Search Valentine and return enriched results (for admin UI — retry
  * manuel sur une demande existante). Fetches cover + size for each result.
  * Inchangé : distinct de la recherche directe (voir searchValentineTitlesFast
  * plus bas), qui elle ne doit surtout pas être ralentie par cet enrichissement.
@@ -1038,7 +1045,7 @@ export async function downloadFromValentine(title, author, requestId, category =
 export function searchOnValentine(query) {
   return withValentineLock(async () => {
     const config = await getConfig();
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
@@ -1067,7 +1074,7 @@ export function searchOnValentine(query) {
 export function searchValentineTitlesFast(query, userId) {
   return withValentineLock(async () => {
     const config = await getConfigForUser(userId);
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
@@ -1094,7 +1101,7 @@ export function searchValentineTitlesFast(query, userId) {
 export function quickSearchOnValentine(title, author) {
   return withValentineLock(async () => {
     const config = await getConfig();
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');
@@ -1131,7 +1138,7 @@ export function quickSearchOnValentine(title, author) {
 export function downloadFromValentineById(requestId, ebookId, userId) {
   return withValentineLock(async () => {
     const config = await getConfigForUser(userId);
-    if (!config.enabled || !config.username || !config.password) {
+    if (!config.enabled || !config.username || !config.password || !config.url) {
       throw new Error('Valentine désactivé ou configuration incomplète');
     }
     const baseUrl = (config.url || DEFAULT_URL).replace(/\/$/, '');

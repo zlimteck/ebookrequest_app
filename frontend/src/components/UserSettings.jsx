@@ -1230,11 +1230,10 @@ const UserSettings = () => {
         {localStorage.getItem('role') !== 'admin' && (
           <div className={styles.settingsCard}>
             <h2 className={styles.sectionTitle}>
-              <img src="https://valentine.wtf/logo.php?mode=clair" alt="Valentine" style={{ height: '16px', width: 'auto' }} />
               Compte Valentine
             </h2>
             <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '0 0 1rem' }}>
-              Utilisez votre propre compte <a href="https://valentine.wtf" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>valentine.wtf</a> pour les téléchargements automatiques. Sans compte personnel, le compte administrateur est utilisé.
+              Utilisez votre propre compte Valentine pour les téléchargements automatiques. Sans compte personnel, le compte administrateur est utilisé.
             </p>
             <div className={`${styles.alert} ${styles.alertWarning}`} style={{ marginBottom: '1rem' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1261,7 +1260,7 @@ const UserSettings = () => {
                 autoComplete="off"
                 value={valentine.username}
                 onChange={e => { setValentine(p => ({ ...p, username: e.target.value })); setValentineTestResult(null); }}
-                placeholder="Votre identifiant valentine.wtf"
+                placeholder="Votre identifiant"
               />
             </div>
             <div className={styles.fieldRow}>

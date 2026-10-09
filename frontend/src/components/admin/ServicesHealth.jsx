@@ -121,13 +121,9 @@ const SERVICE_DEFS = [
   },
   {
     key: 'valentine',
-    label: () => 'Valentine.wtf',
+    label: () => 'Valentine',
     icon: (
-      <img
-        src="https://valentine.wtf/logo.php?mode=clair"
-        alt="Valentine"
-        className={styles.valentineIcon}
-      />
+      <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: "'Arial Black', Arial, Helvetica, sans-serif", color: 'var(--color-text-muted)', lineHeight: 1, letterSpacing: '-0.03em', width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>V</span>
     ),
     isEnabled: (s) => s.enabled,
     isConnected: (s) => s.connected && !s.circuitBreaker?.open,
