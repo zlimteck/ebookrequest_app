@@ -31,20 +31,23 @@ jobs:
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Login to Docker Hub
         # Pas de login pour un build de validation de PR : rien n'est publié,
         # et les secrets ne sont de toute façon pas exposés aux PR venant d'un fork.
+        # Placé AVANT setup-buildx-action : sinon le pull de l'image
+        # moby/buildkit (faite par buildx) se fait en anonyme et peut être
+        # sujet au rate-limit Docker Hub (renvoyé en 500 plutôt qu'en 429).
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -78,18 +81,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.mcp_version.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
         uses: docker/build-push-action@v6
