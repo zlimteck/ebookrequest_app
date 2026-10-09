@@ -19,7 +19,13 @@ router.get('/public/:token', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Bibliothèque introuvable ou partage désactivé.' });
 
     const includeNotes = user.readingShare.includeNotes;
-    const books = await ReadingList.find({ userId: user._id }).sort({ createdAt: -1 }).lean();
+    // populate requestId : la ReadingList elle-même n'a pas de résumé/catégorie/
+    // nombre de pages, seule la BookRequest d'origine les a (quand l'entrée vient
+    // d'une demande complétée, pas d'un ajout manuel à la liste de lecture).
+    const books = await ReadingList.find({ userId: user._id })
+      .populate('requestId', 'description category pageCount format')
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       username: user.username,
@@ -28,9 +34,14 @@ router.get('/public/:token', async (req, res) => {
         author: b.author,
         thumbnail: b.thumbnail,
         status: b.status,
+        readingProgress: b.readingProgress,
         readAt: b.readAt,
         rating: includeNotes ? b.rating : undefined,
         notes: includeNotes ? b.notes : undefined,
+        description: b.requestId?.description || '',
+        category: b.requestId?.category || '',
+        pageCount: b.requestId?.pageCount || null,
+        format: b.requestId?.format || '',
       })),
     });
   } catch (error) {

@@ -18,9 +18,12 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Calibre pour ebook-convert (conversion de formats ebook)
+# Calibre pour ebook-convert (conversion de formats ebook). fontconfig +
+# fonts-dejavu-core pour le rendu texte des images Open Graph générées par
+# sharp (src/services/ogImageService.js) — sans ça le texte sort en carrés
+# vides (tofu), sharp/librsvg n'embarque pas de police par défaut.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends calibre wget && \
+    apt-get install -y --no-install-recommends calibre wget fontconfig fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 # Dépendances backend uniquement (production)

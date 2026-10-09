@@ -30,34 +30,64 @@
   margin: 0;
 }
 
-.filters {
+.toolbar {
   display: flex;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
-.filterBtn {
-  padding: 0.45rem 0.9rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  background: var(--color-bg2, #23272b);
-  border: 1px solid var(--color-border, #333);
-  color: var(--color-text-muted, #94a3b8);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+.selectRow {
+  display: flex;
+  gap: 0.6rem;
+  flex: 1 1 260px;
 }
 
-.filterBtn:hover {
-  border-color: var(--color-accent, #6366f1);
+.searchInput {
+  flex: 1 1 260px;
+  max-width: 420px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 0.9rem;
+  font-size: 0.85rem;
+  background: var(--color-bg2, #23272b);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 10px;
   color: var(--color-text, #e6e6e6);
 }
 
-.filterBtnActive {
-  background: var(--color-accent, #6366f1);
+.searchInput:focus {
+  outline: none;
   border-color: var(--color-accent, #6366f1);
-  color: #fff;
+}
+
+.filterSelect {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 1.8rem 0 0.8rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 10px;
+  background: var(--color-bg2, #23272b);
+  color: var(--color-text, #e6e6e6);
+  font-size: 0.85rem;
+  cursor: pointer;
+  /* Le rendu natif d'un <select> ignore border-radius/background sur
+     Chrome/Safari mobile (widget OS) — appearance:none redonne la main sur
+     le style, au prix de devoir redessiner la flèche nous-mêmes. */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--color-accent, #6366f1);
 }
 
 .grid {
@@ -90,6 +120,7 @@
   border: 1px solid var(--color-border, #333);
   background: var(--color-bg3, #1e2124);
   aspect-ratio: 2 / 3;
+  cursor: pointer;
 }
 
 .thumb {
@@ -128,6 +159,24 @@
 
 .badgeUnread {
   background: rgba(148,163,184,0.75);
+}
+
+.badgeReading {
+  background: rgba(99,102,241,0.85);
+}
+
+.cardProgress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(0,0,0,0.35);
+}
+
+.cardProgressFill {
+  height: 100%;
+  background: var(--color-accent, #6366f1);
 }
 
 .cardTitle {
@@ -210,4 +259,134 @@
   color: var(--color-accent, #6366f1);
   text-decoration: none;
   font-weight: 600;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--color-bg2, #23272b);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 14px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1.1rem;
+}
+
+.modalClose {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.modalThumb {
+  width: 110px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #333);
+  aspect-ratio: 2 / 3;
+}
+
+.modalThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modalBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text, #e6e6e6);
+}
+
+.modalAuthor {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.modalProgressTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-bg3, #1e2124);
+  overflow: hidden;
+}
+
+.modalProgressFill {
+  height: 100%;
+  background: var(--color-accent, #6366f1);
+}
+
+.modalProgressLabel {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.modalMeta {
+  margin: -0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.modalDescription {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text, #e6e6e6);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.modalNotes {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text, #e6e6e6);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+/* Placé en fin de fichier volontairement : à spécificité égale, les règles de
+   base .toolbar/.searchInput/.selectRow plus haut gagneraient sinon sur ce
+   media query (c'est la règle la plus tardive dans le fichier qui l'emporte à
+   égalité de spécificité, peu importe l'ordre media query/règle normale).
+   Recherche sur sa propre ligne pleine largeur ; les 2 select restent côte à
+   côte (50/50) sur la ligne du dessous plutôt que d'être empilés un par un. */
+@media (max-width: 480px) {
+  .toolbar {
+    flex-direction: column;
+  }
+
+  .searchInput,
+  .selectRow {
+    flex-basis: auto;
+    width: 100%;
+    max-width: none;
+  }
 }

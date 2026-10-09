@@ -14,6 +14,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import cookieParser from 'cookie-parser';
+import User from './models/User.js';
+import ReadingList from './models/ReadingList.js';
+import { renderLibraryOgImage } from './services/ogImageService.js';
 import bookRequestRoutes from './routes/bookRequest.js';
 import authRoutes from './routes/auth.js';
 import twoFactorRoutes from './routes/twoFactor.js';
@@ -243,6 +246,75 @@ const APPLE_APP_SITE_ASSOCIATION = {
 app.get(['/.well-known/apple-app-site-association', '/apple-app-site-association'], (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.json(APPLE_APP_SITE_ASSOCIATION);
+});
+
+// Balises Open Graph dynamiques pour un lien de bibliothèque partagée — sans
+// ça, Discord/Twitter/iMessage affichent toujours l'aperçu générique de
+// l'app (statique dans index.html), jamais rien de propre au lien partagé.
+// Les crawlers de ces plateformes n'exécutent pas le JS React, donc il faut
+// injecter les balises côté serveur avant d'envoyer le HTML. Montée avant
+// express.static/le catch-all pour intercepter cette route précise.
+let indexHtmlCache = null;
+function getIndexHtml() {
+  if (!indexHtmlCache) {
+    indexHtmlCache = fs.readFileSync(path.join(frontendBuild, 'index.html'), 'utf-8');
+  }
+  return indexHtmlCache;
+}
+
+function escapeHtmlAttr(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function injectOgTags(html, { title, description, image, url }) {
+  const safeTitle = escapeHtmlAttr(title);
+  const safeDescription = escapeHtmlAttr(description);
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${safeTitle}</title>`)
+    .replace(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${safeTitle}" />`)
+    .replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${safeDescription}" />`)
+    .replace(/<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${image}" /><meta name="twitter:card" content="summary_large_image" />`)
+    .replace(/<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${url}" />`);
+}
+
+app.get('/library/:token/og-image.png', async (req, res) => {
+  try {
+    const user = await User.findOne({ 'readingShare.token': req.params.token, 'readingShare.enabled': true }).select('username _id');
+    if (!user) return res.status(404).end();
+
+    const [bookCount, readCount] = await Promise.all([
+      ReadingList.countDocuments({ userId: user._id }),
+      ReadingList.countDocuments({ userId: user._id, status: 'read' }),
+    ]);
+
+    const png = await renderLibraryOgImage({ username: user.username, bookCount, readCount });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(png);
+  } catch (err) {
+    console.error('[library og-image] Erreur:', err.message);
+    res.status(500).end();
+  }
+});
+
+app.get('/library/:token', async (req, res) => {
+  try {
+    const user = await User.findOne({ 'readingShare.token': req.params.token, 'readingShare.enabled': true }).select('username');
+    if (!user) return res.sendFile(path.join(frontendBuild, 'index.html'));
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const bookCount = await ReadingList.countDocuments({ userId: user._id });
+    const html = injectOgTags(getIndexHtml(), {
+      title: `Bibliothèque de ${user.username}`,
+      description: `${bookCount} livre${bookCount > 1 ? 's' : ''} partagé${bookCount > 1 ? 's' : ''} sur EbookRequest.`,
+      image: `${baseUrl}/library/${req.params.token}/og-image.png`,
+      url: `${baseUrl}/library/${req.params.token}`,
+    });
+    res.send(html);
+  } catch (err) {
+    console.error('[library OG] Erreur:', err.message);
+    res.sendFile(path.join(frontendBuild, 'index.html'));
+  }
 });
 
 app.use(express.static(frontendBuild));
