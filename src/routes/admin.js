@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import multer from 'multer';
 import { getAdminStats, getServicesHealth } from '../controllers/adminController.js';
 import DownloadLog from '../models/DownloadLog.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -7,9 +8,19 @@ import { getLogBuffer, subscribeToLogs, unsubscribeFromLogs } from '../services/
 import BookRequest from '../models/BookRequest.js';
 import AdminLog from '../models/AdminLog.js';
 import upload from '../middleware/upload.js';
+import { exportBackup, restoreBackup } from '../services/backupService.js';
+import { BACKUP_DIR, listBackups, restartBackupCron } from '../services/backupCron.js';
+import { uploadRemoteBackup, testRemoteBackupConnection } from '../services/remoteBackupService.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+
+// Stockage en mémoire pour le zip de restauration (jamais écrit sur disque,
+// contrairement à `upload` qui écrit les ebooks dans uploads/books/) — un
+// dump JSON texte même volumineux reste minuscule comparé à un ebook.
+const backupUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,6 +330,197 @@ router.get('/logs/system', (req, res) => {
     logs = logs.filter(l => l.msg.includes(filter));
   }
   res.json({ logs });
+});
+
+// ── Export/sauvegarde des données (issue #43) ───────────────────────────────
+// GET /api/admin/backup/export — zip téléchargé directement par le navigateur.
+router.get('/backup/export', async (req, res) => {
+  try {
+    const zipBuffer = await exportBackup();
+    const filename = `ebookrequest-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(zipBuffer);
+  } catch (err) {
+    console.error('Erreur export backup:', err);
+    res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
+  }
+});
+
+// POST /api/admin/backup/restore — remplacement complet des données depuis un
+// zip exporté par la route ci-dessus. Action destructive et irréversible,
+// confirmation à double niveau gérée côté frontend avant cet appel.
+router.post('/backup/restore', backupUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier reçu.' });
+    }
+    const result = await restoreBackup(req.file.buffer);
+
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'restore_backup',
+      details: `Sauvegarde du ${result.exportedAt} restaurée (${result.restored.map(r => `${r.name}: ${r.count}`).join(', ')})`,
+    }).catch(() => {});
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Erreur restauration backup:', err);
+    res.status(500).json({ error: err.message || 'Erreur lors de la restauration.' });
+  }
+});
+
+// ── Sauvegarde automatique périodique (issue #43) ───────────────────────────
+// GET /api/admin/backup/auto-config
+router.get('/backup/auto-config', async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'backup' }).lean();
+    res.json({
+      enabled: doc?.enabled ?? false,
+      cronInterval: doc?.cronInterval || 24,
+      backupRetentionCount: doc?.backupRetentionCount || 7,
+      remoteBackupType: doc?.remoteBackupType || '',
+      remoteBackupWebdavUrl: doc?.remoteBackupWebdavUrl || '',
+      remoteBackupWebdavUsername: doc?.remoteBackupWebdavUsername || '',
+      remoteBackupWebdavPassword: doc?.password ? '••••••••' : '',
+      _hasRemoteBackupWebdavPassword: !!doc?.password,
+      remoteBackupS3Endpoint: doc?.remoteBackupS3Endpoint || '',
+      remoteBackupS3Bucket: doc?.remoteBackupS3Bucket || '',
+      remoteBackupS3Region: doc?.remoteBackupS3Region || 'auto',
+      remoteBackupS3AccessKeyId: doc?.remoteBackupS3AccessKeyId || '',
+      remoteBackupS3SecretAccessKey: doc?.apiKey ? '••••••••' : '',
+      _hasRemoteBackupS3SecretAccessKey: !!doc?.apiKey,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/backup/auto-config
+router.put('/backup/auto-config', async (req, res) => {
+  try {
+    const {
+      enabled, cronInterval, backupRetentionCount, remoteBackupType,
+      remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword, _hasRemoteBackupWebdavPassword,
+      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId,
+      remoteBackupS3SecretAccessKey, _hasRemoteBackupS3SecretAccessKey,
+    } = req.body;
+
+    const update = {
+      enabled: !!enabled,
+      cronInterval: Number(cronInterval) || 24,
+      backupRetentionCount: Math.max(1, Number(backupRetentionCount) || 7),
+      remoteBackupType: ['webdav', 's3'].includes(remoteBackupType) ? remoteBackupType : '',
+      remoteBackupWebdavUrl: remoteBackupWebdavUrl?.trim() || '',
+      remoteBackupWebdavUsername: remoteBackupWebdavUsername?.trim() || '',
+      remoteBackupS3Endpoint: remoteBackupS3Endpoint?.trim() || '',
+      remoteBackupS3Bucket: remoteBackupS3Bucket?.trim() || '',
+      remoteBackupS3Region: remoteBackupS3Region?.trim() || 'auto',
+      remoteBackupS3AccessKeyId: remoteBackupS3AccessKeyId?.trim() || '',
+    };
+    // Mots de passe/clés secrètes : champ partagé `password`/`apiKey` déjà
+    // utilisés ailleurs sur ce schéma pour d'autres services, même pattern
+    // que les autres connecteurs (garder si vide + déjà enregistré, effacer
+    // explicitement sinon).
+    if (remoteBackupWebdavPassword && remoteBackupWebdavPassword !== '••••••••') update.password = encrypt(remoteBackupWebdavPassword);
+    if (!remoteBackupWebdavPassword && !_hasRemoteBackupWebdavPassword) update.password = '';
+    if (remoteBackupS3SecretAccessKey && remoteBackupS3SecretAccessKey !== '••••••••') update.apiKey = encrypt(remoteBackupS3SecretAccessKey);
+    if (!remoteBackupS3SecretAccessKey && !_hasRemoteBackupS3SecretAccessKey) update.apiKey = '';
+
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'backup' }, update, { upsert: true, runValidators: true }
+    );
+    await restartBackupCron();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
+  }
+});
+
+// POST /api/admin/backup/remote/test — teste la destination distante avec les
+// valeurs du formulaire (pas forcément déjà enregistrées), même pattern que
+// les boutons "Tester" des autres connecteurs.
+router.post('/backup/remote/test', async (req, res) => {
+  try {
+    const {
+      remoteBackupType, remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword,
+      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3SecretAccessKey,
+    } = req.body;
+
+    await testRemoteBackupConnection({
+      remoteBackupType,
+      remoteBackupWebdavUrl,
+      remoteBackupWebdavUsername,
+      remoteBackupPasswordPlain: remoteBackupWebdavPassword !== '••••••••' ? remoteBackupWebdavPassword : undefined,
+      remoteBackupS3Endpoint,
+      remoteBackupS3Bucket,
+      remoteBackupS3Region,
+      remoteBackupS3AccessKeyId,
+      remoteBackupS3SecretPlain: remoteBackupS3SecretAccessKey !== '••••••••' ? remoteBackupS3SecretAccessKey : undefined,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible.' });
+  }
+});
+
+// POST /api/admin/backup/auto-run-now — force une sauvegarde automatique
+// immédiate, indépendamment du réglage `enabled` (cohérent avec le bouton
+// "Vérifier maintenant" déjà utilisé pour Prowlarr). Envoie aussi vers la
+// destination distante si configurée, comme le ferait le cron.
+router.post('/backup/auto-run-now', async (req, res) => {
+  try {
+    const zipBuffer = await exportBackup();
+    const filename = `auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
+    try {
+      await uploadRemoteBackup(zipBuffer, filename);
+    } catch (err) {
+      console.error('[Backup] Échec de la copie distante:', err.message);
+    }
+    res.json({ success: true, filename });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
+  }
+});
+
+// GET /api/admin/backup/history
+router.get('/backup/history', (req, res) => {
+  try {
+    res.json({ backups: listBackups() });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/admin/backup/history/:filename — téléchargement d'une sauvegarde
+// automatique passée. Filtre strict sur le nom (pas de traversal possible).
+router.get('/backup/history/:filename', (req, res) => {
+  const { filename } = req.params;
+  if (!/^[a-zA-Z0-9_-]+\.zip$/.test(filename)) {
+    return res.status(400).json({ error: 'Nom de fichier invalide.' });
+  }
+  const filePath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Sauvegarde introuvable.' });
+  }
+  res.download(filePath);
+});
+
+// DELETE /api/admin/backup/history/:filename
+router.delete('/backup/history/:filename', (req, res) => {
+  const { filename } = req.params;
+  if (!/^[a-zA-Z0-9_-]+\.zip$/.test(filename)) {
+    return res.status(400).json({ error: 'Nom de fichier invalide.' });
+  }
+  const filePath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Sauvegarde introuvable.' });
+  }
+  fs.unlinkSync(filePath);
+  res.json({ success: true });
 });
 
 export default router;

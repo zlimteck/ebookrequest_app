@@ -87,6 +87,22 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // racine (ex: seedbox où /webdav pointe sur le home entier, torrents dans
   // un sous-dossier). Vide par défaut = racine WebDAV = dossier de téléchargement.
   fileAccessWebdavBasePath: { type: String, default: '' },
+  // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
+  // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
+  // conservées est spécifique à cette fonctionnalité.
+  backupRetentionCount: { type: Number, default: 7, min: 1 },
+  // Copie distante de chaque sauvegarde générée (en plus de la locale, pas à
+  // la place) — réutilise `password` (mot de passe WebDAV) et `apiKey` (clé
+  // secrète S3) génériques, chiffrés comme les autres secrets de ce schéma.
+  // remoteBackupS3AccessKeyId n'est pas secret seul (sans la clé secrète
+  // associée), reste en clair comme un identifiant.
+  remoteBackupType: { type: String, enum: ['', 'webdav', 's3'], default: '' },
+  remoteBackupWebdavUrl: { type: String, default: '' },
+  remoteBackupWebdavUsername: { type: String, default: '' },
+  remoteBackupS3Endpoint: { type: String, default: '' },
+  remoteBackupS3Bucket: { type: String, default: '' },
+  remoteBackupS3Region: { type: String, default: 'auto' },
+  remoteBackupS3AccessKeyId: { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

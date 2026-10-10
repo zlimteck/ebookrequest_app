@@ -39,6 +39,7 @@ import FileManagerPanel from '../../components/admin/FileManagerPanel';
 import InvitationsPanel from '../../components/admin/InvitationsPanel';
 import ConnectorsPanel from '../../components/admin/ConnectorsPanel';
 import SettingsPanel from '../../components/admin/SettingsPanel';
+import BackupPanel from '../../components/admin/BackupPanel';
 import RelayPushPanel from '../../components/admin/RelayPushPanel';
 import ServicesHealth from '../../components/admin/ServicesHealth';
 import DownloadLogs from '../../components/admin/DownloadLogs';
@@ -877,6 +878,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         return <OPDSPanel />;
       case 'files':
         return <FileManagerPanel />;
+      case 'backup':
+        return <BackupPanel />;
       case 'logs':
         return (
           <div className={styles.logsContainer}>
@@ -2038,6 +2041,15 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
       icon: (
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      )
+    },
+    {
+      id: 'backup',
+      label: 'Sauvegarde',
+      icon: (
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>
         </svg>
       )
     },
