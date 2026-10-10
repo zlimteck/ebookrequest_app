@@ -390,6 +390,7 @@ router.get('/backup/auto-config', async (req, res) => {
       remoteBackupS3Bucket: doc?.remoteBackupS3Bucket || '',
       remoteBackupS3Region: doc?.remoteBackupS3Region || 'auto',
       remoteBackupS3AccessKeyId: doc?.remoteBackupS3AccessKeyId || '',
+      remoteBackupS3Prefix: doc?.remoteBackupS3Prefix || '',
       remoteBackupS3SecretAccessKey: doc?.apiKey ? '••••••••' : '',
       _hasRemoteBackupS3SecretAccessKey: !!doc?.apiKey,
     });
@@ -404,7 +405,7 @@ router.put('/backup/auto-config', async (req, res) => {
     const {
       enabled, cronInterval, backupRetentionCount, remoteBackupType,
       remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword, _hasRemoteBackupWebdavPassword,
-      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId,
+      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3Prefix,
       remoteBackupS3SecretAccessKey, _hasRemoteBackupS3SecretAccessKey,
     } = req.body;
 
@@ -419,6 +420,7 @@ router.put('/backup/auto-config', async (req, res) => {
       remoteBackupS3Bucket: remoteBackupS3Bucket?.trim() || '',
       remoteBackupS3Region: remoteBackupS3Region?.trim() || 'auto',
       remoteBackupS3AccessKeyId: remoteBackupS3AccessKeyId?.trim() || '',
+      remoteBackupS3Prefix: remoteBackupS3Prefix?.trim() || '',
     };
     // Mots de passe/clés secrètes : champ partagé `password`/`apiKey` déjà
     // utilisés ailleurs sur ce schéma pour d'autres services, même pattern
@@ -446,7 +448,7 @@ router.post('/backup/remote/test', async (req, res) => {
   try {
     const {
       remoteBackupType, remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword,
-      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3SecretAccessKey,
+      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3Prefix, remoteBackupS3SecretAccessKey,
     } = req.body;
 
     await testRemoteBackupConnection({
@@ -458,6 +460,7 @@ router.post('/backup/remote/test', async (req, res) => {
       remoteBackupS3Bucket,
       remoteBackupS3Region,
       remoteBackupS3AccessKeyId,
+      remoteBackupS3Prefix,
       remoteBackupS3SecretPlain: remoteBackupS3SecretAccessKey !== '••••••••' ? remoteBackupS3SecretAccessKey : undefined,
     });
     res.json({ success: true });

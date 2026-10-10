@@ -103,6 +103,9 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   remoteBackupS3Bucket: { type: String, default: '' },
   remoteBackupS3Region: { type: String, default: 'auto' },
   remoteBackupS3AccessKeyId: { type: String, default: '' },
+  // Sous-dossier optionnel dans le bucket (ex: "db/") — vide par défaut pour
+  // ne rien changer au comportement existant (upload à la racine du bucket).
+  remoteBackupS3Prefix: { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

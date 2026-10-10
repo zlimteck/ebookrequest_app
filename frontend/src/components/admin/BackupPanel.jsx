@@ -176,7 +176,7 @@ function AutoBackupCard() {
     remoteBackupType: '', remoteBackupWebdavUrl: '', remoteBackupWebdavUsername: '',
     remoteBackupWebdavPassword: '', _hasRemoteBackupWebdavPassword: false,
     remoteBackupS3Endpoint: '', remoteBackupS3Bucket: '', remoteBackupS3Region: 'auto',
-    remoteBackupS3AccessKeyId: '', remoteBackupS3SecretAccessKey: '', _hasRemoteBackupS3SecretAccessKey: false,
+    remoteBackupS3AccessKeyId: '', remoteBackupS3Prefix: '', remoteBackupS3SecretAccessKey: '', _hasRemoteBackupS3SecretAccessKey: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -412,6 +412,17 @@ function AutoBackupCard() {
                 value={config.remoteBackupS3Bucket}
                 onChange={e => setConfig(c => ({ ...c, remoteBackupS3Bucket: e.target.value }))}
               />
+            </div>
+            <div className={styles.fieldRow}>
+              <label className={styles.fieldLabel}>Dossier / Préfixe (optionnel)</label>
+              <input
+                className={styles.fieldInput}
+                type="text"
+                placeholder="db/"
+                value={config.remoteBackupS3Prefix}
+                onChange={e => setConfig(c => ({ ...c, remoteBackupS3Prefix: e.target.value }))}
+              />
+              <p className={styles.fieldHint}>Les sauvegardes seront rangées dans ce sous-dossier du bucket plutôt qu'à la racine. Laisser vide pour la racine.</p>
             </div>
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>Région</label>

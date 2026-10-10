@@ -8,6 +8,14 @@ async function getConfig() {
   return doc || {};
 }
 
+// Normalise le préfixe S3 (sous-dossier du bucket) : pas de slash au début,
+// un seul slash à la fin si non vide. Vide par défaut = comportement
+// inchangé (upload à la racine du bucket).
+function normalizeS3Prefix(prefix) {
+  if (!prefix) return '';
+  return `${prefix.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+}
+
 async function uploadToWebdav(buffer, filename, config) {
   if (!config.remoteBackupWebdavUrl) throw new Error('URL WebDAV non configurée.');
   const password = decrypt(config.password) ?? '';
@@ -37,7 +45,7 @@ async function uploadToS3(buffer, filename, config) {
   });
   await client.send(new PutObjectCommand({
     Bucket: config.remoteBackupS3Bucket,
-    Key: filename,
+    Key: `${normalizeS3Prefix(config.remoteBackupS3Prefix)}${filename}`,
     Body: buffer,
   }));
 }
@@ -91,14 +99,15 @@ export async function testRemoteBackupConnection(config) {
       credentials: { accessKeyId: config.remoteBackupS3AccessKeyId || '', secretAccessKey },
       forcePathStyle: true,
     });
+    const testKey = `${normalizeS3Prefix(config.remoteBackupS3Prefix)}${testFilename}`;
     await client.send(new PutObjectCommand({
       Bucket: config.remoteBackupS3Bucket,
-      Key: testFilename,
+      Key: testKey,
       Body: testBuffer,
     }));
     await client.send(new DeleteObjectCommand({
       Bucket: config.remoteBackupS3Bucket,
-      Key: testFilename,
+      Key: testKey,
     }));
   } else {
     throw new Error('Aucune destination distante sélectionnée.');
