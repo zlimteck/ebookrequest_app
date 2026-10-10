@@ -37,7 +37,7 @@ async function runBackupCron() {
     if (!config.enabled) return;
 
     const zipBuffer = await exportBackup();
-    const filename = `auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
     fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
     console.log(`[BackupCron] Sauvegarde automatique créée : ${filename}`);
 

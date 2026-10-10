@@ -1,5 +1,5 @@
 import { createClient } from 'webdav';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { decrypt } from './cryptoService.js';
 
@@ -61,10 +61,7 @@ export async function uploadRemoteBackup(buffer, filename) {
 
 /**
  * Test de connexion depuis l'UI admin — envoie un petit fichier de test puis
- * le supprime (WebDAV) ou l'écrase simplement au prochain vrai upload (S3,
- * pas de suppression immédiate pour rester simple, le fichier de test est
- * minuscule et sera de toute façon purgé par la rétention si le dossier est
- * partagé avec les vraies sauvegardes).
+ * le supprime immédiatement, aussi bien en WebDAV qu'en S3.
  */
 export async function testRemoteBackupConnection(config) {
   const testBuffer = Buffer.from('EbookRequest — test de connexion sauvegarde distante');
@@ -98,6 +95,10 @@ export async function testRemoteBackupConnection(config) {
       Bucket: config.remoteBackupS3Bucket,
       Key: testFilename,
       Body: testBuffer,
+    }));
+    await client.send(new DeleteObjectCommand({
+      Bucket: config.remoteBackupS3Bucket,
+      Key: testFilename,
     }));
   } else {
     throw new Error('Aucune destination distante sélectionnée.');

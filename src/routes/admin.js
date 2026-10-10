@@ -473,7 +473,7 @@ router.post('/backup/remote/test', async (req, res) => {
 router.post('/backup/auto-run-now', async (req, res) => {
   try {
     const zipBuffer = await exportBackup();
-    const filename = `auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
     fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
     try {
       await uploadRemoteBackup(zipBuffer, filename);
