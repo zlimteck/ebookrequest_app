@@ -130,6 +130,13 @@ function BackupCard() {
                 seront remplacées par le contenu de « {confirmModal.name} ». Les secrets Apprise/Pushover devront
                 être ressaisis après coup (stockés en clair, jamais inclus dans la sauvegarde).
               </p>
+              <p>
+                <strong>Si cette sauvegarde vient d'une autre instance</strong> (ou si le fichier <code>.env</code> a changé
+                depuis), assurez-vous d'avoir le <strong>JWT_SECRET</strong> d'origine à portée de main : les secrets
+                chiffrés qu'elle contient (connecteurs, comptes Valentine/Hardcover...) ne redeviennent lisibles
+                qu'avec la même clé que celle utilisée à l'export. Sans elle, ils resteront simplement vides après
+                la restauration, à ressaisir manuellement.
+              </p>
               <p>Pour confirmer, tapez <strong style={{ color: 'var(--color-text)' }}>restaurer</strong> ci-dessous.</p>
               <input
                 type="text"
@@ -171,18 +178,10 @@ function formatBytes(bytes) {
 }
 
 function AutoBackupCard() {
-  const [config, setConfig] = useState({
-    enabled: false, cronInterval: 24, backupRetentionCount: 7,
-    remoteBackupType: '', remoteBackupWebdavUrl: '', remoteBackupWebdavUsername: '',
-    remoteBackupWebdavPassword: '', _hasRemoteBackupWebdavPassword: false,
-    remoteBackupS3Endpoint: '', remoteBackupS3Bucket: '', remoteBackupS3Region: 'auto',
-    remoteBackupS3AccessKeyId: '', remoteBackupS3Prefix: '', remoteBackupS3SecretAccessKey: '', _hasRemoteBackupS3SecretAccessKey: false,
-  });
+  const [config, setConfig] = useState({ enabled: false, cronInterval: 24, backupRetentionCount: 7 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [runningNow, setRunningNow] = useState(false);
-  const [testingRemote, setTestingRemote] = useState(false);
-  const [remoteAlert, setRemoteAlert] = useState(null);
   const [backups, setBackups] = useState([]);
   const [alert, setAlert] = useState(null);
 
@@ -241,35 +240,6 @@ function AutoBackupCard() {
 
   const handleDownload = (filename) => {
     window.open(`${axiosAdmin.defaults.baseURL || ''}/api/admin/backup/history/${filename}`, '_blank');
-  };
-
-  const showRemoteAlertMsg = (type, message) => {
-    setRemoteAlert({ type, message });
-    setTimeout(() => setRemoteAlert(null), 8000);
-  };
-
-  const handleSaveRemote = async () => {
-    setSaving(true);
-    try {
-      await axiosAdmin.put('/api/admin/backup/auto-config', config);
-      showRemoteAlertMsg('success', 'Destination distante enregistrée.');
-    } catch (err) {
-      showRemoteAlertMsg('error', 'Erreur lors de la sauvegarde.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleTestRemote = async () => {
-    setTestingRemote(true);
-    try {
-      await axiosAdmin.post('/api/admin/backup/remote/test', config);
-      showRemoteAlertMsg('success', 'Connexion réussie.');
-    } catch (err) {
-      showRemoteAlertMsg('error', err.response?.data?.error || 'Connexion impossible.');
-    } finally {
-      setTestingRemote(false);
-    }
   };
 
   if (loading) return (
@@ -343,138 +313,6 @@ function AutoBackupCard() {
           </button>
         </div>
 
-        <div className={styles.fieldRow} style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem', marginTop: '0.25rem' }}>
-          <label className={styles.fieldLabel}>Destination distante (optionnel)</label>
-          <select
-            className={styles.fieldInput}
-            value={config.remoteBackupType}
-            onChange={e => setConfig(c => ({ ...c, remoteBackupType: e.target.value }))}
-          >
-            <option value="">Aucune, locale uniquement</option>
-            <option value="webdav">WebDAV</option>
-            <option value="s3">S3 compatible</option>
-          </select>
-        </div>
-
-        {config.remoteBackupType === 'webdav' && (
-          <>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>URL WebDAV</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                placeholder="https://u123.your-storagebox.de/backups"
-                value={config.remoteBackupWebdavUrl}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupWebdavUrl: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Utilisateur</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                value={config.remoteBackupWebdavUsername}
-                autoComplete="off"
-                onChange={e => setConfig(c => ({ ...c, remoteBackupWebdavUsername: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Mot de passe</label>
-              <input
-                className={styles.fieldInput}
-                type="password"
-                placeholder={config._hasRemoteBackupWebdavPassword ? '••••••••' : ''}
-                value={config.remoteBackupWebdavPassword}
-                autoComplete="off"
-                onChange={e => setConfig(c => ({ ...c, remoteBackupWebdavPassword: e.target.value }))}
-              />
-            </div>
-          </>
-        )}
-
-        {config.remoteBackupType === 's3' && (
-          <>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Endpoint</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                placeholder="https://fsn1.your-objectstorage.com"
-                value={config.remoteBackupS3Endpoint}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3Endpoint: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Bucket</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                value={config.remoteBackupS3Bucket}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3Bucket: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Dossier / Préfixe (optionnel)</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                placeholder="db/"
-                value={config.remoteBackupS3Prefix}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3Prefix: e.target.value }))}
-              />
-              <p className={styles.fieldHint}>Les sauvegardes seront rangées dans ce sous-dossier du bucket plutôt qu'à la racine. Laisser vide pour la racine.</p>
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Région</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                value={config.remoteBackupS3Region}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3Region: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Access Key ID</label>
-              <input
-                className={styles.fieldInput}
-                type="text"
-                autoComplete="off"
-                value={config.remoteBackupS3AccessKeyId}
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3AccessKeyId: e.target.value }))}
-              />
-            </div>
-            <div className={styles.fieldRow}>
-              <label className={styles.fieldLabel}>Secret Access Key</label>
-              <input
-                className={styles.fieldInput}
-                type="password"
-                placeholder={config._hasRemoteBackupS3SecretAccessKey ? '••••••••' : ''}
-                value={config.remoteBackupS3SecretAccessKey}
-                autoComplete="off"
-                onChange={e => setConfig(c => ({ ...c, remoteBackupS3SecretAccessKey: e.target.value }))}
-              />
-            </div>
-          </>
-        )}
-
-        {remoteAlert && (
-          <div className={`${styles.alert} ${remoteAlert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
-            {remoteAlert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
-            {remoteAlert.message}
-          </div>
-        )}
-
-        {config.remoteBackupType && (
-          <div className={styles.cardActions}>
-            <button type="button" className={styles.btnTest} onClick={handleTestRemote} disabled={testingRemote}>
-              {testingRemote ? 'Test en cours…' : 'Tester la connexion'}
-            </button>
-            <button type="button" className={styles.btnPrimary} onClick={handleSaveRemote} disabled={saving}>
-              {saving ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-          </div>
-        )}
-
         {backups.length > 0 && (
           <div className={fstyles.fileList}>
             {backups.map(b => (
@@ -496,6 +334,329 @@ function AutoBackupCard() {
   );
 }
 
+const EMPTY_DESTINATION = {
+  id: null,
+  type: 'webdav',
+  label: '',
+  enabled: true,
+  webdavUrl: '', webdavUsername: '', webdavPassword: '', _hasWebdavPassword: false,
+  s3Endpoint: '', s3Bucket: '', s3Region: 'auto', s3AccessKeyId: '', s3Prefix: '',
+  s3SecretAccessKey: '', _hasS3SecretAccessKey: false,
+};
+
+function DestinationsCard() {
+  const [destinations, setDestinations] = useState(null); // null = pas encore chargé
+  const [modal, setModal] = useState(null); // destination en édition/création
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [modalAlert, setModalAlert] = useState(null);
+
+  const loadDestinations = () => {
+    axiosAdmin.get('/api/admin/backup/destinations')
+      .then(res => setDestinations(res.data.destinations || []))
+      .catch(() => setDestinations([]));
+  };
+
+  useEffect(() => { loadDestinations(); }, []);
+
+  const openCreateModal = () => { setModal({ ...EMPTY_DESTINATION }); setModalAlert(null); };
+  const openEditModal = (dest) => { setModal({ ...EMPTY_DESTINATION, ...dest }); setModalAlert(null); };
+
+  const showModalAlert = (type, message) => setModalAlert({ type, message });
+
+  const toggleEnabled = async (dest) => {
+    try {
+      await axiosAdmin.put(`/api/admin/backup/destinations/${dest.id}`, { ...dest, enabled: !dest.enabled });
+      loadDestinations();
+    } catch (err) {
+      // silencieux, le toggle reste dans son état précédent côté UI au prochain reload
+    }
+  };
+
+  const handleSaveModal = async () => {
+    setSaving(true);
+    try {
+      if (modal.id) {
+        await axiosAdmin.put(`/api/admin/backup/destinations/${modal.id}`, modal);
+      } else {
+        await axiosAdmin.post('/api/admin/backup/destinations', modal);
+      }
+      setModal(null);
+      loadDestinations();
+    } catch (err) {
+      showModalAlert('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestModal = async () => {
+    setTesting(true);
+    try {
+      await axiosAdmin.post('/api/admin/backup/destinations/test', modal);
+      showModalAlert('success', 'Connexion réussie.');
+    } catch (err) {
+      showModalAlert('error', err.response?.data?.error || 'Connexion impossible.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleDeleteModal = async () => {
+    if (!modal.id) return;
+    setDeleting(true);
+    try {
+      await axiosAdmin.delete(`/api/admin/backup/destinations/${modal.id}`);
+      setModal(null);
+      loadDestinations();
+    } catch (err) {
+      showModalAlert('error', 'Erreur lors de la suppression.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (destinations === null) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={styles.cardLogoWrap}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+          </div>
+          <div>
+            <p className={styles.cardName}>Destinations distantes</p>
+            <p className={styles.cardDesc}>
+              Chaque sauvegarde automatique est envoyée vers toutes les destinations activées ci-dessous, en plus
+              de la copie locale. WebDAV ou S3-compatible (Hetzner Object Storage, Backblaze B2, MinIO,
+              SeaweedFS...), autant de destinations que besoin.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.form}>
+        <div className={styles.fieldRow}>
+          {destinations.length === 0 ? (
+            <p className={styles.fieldHint}>Aucune destination configurée.</p>
+          ) : (
+            <div className={styles.miniCardGrid}>
+              {destinations.map(d => (
+                <div
+                  key={d.id}
+                  className={`${styles.miniCard} ${styles.miniCardClickable} ${!d.enabled ? styles.miniCardDisabled : ''}`}
+                  onClick={() => openEditModal(d)}
+                  title="Cliquer pour modifier"
+                >
+                  <span
+                    className={`${styles.miniCardDot} ${d.enabled ? styles.miniCardDotOn : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleEnabled(d); }}
+                    title={d.enabled ? 'Désactiver' : 'Activer'}
+                  />
+                  <div className={styles.miniCardBody}>
+                    <div className={styles.miniCardName} title={d.label || d.type}>
+                      {d.label || (d.type === 's3' ? 'S3' : 'WebDAV')}
+                    </div>
+                    <div className={styles.miniCardMeta}>
+                      {d.type === 's3' ? (d.s3Bucket || 'Bucket non configuré') : (d.webdavUrl || 'URL non configurée')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className={styles.cardActions}>
+          <button type="button" className={styles.btnPrimary} onClick={openCreateModal}>
+            + Ajouter une destination
+          </button>
+        </div>
+      </div>
+
+      {modal && (
+        <div className={styles.catModalOverlay} onClick={() => !saving && setModal(null)}>
+          <div className={styles.catModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.catModalHeader}>
+              <div>
+                <p className={styles.catModalTitle}>{modal.id ? 'Modifier la destination' : 'Nouvelle destination'}</p>
+                <p className={styles.catModalSubtitle}>WebDAV ou S3-compatible, utilisé pour chaque sauvegarde automatique.</p>
+              </div>
+              <button type="button" className={styles.catModalClose} onClick={() => setModal(null)}>×</button>
+            </div>
+            <div className={styles.catModalBody}>
+              <label className={styles.toggleOptionRow} style={{ borderTop: 'none', paddingTop: 0 }}>
+                <input
+                  type="checkbox"
+                  className={styles.toggleOptionCheckbox}
+                  checked={modal.enabled}
+                  onChange={e => setModal(m => ({ ...m, enabled: e.target.checked }))}
+                />
+                <div className={styles.toggleOptionInfo}>
+                  <span className={styles.toggleOptionLabel}>Activée</span>
+                  <p className={styles.toggleOptionDesc}>Une destination désactivée est ignorée par le cron automatique.</p>
+                </div>
+              </label>
+
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Nom (optionnel)</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  placeholder="Ex: Hetzner prod"
+                  value={modal.label}
+                  onChange={e => setModal(m => ({ ...m, label: e.target.value }))}
+                />
+              </div>
+
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Type</label>
+                <select
+                  className={styles.fieldInput}
+                  value={modal.type}
+                  onChange={e => setModal(m => ({ ...m, type: e.target.value }))}
+                >
+                  <option value="webdav">WebDAV</option>
+                  <option value="s3">S3 compatible</option>
+                </select>
+              </div>
+
+              {modal.type === 'webdav' && (
+                <>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>URL WebDAV</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      placeholder="https://u123.your-storagebox.de/backups"
+                      value={modal.webdavUrl}
+                      onChange={e => setModal(m => ({ ...m, webdavUrl: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Utilisateur</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      autoComplete="off"
+                      value={modal.webdavUsername}
+                      onChange={e => setModal(m => ({ ...m, webdavUsername: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Mot de passe</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="password"
+                      autoComplete="off"
+                      placeholder={modal._hasWebdavPassword ? '••••••••' : ''}
+                      value={modal.webdavPassword}
+                      onChange={e => setModal(m => ({ ...m, webdavPassword: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+
+              {modal.type === 's3' && (
+                <>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Endpoint</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      placeholder="https://fsn1.your-objectstorage.com"
+                      value={modal.s3Endpoint}
+                      onChange={e => setModal(m => ({ ...m, s3Endpoint: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Bucket</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      value={modal.s3Bucket}
+                      onChange={e => setModal(m => ({ ...m, s3Bucket: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Dossier / Préfixe (optionnel)</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      placeholder="db/"
+                      value={modal.s3Prefix}
+                      onChange={e => setModal(m => ({ ...m, s3Prefix: e.target.value }))}
+                    />
+                    <p className={styles.fieldHint}>Les sauvegardes seront rangées dans ce sous-dossier du bucket plutôt qu'à la racine.</p>
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Région</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      value={modal.s3Region}
+                      onChange={e => setModal(m => ({ ...m, s3Region: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Access Key ID</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="text"
+                      autoComplete="off"
+                      value={modal.s3AccessKeyId}
+                      onChange={e => setModal(m => ({ ...m, s3AccessKeyId: e.target.value }))}
+                    />
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.fieldLabel}>Secret Access Key</label>
+                    <input
+                      className={styles.fieldInput}
+                      type="password"
+                      autoComplete="off"
+                      placeholder={modal._hasS3SecretAccessKey ? '••••••••' : ''}
+                      value={modal.s3SecretAccessKey}
+                      onChange={e => setModal(m => ({ ...m, s3SecretAccessKey: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+
+              {modalAlert && (
+                <div className={`${styles.alert} ${modalAlert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+                  {modalAlert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+                  {modalAlert.message}
+                </div>
+              )}
+            </div>
+            <div className={styles.catModalFooter}>
+              {modal.id && (
+                <button type="button" className={styles.btnTest} onClick={handleDeleteModal} disabled={deleting || saving}>
+                  {deleting ? 'Suppression…' : 'Supprimer'}
+                </button>
+              )}
+              <button type="button" className={styles.btnTest} onClick={handleTestModal} disabled={testing || saving}>
+                {testing ? 'Test en cours…' : 'Tester la connexion'}
+              </button>
+              <button type="button" className={styles.btnPrimary} onClick={handleSaveModal} disabled={saving}>
+                {saving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BackupPanel() {
   return (
     <div className={styles.panel}>
@@ -511,6 +672,7 @@ export default function BackupPanel() {
 
       <BackupCard />
       <AutoBackupCard />
+      <DestinationsCard />
     </div>
   );
 }

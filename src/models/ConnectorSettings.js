@@ -91,11 +91,10 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.
   backupRetentionCount: { type: Number, default: 7, min: 1 },
-  // Copie distante de chaque sauvegarde générée (en plus de la locale, pas à
-  // la place) — réutilise `password` (mot de passe WebDAV) et `apiKey` (clé
-  // secrète S3) génériques, chiffrés comme les autres secrets de ce schéma.
-  // remoteBackupS3AccessKeyId n'est pas secret seul (sans la clé secrète
-  // associée), reste en clair comme un identifiant.
+  // ── Anciens champs destination unique (remplacés par remoteBackupDestinations
+  // ci-dessous, issue #43 suite) — gardés uniquement pour la migration à la
+  // volée d'une config déjà enregistrée avant ce changement, jamais réécrits
+  // après coup. Ne pas utiliser dans du code neuf.
   remoteBackupType: { type: String, enum: ['', 'webdav', 's3'], default: '' },
   remoteBackupWebdavUrl: { type: String, default: '' },
   remoteBackupWebdavUsername: { type: String, default: '' },
@@ -103,9 +102,15 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   remoteBackupS3Bucket: { type: String, default: '' },
   remoteBackupS3Region: { type: String, default: 'auto' },
   remoteBackupS3AccessKeyId: { type: String, default: '' },
-  // Sous-dossier optionnel dans le bucket (ex: "db/") — vide par défaut pour
-  // ne rien changer au comportement existant (upload à la racine du bucket).
   remoteBackupS3Prefix: { type: String, default: '' },
+  // Plusieurs destinations distantes possibles en parallèle, chacune avec son
+  // propre toggle actif/inactif — chaque élément : { id, type: 'webdav'|'s3',
+  // label, enabled, webdavUrl, webdavUsername, webdavPassword (chiffré),
+  // s3Endpoint, s3Bucket, s3Region, s3AccessKeyId, s3Prefix, s3SecretAccessKey
+  // (chiffré) }. Secrets chiffrés individuellement (même cryptoService que le
+  // reste de ce schéma), pas de champ générique partagé possible ici puisqu'il
+  // peut y en avoir plusieurs.
+  remoteBackupDestinations: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);

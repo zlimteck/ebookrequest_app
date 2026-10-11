@@ -41,21 +41,18 @@ async function runBackupCron() {
     fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
     console.log(`[BackupCron] Sauvegarde automatique créée : ${filename}`);
 
-    // Copie distante en plus de la locale, jamais à la place — un échec de
-    // la copie distante ne doit pas faire perdre la sauvegarde locale déjà
-    // écrite sur disque.
-    try {
-      const remoteResult = await uploadRemoteBackup(zipBuffer, filename);
-      if (!remoteResult.skipped) {
-        console.log(`[BackupCron] Copie distante envoyée (${remoteResult.type}) : ${filename}`);
-      }
-    } catch (err) {
-      console.error('[BackupCron] Échec de la copie distante:', err.message);
-    }
-
     // Rétention : ne garde que les N plus récentes (toutes sauvegardes
     // confondues, auto + export manuel s'il a été placé dans ce dossier).
     const retention = config.backupRetentionCount || 7;
+
+    // Copie vers chaque destination distante active, en plus de la locale,
+    // jamais à la place — l'échec d'une destination n'empêche pas les autres
+    // d'être tentées ni de garder la sauvegarde locale déjà écrite sur disque
+    // (chaque résultat est déjà loggé individuellement dans uploadRemoteBackup).
+    // Même rétention appliquée côté distant que côté local.
+    await uploadRemoteBackup(zipBuffer, filename, retention).catch(err => {
+      console.error('[BackupCron] Échec de la copie distante:', err.message);
+    });
     const existing = listBackups();
     for (const old of existing.slice(retention)) {
       fs.unlinkSync(path.join(BACKUP_DIR, old.filename));

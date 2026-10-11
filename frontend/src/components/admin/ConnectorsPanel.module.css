@@ -794,3 +794,19 @@ select.fieldInput {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Placé en fin de fichier volontairement : à spécificité égale, la règle de
+   base .catModalFooter plus haut gagnerait sinon sur ce media query.
+   Avec 3 boutons (ex: Supprimer/Tester/Enregistrer sur la modale de
+   destination de sauvegarde), la ligne horizontale déborde sur petit écran —
+   empilés en pleine largeur à la place. */
+@media (max-width: 480px) {
+  .catModalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .catModalFooter > button {
+    width: 100%;
+    justify-content: center;
+  }
+}

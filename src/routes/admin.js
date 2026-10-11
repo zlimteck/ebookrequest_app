@@ -10,8 +10,10 @@ import AdminLog from '../models/AdminLog.js';
 import upload from '../middleware/upload.js';
 import { exportBackup, restoreBackup } from '../services/backupService.js';
 import { BACKUP_DIR, listBackups, restartBackupCron } from '../services/backupCron.js';
-import { uploadRemoteBackup, testRemoteBackupConnection } from '../services/remoteBackupService.js';
-import { encrypt, decrypt } from '../services/cryptoService.js';
+import {
+  uploadRemoteBackup, testDestination,
+  listDestinationsMasked, createDestination, updateDestination, deleteDestination,
+} from '../services/remoteBackupService.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import path from 'path';
 import fs from 'fs';
@@ -373,7 +375,8 @@ router.post('/backup/restore', backupUpload.single('file'), async (req, res) => 
 });
 
 // ── Sauvegarde automatique périodique (issue #43) ───────────────────────────
-// GET /api/admin/backup/auto-config
+// GET /api/admin/backup/auto-config — réglages locaux uniquement (planning +
+// rétention). Les destinations distantes sont gérées à part, voir plus bas.
 router.get('/backup/auto-config', async (req, res) => {
   try {
     const doc = await ConnectorSettings.findOne({ service: 'backup' }).lean();
@@ -381,18 +384,6 @@ router.get('/backup/auto-config', async (req, res) => {
       enabled: doc?.enabled ?? false,
       cronInterval: doc?.cronInterval || 24,
       backupRetentionCount: doc?.backupRetentionCount || 7,
-      remoteBackupType: doc?.remoteBackupType || '',
-      remoteBackupWebdavUrl: doc?.remoteBackupWebdavUrl || '',
-      remoteBackupWebdavUsername: doc?.remoteBackupWebdavUsername || '',
-      remoteBackupWebdavPassword: doc?.password ? '••••••••' : '',
-      _hasRemoteBackupWebdavPassword: !!doc?.password,
-      remoteBackupS3Endpoint: doc?.remoteBackupS3Endpoint || '',
-      remoteBackupS3Bucket: doc?.remoteBackupS3Bucket || '',
-      remoteBackupS3Region: doc?.remoteBackupS3Region || 'auto',
-      remoteBackupS3AccessKeyId: doc?.remoteBackupS3AccessKeyId || '',
-      remoteBackupS3Prefix: doc?.remoteBackupS3Prefix || '',
-      remoteBackupS3SecretAccessKey: doc?.apiKey ? '••••••••' : '',
-      _hasRemoteBackupS3SecretAccessKey: !!doc?.apiKey,
     });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -402,37 +393,15 @@ router.get('/backup/auto-config', async (req, res) => {
 // PUT /api/admin/backup/auto-config
 router.put('/backup/auto-config', async (req, res) => {
   try {
-    const {
-      enabled, cronInterval, backupRetentionCount, remoteBackupType,
-      remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword, _hasRemoteBackupWebdavPassword,
-      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3Prefix,
-      remoteBackupS3SecretAccessKey, _hasRemoteBackupS3SecretAccessKey,
-    } = req.body;
-
-    const update = {
-      enabled: !!enabled,
-      cronInterval: Number(cronInterval) || 24,
-      backupRetentionCount: Math.max(1, Number(backupRetentionCount) || 7),
-      remoteBackupType: ['webdav', 's3'].includes(remoteBackupType) ? remoteBackupType : '',
-      remoteBackupWebdavUrl: remoteBackupWebdavUrl?.trim() || '',
-      remoteBackupWebdavUsername: remoteBackupWebdavUsername?.trim() || '',
-      remoteBackupS3Endpoint: remoteBackupS3Endpoint?.trim() || '',
-      remoteBackupS3Bucket: remoteBackupS3Bucket?.trim() || '',
-      remoteBackupS3Region: remoteBackupS3Region?.trim() || 'auto',
-      remoteBackupS3AccessKeyId: remoteBackupS3AccessKeyId?.trim() || '',
-      remoteBackupS3Prefix: remoteBackupS3Prefix?.trim() || '',
-    };
-    // Mots de passe/clés secrètes : champ partagé `password`/`apiKey` déjà
-    // utilisés ailleurs sur ce schéma pour d'autres services, même pattern
-    // que les autres connecteurs (garder si vide + déjà enregistré, effacer
-    // explicitement sinon).
-    if (remoteBackupWebdavPassword && remoteBackupWebdavPassword !== '••••••••') update.password = encrypt(remoteBackupWebdavPassword);
-    if (!remoteBackupWebdavPassword && !_hasRemoteBackupWebdavPassword) update.password = '';
-    if (remoteBackupS3SecretAccessKey && remoteBackupS3SecretAccessKey !== '••••••••') update.apiKey = encrypt(remoteBackupS3SecretAccessKey);
-    if (!remoteBackupS3SecretAccessKey && !_hasRemoteBackupS3SecretAccessKey) update.apiKey = '';
-
+    const { enabled, cronInterval, backupRetentionCount } = req.body;
     await ConnectorSettings.findOneAndUpdate(
-      { service: 'backup' }, update, { upsert: true, runValidators: true }
+      { service: 'backup' },
+      {
+        enabled: !!enabled,
+        cronInterval: Number(cronInterval) || 24,
+        backupRetentionCount: Math.max(1, Number(backupRetentionCount) || 7),
+      },
+      { upsert: true, runValidators: true }
     );
     await restartBackupCron();
     res.json({ success: true });
@@ -441,28 +410,52 @@ router.put('/backup/auto-config', async (req, res) => {
   }
 });
 
-// POST /api/admin/backup/remote/test — teste la destination distante avec les
-// valeurs du formulaire (pas forcément déjà enregistrées), même pattern que
-// les boutons "Tester" des autres connecteurs.
-router.post('/backup/remote/test', async (req, res) => {
+// ── Destinations distantes multiples (issue #43 suite) ──────────────────────
+// GET /api/admin/backup/destinations
+router.get('/backup/destinations', async (req, res) => {
   try {
-    const {
-      remoteBackupType, remoteBackupWebdavUrl, remoteBackupWebdavUsername, remoteBackupWebdavPassword,
-      remoteBackupS3Endpoint, remoteBackupS3Bucket, remoteBackupS3Region, remoteBackupS3AccessKeyId, remoteBackupS3Prefix, remoteBackupS3SecretAccessKey,
-    } = req.body;
+    res.json({ destinations: await listDestinationsMasked() });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
-    await testRemoteBackupConnection({
-      remoteBackupType,
-      remoteBackupWebdavUrl,
-      remoteBackupWebdavUsername,
-      remoteBackupPasswordPlain: remoteBackupWebdavPassword !== '••••••••' ? remoteBackupWebdavPassword : undefined,
-      remoteBackupS3Endpoint,
-      remoteBackupS3Bucket,
-      remoteBackupS3Region,
-      remoteBackupS3AccessKeyId,
-      remoteBackupS3Prefix,
-      remoteBackupS3SecretPlain: remoteBackupS3SecretAccessKey !== '••••••••' ? remoteBackupS3SecretAccessKey : undefined,
-    });
+// POST /api/admin/backup/destinations — crée une nouvelle destination
+router.post('/backup/destinations', async (req, res) => {
+  try {
+    const destination = await createDestination(req.body);
+    res.json({ success: true, destination });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la création.' });
+  }
+});
+
+// PUT /api/admin/backup/destinations/:id
+router.put('/backup/destinations/:id', async (req, res) => {
+  try {
+    const destination = await updateDestination(req.params.id, req.body);
+    res.json({ success: true, destination });
+  } catch (err) {
+    res.status(err.message === 'Destination introuvable.' ? 404 : 500).json({ error: err.message || 'Erreur lors de la sauvegarde.' });
+  }
+});
+
+// DELETE /api/admin/backup/destinations/:id
+router.delete('/backup/destinations/:id', async (req, res) => {
+  try {
+    await deleteDestination(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// POST /api/admin/backup/destinations/test — teste une destination avec les
+// valeurs du formulaire (enregistrée ou pas encore), même pattern que les
+// boutons "Tester" des autres connecteurs.
+router.post('/backup/destinations/test', async (req, res) => {
+  try {
+    await testDestination(req.body);
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible.' });
@@ -479,7 +472,8 @@ router.post('/backup/auto-run-now', async (req, res) => {
     const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
     fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
     try {
-      await uploadRemoteBackup(zipBuffer, filename);
+      const { backupRetentionCount } = await ConnectorSettings.findOne({ service: 'backup' }).lean() || {};
+      await uploadRemoteBackup(zipBuffer, filename, backupRetentionCount || 7);
     } catch (err) {
       console.error('[Backup] Échec de la copie distante:', err.message);
     }
