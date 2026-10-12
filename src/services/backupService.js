@@ -24,6 +24,21 @@ import PushoverConfig from '../models/PushoverConfig.js';
 const require = createRequire(import.meta.url);
 const { version: APP_VERSION } = require('../../package.json');
 
+// Garde-fou contre un zip-bomb côté restauration (audit sécurité) : l'upload
+// est déjà plafonné à 50 Mo côté multer (src/routes/admin.js), mais rien ne
+// limitait la taille UNE FOIS DÉCOMPRESSÉE — un fichier très compressé pouvait
+// gonfler à plusieurs Go en mémoire avant même d'arriver à JSON.parse. On lit
+// la taille décompressée déclarée par le zip (métadonnée du format, avant de
+// décompresser quoi que ce soit) et on refuse si elle dépasse ces limites.
+const MAX_ENTRY_UNCOMPRESSED_BYTES = 500 * 1024 * 1024; // 500 Mo par fichier JSON
+const MAX_TOTAL_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 Go pour l'archive entière
+
+function getDeclaredUncompressedSize(zipObject) {
+  // API interne non documentée de JSZip, mais fiable en pratique (lue depuis
+  // le zip central directory, donc disponible avant toute décompression).
+  return zipObject?._data?.uncompressedSize ?? null;
+}
+
 // Session/TrendingCache volontairement absents : éphémère (JWT) ou pur cache
 // auto-régénéré, aucune valeur à restaurer (voir issue #43).
 //
@@ -123,6 +138,26 @@ export async function restoreBackup(zipBuffer) {
   if (!metaFile) {
     throw new Error('Archive invalide : meta.json manquant.');
   }
+
+  // Vérifie la taille décompressée déclarée de CHAQUE entrée avant de décompresser
+  // quoi que ce soit — un fichier individuel trop gros ou un total trop gros sont
+  // rejetés immédiatement (voir MAX_ENTRY_UNCOMPRESSED_BYTES ci-dessus).
+  let totalDeclaredSize = 0;
+  for (const name of Object.keys(zip.files)) {
+    const entry = zip.files[name];
+    if (entry.dir) continue;
+    const declaredSize = getDeclaredUncompressedSize(entry);
+    if (declaredSize !== null) {
+      if (declaredSize > MAX_ENTRY_UNCOMPRESSED_BYTES) {
+        throw new Error(`Archive invalide : "${name}" dépasse la taille maximale autorisée une fois décompressé.`);
+      }
+      totalDeclaredSize += declaredSize;
+    }
+  }
+  if (totalDeclaredSize > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw new Error('Archive invalide : taille totale décompressée trop importante.');
+  }
+
   const meta = JSON.parse(await metaFile.async('string'));
 
   const toRestore = [];
