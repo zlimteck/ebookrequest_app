@@ -47,6 +47,23 @@ function decryptTOTPSecret(stored) {
   return decrypt(stored) ?? stored;
 }
 
+// Un vrai secret TOTP (déchiffré ou legacy en clair) est toujours en base32
+// RFC 4648 (A-Z, 2-7). Si decrypt() échoue silencieusement (ex: JWT_SECRET a
+// changé depuis le chiffrement), le fallback ci-dessus renvoie le texte
+// chiffré brut tel quel ("iv:hex") — jamais du base32 valide. Sans ce
+// contrôle, otplib plante avec une exception non maîtrisée sur ce genre de
+// valeur (chiffres/deux-points hors de l'alphabet autorisé), remontée en 500
+// générique au lieu d'un message exploitable.
+const BASE32_SECRET_RE = /^[A-Z2-7]+=*$/;
+function safeTotpVerify(code, secret) {
+  if (!BASE32_SECRET_RE.test(secret)) {
+    const err = new Error('Secret 2FA invalide ou corrompu (JWT_SECRET a peut-être changé depuis sa création) — réinitialisez la 2FA ou utilisez un code de récupération.');
+    err.isCorruptedSecret = true;
+    throw err;
+  }
+  return totpVerify(code, secret);
+}
+
 // GET /setup — génère le secret et le QR code (authentifié, 2FA pas encore activé)
 router.get('/setup', requireAuth, async (req, res) => {
   try {
@@ -86,7 +103,7 @@ router.post('/verify-setup', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Aucun secret trouvé. Lancez d\'abord /setup.' });
     }
 
-    const result = await totpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
+    const result = await safeTotpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(400).json({ error: 'Code invalide' });
 
@@ -111,6 +128,7 @@ router.post('/verify-setup', requireAuth, async (req, res) => {
     res.json({ success: true, recoveryCodes: plainCodes });
   } catch (err) {
     console.error('Erreur 2FA verify-setup:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -134,7 +152,7 @@ router.post('/disable', requireAuth, async (req, res) => {
       if (!user.twoFactor?.secret) {
         return res.status(400).json({ error: '2FA non configuré' });
       }
-      const result = await totpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
+      const result = await safeTotpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
       const validCode = result?.valid ?? result === true;
       if (!validCode) return res.status(401).json({ error: 'Code invalide' });
     }
@@ -147,6 +165,7 @@ router.post('/disable', requireAuth, async (req, res) => {
     res.json({ success: true, message: '2FA désactivé' });
   } catch (err) {
     console.error('Erreur 2FA disable:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -178,7 +197,7 @@ router.post('/verify-login', async (req, res) => {
     }
 
     const plainSecret = decryptTOTPSecret(user.twoFactor.secret);
-    const result = await totpVerify(code, plainSecret);
+    const result = await safeTotpVerify(code, plainSecret);
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(401).json({ error: 'Code invalide' });
 
@@ -206,6 +225,7 @@ router.post('/verify-login', async (req, res) => {
     });
   } catch (err) {
     console.error('Erreur 2FA verify-login:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
