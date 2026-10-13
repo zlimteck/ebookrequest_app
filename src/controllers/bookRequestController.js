@@ -814,10 +814,10 @@ export const applyMetadataCandidate = async (req, res) => {
 
     await request.save();
 
-    // Même propagation que editUserRequest (voir issue #40 / session du 1er octobre) :
-    // sans ça, une couverture récupérée via Google Books après complétion ne se
-    // reflète jamais côté Bibliothèque. Best-effort, ne doit jamais faire échouer la réponse.
-    if (request.status === 'completed' && request.thumbnail && request.thumbnail !== previousThumbnail) {
+    // Même propagation que editUserRequest : sans ça, une couverture récupérée via Google
+    // Books ne se reflète jamais côté Bibliothèque, même une fois la demande complétée.
+    // Best-effort, ne doit jamais faire échouer la réponse.
+    if (request.thumbnail && request.thumbnail !== previousThumbnail) {
       ReadingList.updateOne({ requestId: request._id }, { $set: { thumbnail: request.thumbnail } }).catch(() => {});
     }
 
@@ -1593,10 +1593,10 @@ export const editUserRequest = async (req, res) => {
     );
 
     // Propage titre/auteur/couverture vers l'entrée Bibliothèque liée (ReadingList.requestId,
-    // rempli une seule fois à la création) — sinon une correction post-complétion (ex. titre/
-    // auteur inversés) ne se reflète jamais côté Bibliothèque. Best-effort, comme les
-    // ReadingList.create existants : ne doit jamais faire échouer la réponse.
-    if (updated.status === 'completed') {
+    // rempli une seule fois à la création, dès la création — pas seulement une fois complétée)
+    // — sinon une correction de titre/auteur (ex. inversés) sur une demande encore en attente
+    // ne se reflète jamais côté Bibliothèque. Best-effort, ne doit jamais faire échouer la réponse.
+    {
       const readingListUpdates = {};
       if (title?.trim() && title.trim() !== request.title) readingListUpdates.title = updated.title;
       if (author?.trim() && author.trim() !== request.author) readingListUpdates.author = updated.author;

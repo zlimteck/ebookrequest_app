@@ -91,6 +91,8 @@ export default function ReadingPage() {
   const [filterFormat, setFilterFormat] = useState('all');
   const [exportingCsv, setExportingCsv] = useState(false);
   const filterBarRef = useRef(null);
+  const [metadataModal, setMetadataModal] = useState(null); // { book, loading, candidates, error }
+  const [fetchingMetaId, setFetchingMetaId] = useState(null);
 
   // Auto-vider le message d'erreur après 5s
   useEffect(() => {
@@ -195,6 +197,47 @@ export default function ReadingPage() {
       setBooks(prev => prev.filter(b => b._id !== id));
       toast.success('Livre retiré de la liste');
     } catch { toast.error('Erreur lors de la suppression'); }
+  };
+
+  // Récupération/correction des métadonnées (couverture, description, pages,
+  // date, lien) depuis Google Books — même mécanisme que la modale d'édition
+  // d'une demande ("Mes demandes"), uniquement disponible ici pour les livres
+  // issus d'une demande (book.requestId), la seule source qui a un historique
+  // de demande à interroger sur Google Books.
+  const openMetadataPicker = async (book) => {
+    const requestId = book.requestId?._id;
+    if (!requestId) return;
+    setMetadataModal({ book, loading: true, candidates: [], error: null });
+    try {
+      const res = await axiosAdmin.get(`/api/requests/${requestId}/metadata-candidates`);
+      setMetadataModal({ book, loading: false, candidates: res.data.candidates || [], error: null });
+    } catch (err) {
+      setMetadataModal({
+        book, loading: false, candidates: [],
+        error: err.response?.data?.error || 'Aucune métadonnée trouvée sur Google Books.',
+      });
+    }
+  };
+
+  const applyMetadataChoice = async (candidate) => {
+    const requestId = metadataModal?.book?.requestId?._id;
+    if (!requestId) return;
+    setFetchingMetaId(requestId);
+    try {
+      const res = await axiosAdmin.post(`/api/requests/${requestId}/metadata-candidates/apply`, {
+        googleBooksId: candidate.googleBooksId,
+      });
+      const { thumbnail } = res.data.request || {};
+      setBooks(prev => prev.map(b => b._id === metadataModal.book._id
+        ? { ...b, thumbnail: thumbnail || b.thumbnail, requestId: { ...b.requestId, ...res.data.request } }
+        : b));
+      toast.success('Métadonnées mises à jour.');
+      setMetadataModal(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de l\'application des métadonnées.');
+    } finally {
+      setFetchingMetaId(null);
+    }
   };
 
   const handleExportCsv = async () => {
@@ -525,6 +568,26 @@ export default function ReadingPage() {
                   </button>
                 )}
 
+                {/* Récupérer/corriger les métadonnées (Google Books) */}
+                {book.source === 'request' && book.requestId?._id && (
+                  <button
+                    className={styles.metaBtn}
+                    onClick={() => openMetadataPicker(book)}
+                    disabled={fetchingMetaId === book.requestId._id}
+                    title="Rechercher/corriger les métadonnées (Google Books)"
+                  >
+                    {fetchingMetaId === book.requestId._id ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.spinIcon}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                      </svg>
+                    )}
+                  </button>
+                )}
+
                 {/* Statut */}
                 <button
                   className={`${styles.statusBtn} ${book.status === 'read' ? styles.statusBtnRead : styles.statusBtnUnread}`}
@@ -578,6 +641,60 @@ export default function ReadingPage() {
           request={downloadModalBook}
           onClose={() => setDownloadModalBook(null)}
         />
+      )}
+
+      {metadataModal && (
+        <div className={styles.modalOverlay} onClick={() => setMetadataModal(null)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Choisir les métadonnées">
+            <h2>Métadonnées Google Books</h2>
+            <p className={styles.modalBookTitle}>« {metadataModal.book?.title} »</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+              Choisis le bon livre — rien n'est appliqué tant que tu n'as pas cliqué sur un résultat.
+            </p>
+
+            {metadataModal.loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 0' }}>
+                <div className={styles.loadingSpinner} />
+              </div>
+            ) : metadataModal.error ? (
+              <p style={{ fontSize: '0.85rem', color: '#f59e0b' }}>{metadataModal.error}</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '55vh', overflowY: 'auto' }}>
+                {metadataModal.candidates.map(c => (
+                  <button
+                    key={c.googleBooksId}
+                    onClick={() => applyMetadataChoice(c)}
+                    disabled={!!fetchingMetaId}
+                    style={{
+                      display: 'flex', gap: '0.75rem', textAlign: 'left', alignItems: 'flex-start',
+                      background: 'var(--color-bg3)', border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius)', padding: '0.6rem', cursor: 'pointer', color: 'inherit',
+                    }}
+                  >
+                    {c.thumbnail ? (
+                      <img src={c.thumbnail} alt="" style={{ width: 44, height: 66, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 44, height: 66, flexShrink: 0, background: 'var(--color-bg2)', borderRadius: 4 }} />
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{c.title}</div>
+                      {c.authors && <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{c.authors}</div>}
+                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
+                        {[c.publishedDate, c.pageCount ? `${c.pageCount} pages` : null].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className={styles.modalButtons} style={{ marginTop: '1rem' }}>
+              <button className={styles.modalCancelButton} onClick={() => setMetadataModal(null)}>
+                {metadataModal.loading || metadataModal.error ? 'Fermer' : 'Aucun ne correspond'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

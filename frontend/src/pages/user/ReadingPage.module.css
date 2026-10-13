@@ -469,6 +469,102 @@
 
 .noteBtn:hover { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,0.08); }
 
+.metaBtn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.metaBtn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(99,102,241,0.08);
+}
+
+.metaBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background: var(--color-bg2);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border);
+}
+
+.modalBookTitle {
+  color: var(--color-text-muted);
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+.modalButtons {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.modalCancelButton {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.modalCancelButton:hover {
+  background: var(--color-bg3);
+  color: var(--color-text);
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--color-accent);
+  animation: spin 1s ease-in-out infinite;
+}
+
 .noteBtnActive {
   border-color: rgba(245,158,11,0.4);
   color: #f59e0b;
