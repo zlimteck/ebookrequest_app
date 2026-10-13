@@ -91,6 +91,12 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.
   backupRetentionCount: { type: Number, default: 7, min: 1 },
+  // Mot de passe optionnel pour chiffrer les zips générés automatiquement
+  // (local + toutes les destinations distantes) — chiffré via cryptoService
+  // comme les autres secrets de ce schéma. Vide = comportement inchangé (zip
+  // non chiffré). Distinct du mot de passe de l'export manuel, qui lui n'est
+  // jamais stocké nulle part.
+  backupEncryptionPassword: { type: String, default: '' },
   // ── Anciens champs destination unique (remplacés par remoteBackupDestinations
   // ci-dessous, issue #43 suite) — gardés uniquement pour la migration à la
   // volée d'une config déjà enregistrée avant ce changement, jamais réécrits

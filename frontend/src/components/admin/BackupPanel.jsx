@@ -19,8 +19,10 @@ function BackupCard() {
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [exportPassword, setExportPassword] = useState('');
   const [confirmModal, setConfirmModal] = useState(null); // File en attente de confirmation
   const [confirmInput, setConfirmInput] = useState('');
+  const [restorePassword, setRestorePassword] = useState('');
   const fileInputRef = React.useRef(null);
 
   const showAlertMsg = (type, message) => {
@@ -31,11 +33,13 @@ function BackupCard() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await axiosAdmin.get('/api/admin/backup/export', { responseType: 'blob', timeout: 120000 });
+      const res = await axiosAdmin.post('/api/admin/backup/export', { password: exportPassword || undefined }, {
+        responseType: 'blob', timeout: 120000,
+      });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ebookrequest-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `ebookrequest-backup-${new Date().toISOString().slice(0, 10)}.zip${exportPassword ? '.enc' : ''}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -52,6 +56,7 @@ function BackupCard() {
     if (!file) return;
     setConfirmModal(file);
     setConfirmInput('');
+    setRestorePassword('');
     e.target.value = '';
   };
 
@@ -61,6 +66,7 @@ function BackupCard() {
     try {
       const formData = new FormData();
       formData.append('file', confirmModal);
+      if (restorePassword) formData.append('password', restorePassword);
       const res = await axiosAdmin.post('/api/admin/backup/restore', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000,
@@ -99,6 +105,22 @@ function BackupCard() {
       </div>
 
       <div className={styles.form}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Mot de passe de protection (optionnel)</label>
+          <input
+            type="password"
+            className={styles.fieldInput}
+            placeholder="Laisser vide pour un zip non protégé"
+            value={exportPassword}
+            autoComplete="new-password"
+            onChange={e => setExportPassword(e.target.value)}
+          />
+          <p className={styles.fieldHint}>
+            Si renseigné, le fichier est chiffré (AES-256) et illisible sans ce mot de passe, y compris par
+            vous-même en cas d'oubli, il n'est jamais stocké nulle part.
+          </p>
+        </div>
+
         <div className={styles.cardActions}>
           <button type="button" className={styles.btnPrimary} onClick={handleExport} disabled={exporting}>
             {exporting ? 'Export en cours…' : 'Exporter les données'}
@@ -106,7 +128,7 @@ function BackupCard() {
           <button type="button" className={styles.btnTest} onClick={() => fileInputRef.current?.click()} disabled={restoring}>
             Restaurer depuis un fichier...
           </button>
-          <input ref={fileInputRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={handleFileSelected} />
+          <input ref={fileInputRef} type="file" accept=".zip,.enc" style={{ display: 'none' }} onChange={handleFileSelected} />
         </div>
 
         {alert && (
@@ -137,6 +159,16 @@ function BackupCard() {
                 qu'avec la même clé que celle utilisée à l'export. Sans elle, ils resteront simplement vides après
                 la restauration, à ressaisir manuellement.
               </p>
+              <input
+                type="password"
+                className={styles.dangerModalInput}
+                value={restorePassword}
+                onChange={e => setRestorePassword(e.target.value)}
+                placeholder="Mot de passe (si ce fichier en a un)"
+                autoComplete="new-password"
+                disabled={restoring}
+                style={{ marginBottom: '0.75rem' }}
+              />
               <p>Pour confirmer, tapez <strong style={{ color: 'var(--color-text)' }}>restaurer</strong> ci-dessous.</p>
               <input
                 type="text"
@@ -178,9 +210,13 @@ function formatBytes(bytes) {
 }
 
 function AutoBackupCard() {
-  const [config, setConfig] = useState({ enabled: false, cronInterval: 24, backupRetentionCount: 7 });
+  const [config, setConfig] = useState({
+    enabled: false, cronInterval: 24, backupRetentionCount: 7,
+    backupEncryptionPassword: '', _hasBackupEncryptionPassword: false,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [runningNow, setRunningNow] = useState(false);
   const [backups, setBackups] = useState([]);
   const [alert, setAlert] = useState(null);
@@ -213,6 +249,19 @@ function AutoBackupCard() {
       showAlertMsg('error', 'Erreur lors de la sauvegarde du réglage.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePassword = async () => {
+    setSavingPassword(true);
+    try {
+      await axiosAdmin.put('/api/admin/backup/auto-config', config);
+      showAlertMsg('success', 'Mot de passe enregistré.');
+      setConfig(c => ({ ...c, _hasBackupEncryptionPassword: !!c.backupEncryptionPassword || c._hasBackupEncryptionPassword, backupEncryptionPassword: '' }));
+    } catch (err) {
+      showAlertMsg('error', 'Erreur lors de la sauvegarde du mot de passe.');
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -298,6 +347,28 @@ function AutoBackupCard() {
             onBlur={() => handleSave(config)}
             disabled={saving}
           />
+        </div>
+
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Mot de passe de protection (optionnel)</label>
+          <input
+            type="password"
+            className={styles.fieldInput}
+            placeholder={config._hasBackupEncryptionPassword ? '••••••••' : 'Laisser vide pour des zips non protégés'}
+            value={config.backupEncryptionPassword}
+            autoComplete="new-password"
+            onChange={e => setConfig(c => ({ ...c, backupEncryptionPassword: e.target.value }))}
+          />
+          <p className={styles.fieldHint}>
+            Si renseigné, chaque sauvegarde générée automatiquement (locale et sur chaque destination distante) est
+            chiffrée (AES-256) avec ce mot de passe, stocké chiffré sur cette instance, à retenir séparément pour
+            pouvoir restaurer plus tard.
+          </p>
+          <div className={styles.cardActions}>
+            <button type="button" className={styles.btnPrimary} onClick={handleSavePassword} disabled={savingPassword}>
+              {savingPassword ? 'Enregistrement…' : 'Enregistrer le mot de passe'}
+            </button>
+          </div>
         </div>
 
         {alert && (

@@ -9,6 +9,11 @@ import { encrypt, decrypt } from './cryptoService.js';
 // distant, pour ne jamais supprimer autre chose que ce qu'on a nous-mêmes écrit.
 const BACKUP_FILENAME_PREFIX = 'ebookrequest-backup-auto-';
 
+// Un fichier de sauvegarde auto, chiffré (.zip.enc) ou non (.zip).
+function isBackupFilename(basename) {
+  return basename.startsWith(BACKUP_FILENAME_PREFIX) && (basename.endsWith('.zip') || basename.endsWith('.zip.enc'));
+}
+
 // Normalise le préfixe S3 (sous-dossier du bucket) : pas de slash au début,
 // un seul slash à la fin si non vide. Vide par défaut = comportement
 // inchangé (upload à la racine du bucket).
@@ -193,7 +198,7 @@ async function applyWebdavRetention(dest, retentionCount) {
   const client = buildWebdavClient(dest);
   const contents = await client.getDirectoryContents('/');
   const backups = contents
-    .filter(f => f.type === 'file' && f.basename.startsWith(BACKUP_FILENAME_PREFIX) && f.basename.endsWith('.zip'))
+    .filter(f => f.type === 'file' && isBackupFilename(f.basename))
     .sort((a, b) => new Date(b.lastmod) - new Date(a.lastmod));
   for (const old of backups.slice(retentionCount)) {
     await client.deleteFile(old.filename);
@@ -205,10 +210,7 @@ async function applyS3Retention(dest, retentionCount) {
   const prefix = normalizeS3Prefix(dest.s3Prefix);
   const response = await client.send(new ListObjectsV2Command({ Bucket: dest.s3Bucket, Prefix: prefix }));
   const backups = (response.Contents || [])
-    .filter(o => {
-      const basename = o.Key.slice(prefix.length);
-      return basename.startsWith(BACKUP_FILENAME_PREFIX) && basename.endsWith('.zip');
-    })
+    .filter(o => isBackupFilename(o.Key.slice(prefix.length)))
     .sort((a, b) => new Date(b.LastModified) - new Date(a.LastModified));
   for (const old of backups.slice(retentionCount)) {
     await client.send(new DeleteObjectCommand({ Bucket: dest.s3Bucket, Key: old.Key }));

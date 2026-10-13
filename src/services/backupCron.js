@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { exportBackup } from './backupService.js';
 import { uploadRemoteBackup } from './remoteBackupService.js';
+import { decrypt } from './cryptoService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ async function getConfig() {
 
 export function listBackups() {
   return fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.endsWith('.zip'))
+    .filter(f => f.endsWith('.zip') || f.endsWith('.zip.enc'))
     .map(f => {
       const stat = fs.statSync(path.join(BACKUP_DIR, f));
       return { filename: f, size: stat.size, createdAt: stat.mtime };
@@ -36,8 +37,9 @@ async function runBackupCron() {
     const config = await getConfig();
     if (!config.enabled) return;
 
-    const zipBuffer = await exportBackup();
-    const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    const backupPassword = config.backupEncryptionPassword ? decrypt(config.backupEncryptionPassword) : null;
+    const zipBuffer = await exportBackup(backupPassword || undefined);
+    const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip${backupPassword ? '.enc' : ''}`;
     fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
     console.log(`[BackupCron] Sauvegarde automatique créée : ${filename}`);
 
