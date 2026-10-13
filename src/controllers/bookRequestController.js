@@ -218,6 +218,7 @@ export const createBookRequest = async (req, res) => {
     });
 
     await newRequest.save();
+    emitToAdmins('requests:changed', { reason: 'created', id: newRequest._id });
 
     // Gamification : série de jours consécutifs d'activité, best-effort.
     recordActivity(user._id).catch(() => {});
@@ -537,6 +538,7 @@ export const directDownloadRequest = async (req, res) => {
     });
 
     await newRequest.save();
+    emitToAdmins('requests:changed', { reason: 'created', id: newRequest._id });
 
     // Auto-ajout à la liste de lecture (best-effort, non bloquant)
     try {
@@ -1031,6 +1033,7 @@ export const updateRequestStatus = async (req, res) => {
     await logAdminAction(req.user.id, adminUser?.username || 'admin', logAction, request,
       reason ? `Raison : ${reason}` : status);
 
+    emitToAdmins('requests:changed', { reason: 'status', id: request._id, status });
     res.json(request);
   } catch (error) {
     console.error('Erreur lors de la mise à jour du statut:', error);
@@ -1400,6 +1403,7 @@ export const deleteRequest = async (req, res) => {
 
     // Supprimer la demande
     await BookRequest.findByIdAndDelete(id);
+    emitToAdmins('requests:changed', { reason: 'deleted', id });
 
     res.json({ message: 'Demande supprimée avec succès.' });
   } catch (error) {
@@ -1675,6 +1679,7 @@ export const reportRequest = async (req, res) => {
     request.reportSeenByAdmin = false;
 
     await request.save();
+    emitToAdmins('requests:changed', { reason: 'reported', id: request._id });
 
     appriseService.notifyReport(request, reason).catch(() => {});
     // Email + push aux admins — signalement

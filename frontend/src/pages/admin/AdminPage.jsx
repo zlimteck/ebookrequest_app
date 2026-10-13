@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 function isoToFr(str) {
   if (!str) return '';
@@ -49,12 +49,64 @@ import SendEmailModal from '../../components/SendEmailModal';
 import CommentThread from '../../components/CommentThread';
 import ExtraShelvesModal from '../../components/admin/ExtraShelvesModal';
 import { formatDisplayTitle } from '../../utils/formatTitle';
+import { useSocket } from '../../hooks/useSocket';
 
 const READABLE_EXTS = ['pdf', 'epub', 'cbz', 'cbr'];
 const isReadable = (filePath) => {
   if (!filePath) return false;
   const ext = filePath.split(/[\\/]/).pop().split('.').pop().toLowerCase();
   return READABLE_EXTS.includes(ext);
+};
+
+// Défilement horizontal des boutons d'action, avec points de pagination
+// (style carrousel) affichés uniquement quand le contenu déborde réellement —
+// même système que ActionIconsScroll côté UserDashboard, le nombre d'actions
+// admin par demande étant au moins aussi élevé.
+const ActionIconsScroll = ({ children, className }) => {
+  const scrollRef = useRef(null);
+  const [pageCount, setPageCount] = useState(1);
+  const [activePage, setActivePage] = useState(0);
+
+  const recompute = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 4) {
+      setPageCount(1);
+      setActivePage(0);
+      return;
+    }
+    const pages = Math.max(2, Math.ceil(el.scrollWidth / el.clientWidth));
+    setPageCount(pages);
+    setActivePage(Math.round((el.scrollLeft / maxScroll) * (pages - 1)));
+  }, []);
+
+  useEffect(() => {
+    recompute();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const onScroll = () => recompute();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, [recompute, children]);
+
+  return (
+    <div className={styles.actionIconsWrap}>
+      <div className={className} ref={scrollRef}>{children}</div>
+      {pageCount > 1 && (
+        <div className={styles.actionDots}>
+          {Array.from({ length: pageCount }).map((_, i) => (
+            <span key={i} className={`${styles.actionDot} ${i === activePage ? styles.actionDotActive : ''}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const TrashIcon = () => (
@@ -104,6 +156,34 @@ function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending');
   const filterBarRef = useRef(null);
+  const searchInputWrapRef = useRef(null);
+  const searchFakePlaceholderRef = useRef(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchPlaceholderScrolls, setSearchPlaceholderScrolls] = useState(false);
+  const SEARCH_PLACEHOLDER = 'Rechercher par utilisateur…';
+
+  // Même système que GoogleBooksSearch : sur un champ trop étroit (mobile), le
+  // placeholder ne tient pas en entier et serait juste tronqué sans explication
+  // — un faux placeholder défile légèrement au lieu d'être coupé.
+  useLayoutEffect(() => {
+    const check = () => {
+      const text = searchFakePlaceholderRef.current;
+      if (!text) return;
+      const textW = text.offsetWidth;
+      const boxW = text.parentElement?.clientWidth ?? 0;
+      const overflow = textW - boxW;
+      if (overflow > 2) {
+        setSearchPlaceholderScrolls(true);
+        text.style.setProperty('--scroll-amount', `-${overflow + 6}px`);
+      } else {
+        setSearchPlaceholderScrolls(false);
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (searchInputWrapRef.current) ro.observe(searchInputWrapRef.current);
+    return () => ro.disconnect();
+  }, []);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -751,6 +831,25 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     }
   }, [filter, activeTab]);
 
+  // Refresh silencieux (sans spinner) des demandes — déclenché par un socket
+  // dès qu'un événement change la liste (nouvelle demande, statut, signalement,
+  // auto-complétion/échec...) côté serveur, avec un setInterval de 30s en
+  // filet de sécurité si l'événement socket est manqué (reco en cours, etc.).
+  const silentRefreshRequests = useCallback(async () => {
+    if (activeTab !== 'requests') return;
+    try {
+      const response = await axiosAdmin.get(`/api/requests/all?status=${filter}`);
+      setRequests(response.data);
+    } catch {}
+  }, [activeTab, filter]);
+
+  useEffect(() => {
+    const intervalId = setInterval(silentRefreshRequests, 30000);
+    return () => clearInterval(intervalId);
+  }, [silentRefreshRequests]);
+
+  useSocket('requests:changed', () => silentRefreshRequests());
+
   // Scroll + pagination vers la demande mise en surbrillance
   useEffect(() => {
     if (!highlightId || activeTab !== 'requests' || !requests.length) return;
@@ -1014,6 +1113,72 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
       default:
         return (
           <>
+            <div className={styles.requestsSearchRow}>
+            <div className={styles.searchBar}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <div className={styles.searchInputWrap} ref={searchInputWrapRef}>
+                <input
+                  type="text"
+                  aria-label="Rechercher par utilisateur"
+                  value={userFilter}
+                  list="user-list"
+                  onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  className={styles.searchInput}
+                />
+                <span
+                  className={`${styles.fakePlaceholder} ${(userFilter || searchFocused) ? styles.fakePlaceholderHidden : ''}`}
+                  aria-hidden="true"
+                >
+                  <span
+                    ref={searchFakePlaceholderRef}
+                    className={`${styles.fakePlaceholderText} ${searchPlaceholderScrolls ? styles.fakePlaceholderScrolling : ''}`}
+                  >
+                    {SEARCH_PLACEHOLDER}
+                  </span>
+                </span>
+              </div>
+              {userFilter && (
+                <button className={styles.searchClear} onClick={() => { setUserFilter(''); setCurrentPage(1); }}>×</button>
+              )}
+              <datalist id="user-list">
+                {[...new Set(requests.map(r => r.username).filter(Boolean))].sort().map(u => <option key={u} value={u} />)}
+              </datalist>
+              <div className={styles.viewToggle}>
+                <button
+                  className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+                  onClick={() => setView('cards')}
+                  title="Vue grille"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                </button>
+                <button
+                  className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
+                  onClick={() => setView('table')}
+                  title="Vue tableau"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <button
+              className={styles.refreshButton}
+              onClick={fetchRequests}
+              disabled={loading}
+              title="Rafraîchir"
+            >
+              <RefreshIcon />
+            </button>
+            </div>
+
             <div className={styles.filterBarWrapper}>
               <div className={styles.filterBar} ref={filterBarRef}>
                 {[
@@ -1043,54 +1208,6 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                     </button>
                   );
                 })}
-              </div>
-            </div>
-            <div className={styles.userFilterWrap}>
-              <span className={styles.userFilterIcon}>
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-              </span>
-              <input
-                className={styles.userFilterInput}
-                type="text"
-                placeholder="Rechercher par utilisateur..."
-                value={userFilter}
-                list="user-list"
-                onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
-              />
-              <datalist id="user-list">
-                {[...new Set(requests.map(r => r.username).filter(Boolean))].sort().map(u => <option key={u} value={u} />)}
-              </datalist>
-            </div>
-            <div className={styles.requestsToolbar}>
-              <button
-                className={styles.refreshButton}
-                onClick={fetchRequests}
-                disabled={loading}
-              >
-                <RefreshIcon />
-              </button>
-              <div className={styles.viewToggle}>
-                <button
-                  className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
-                  onClick={() => setView('cards')}
-                  title="Vue grille"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                    <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                  </svg>
-                </button>
-                <button
-                  className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
-                  onClick={() => setView('table')}
-                  title="Vue tableau"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-                  </svg>
-                </button>
               </div>
             </div>
             {renderRequestsList()}
@@ -1309,7 +1426,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                                     className={styles.historyToggle}
                                     onClick={() => setEditingComment(prev => prev === `hist_${request._id}` ? null : `hist_${request._id}`)}
                                   >
-                                    🕓 Historique {editingComment === `hist_${request._id}` ? '▲' : '▼'}
+                                    Historique {editingComment === `hist_${request._id}` ? '▲' : '▼'}
                                   </button>
                                   {editingComment === `hist_${request._id}` && (
                                     <div className={styles.historyList}>
@@ -1500,8 +1617,6 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
         ) : (
           <div className={styles.requestsGrid}>
             {paginated.map(request => {
-              const isExpanded = expandedCards.has(request._id)
-                || cancelingRequest === request._id
               return (
               <div key={request._id}
                 ref={el => { cardRefs.current[request._id] = el; }}
@@ -1551,8 +1666,29 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                   <div className={styles.bookAuthor}>
                     {request.author}
                   </div>
-                  {(request.format || request.publishedDate) && (
+                  {(request.format || request.publishedDate || request.category) && (
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                      {(() => {
+                        const cats = ['ebook', 'manga', 'comic'];
+                        const labels = { ebook: 'Roman', manga: 'Manga', comic: 'Comic' };
+                        const cur = cats.includes(request.category) ? request.category : 'ebook';
+                        const next = cats[(cats.indexOf(cur) + 1) % cats.length];
+                        return (
+                          <span
+                            className={`${styles.categoryMetaTag} ${styles[`categoryMetaTag_${cur}`]}`}
+                            title={`Changer → ${labels[next]}`}
+                            onClick={async e => {
+                              e.stopPropagation();
+                              try {
+                                await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next });
+                                setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
+                              } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
+                            }}
+                          >
+                            {labels[cur]}
+                          </span>
+                        );
+                      })()}
                       {isKnownFormat(request.format) && <span className={styles.formatBadge}>{request.format.toUpperCase()}</span>}
                       {request.publishedDate && <span className={styles.formatBadge} style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg3)' }}>{isoToFr(request.publishedDate)}</span>}
                     </div>
@@ -1568,37 +1704,10 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                       {new Date(request.createdAt).toLocaleDateString('fr-FR')}
                     </span>
-                    {(() => {
-                      const cats = ['ebook', 'manga', 'comic'];
-                      const labels = { ebook: 'Roman', manga: 'Manga', comic: 'Comic' };
-                      const cur = cats.includes(request.category) ? request.category : 'ebook';
-                      const next = cats[(cats.indexOf(cur) + 1) % cats.length];
-                      return (
-                        <span
-                          className={`${styles.categoryMetaTag} ${styles[`categoryMetaTag_${cur}`]}`}
-                          title={`Changer → ${labels[next]}`}
-                          onClick={async e => {
-                            e.stopPropagation();
-                            try {
-                              await axiosAdmin.patch(`/api/requests/${request._id}/category`, { category: next });
-                              setRequests(prev => prev.map(r => r._id === request._id ? { ...r, category: next } : r));
-                            } catch { toast.error('Erreur lors de la mise à jour de la catégorie'); }
-                          }}
-                        >
-                          {labels[cur]}
-                        </span>
-                      );
-                    })()}
                     {request.downloadedAt && (
                       <span className={`${styles.adminMetaItem} ${styles.adminMetaDownloaded}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         {new Date(request.downloadedAt).toLocaleDateString('fr-FR')}
-                      </span>
-                    )}
-                    {(request.filePath || request.downloadLink) && (
-                      <span className={`${styles.adminMetaItem} ${styles.adminMetaFile}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        {request.filePath ? getFileType(request.filePath) : 'Lien'}
                       </span>
                     )}
                     {request.lastAutoAttempt?.date && (
@@ -1619,16 +1728,6 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                       </span>
                     )}
-                    {request.link && (
-                      <a href={request.link} target="_blank" rel="noopener noreferrer" className={styles.adminMetaLink} onClick={e => e.stopPropagation()} title={`Voir sur ${infoLinkSourceLabel(request.link)}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      </a>
-                    )}
-                    {request.sourceLink && (
-                      <a href={request.sourceLink} target="_blank" rel="noopener noreferrer" className={styles.adminMetaLink} onClick={e => e.stopPropagation()} title={`Voir sur ${request.sourceConnector === 'fourtoutici' ? 'Fourtoutici' : 'Valentine'}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      </a>
-                    )}
                     {request.adminComment && (
                       <span className={styles.adminMetaItem} title={`Note : ${request.adminComment}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1636,21 +1735,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                     )}
                   </div>
 
-                  {/* Bouton accordéon */}
-                  <button
-                    className={`${styles.expandToggle} ${isExpanded ? styles.expandToggleOpen : ''}`}
-                    onClick={() => toggleExpand(request._id)}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                    {isExpanded ? 'Réduire' : 'Actions'}
-                  </button>
-
-                  {/* Panneau déroulant */}
-                  {isExpanded && (
-                    <div className={styles.expandedPanel}>
-                      {request.status === 'reported' && request.reportReason && (
+                  {request.status === 'reported' && request.reportReason && (
                         <div className={styles.reportSection}>
                           <div className={styles.reportLabel}>⚠️ {request.reportReason}</div>
                           <div className={styles.reportDate}>{new Date(request.reportedAt).toLocaleDateString('fr-FR')}</div>
@@ -1678,7 +1763,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                             className={styles.historyToggle}
                             onClick={() => setEditingComment(prev => prev === `hist_${request._id}` ? null : `hist_${request._id}`)}
                           >
-                            🕓 Historique {editingComment === `hist_${request._id}` ? '▲' : '▼'}
+                            Historique {editingComment === `hist_${request._id}` ? '▲' : '▼'}
                           </button>
                           {editingComment === `hist_${request._id}` && (
                             <div className={styles.historyList}>
@@ -1702,8 +1787,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                         </div>
                       )}
 
-                      {/* Boutons d'action — une seule ligne */}
-                      <div className={styles.statusButtons}>
+                      {/* Boutons d'action — défilement horizontal sur mobile */}
+                      <ActionIconsScroll className={`${styles.statusButtons} ${styles.statusButtonsScroll}`}>
                         <button
                           className={styles.aIconBtn}
                           title="Modifier la demande"
@@ -1833,7 +1918,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                           onClick={() => handleDeleteRequest(request._id)} disabled={deletingRequest === request._id}>
                           {deletingRequest === request._id ? <span className={styles.spinner}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
                         </button>
-                      </div>
+                      </ActionIconsScroll>
 
                       {cancelingRequest === request._id && (
                       <div className={styles.cancelForm}>
@@ -1865,9 +1950,6 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                         </div>
                       </div>
                     )}
-                    
-                    </div>
-                  )}
                 </div>
               </div>
             );
