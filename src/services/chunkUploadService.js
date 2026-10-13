@@ -15,9 +15,17 @@ const __dirname = path.dirname(__filename);
 const TMP_DIR = path.join(__dirname, '../../uploads/tmp-chunks');
 
 function uploadDir(uploadId) {
-  // uploadId généré côté serveur (voir initUpload) : jamais de valeur client dans le
-  // chemin, pas de risque de traversée de répertoire.
-  return path.join(TMP_DIR, uploadId);
+  // uploadId généré côté serveur à l'étape /init (voir initUpload), mais repris
+  // tel quel depuis le client à chaque appel suivant (/chunk, /finalize, /abort)
+  // — path.basename() + vérification que le chemin résolu reste bien sous
+  // TMP_DIR empêchent toute traversée de répertoire si cette valeur est
+  // falsifiée (admin compromis/CSRF), même si elle n'est normalement jamais
+  // modifiée par un client légitime.
+  const safeId = path.basename(String(uploadId || ''));
+  if (!safeId || safeId === '.' || safeId === '..') {
+    throw new Error('Upload inconnu ou expiré.');
+  }
+  return path.join(TMP_DIR, safeId);
 }
 
 export function initUpload(originalName) {

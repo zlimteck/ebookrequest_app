@@ -8,6 +8,7 @@ import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
@@ -35,6 +36,17 @@ const totpGenerate = (secret) => generate({ secret, type: 'totp' });
 const totpVerify = (token, secret) => verify({ token, secret, type: 'totp' });
 const totpURI = (label, issuer, secret) => generateURI({ type: 'totp', label, issuer, secret });
 
+// Le secret TOTP est chiffré via cryptoService (même garanties que les autres
+// secrets de l'app) — mais les comptes ayant activé la 2FA avant ce
+// changement l'ont encore en clair en base. decrypt() renvoie null sur une
+// valeur qui n'est pas au format "iv:hex" (jamais le cas d'un secret base32
+// TOTP, qui ne contient pas de ':'), d'où ce fallback : si le déchiffrement
+// échoue, on suppose un ancien secret pas encore migré et on l'utilise tel
+// quel plutôt que de bloquer la connexion de l'utilisateur.
+function decryptTOTPSecret(stored) {
+  return decrypt(stored) ?? stored;
+}
+
 // GET /setup — génère le secret et le QR code (authentifié, 2FA pas encore activé)
 router.get('/setup', requireAuth, async (req, res) => {
   try {
@@ -46,8 +58,9 @@ router.get('/setup', requireAuth, async (req, res) => {
     // Générer un nouveau secret (via crypto natif Node.js)
     const secret = generateTOTPSecret();
 
-    // Stocker le secret temporairement (enabled reste false)
-    await User.updateOne({ _id: user._id }, { $set: { 'twoFactor.secret': secret } });
+    // Stocker le secret temporairement (enabled reste false), chiffré comme
+    // les autres secrets de l'app.
+    await User.updateOne({ _id: user._id }, { $set: { 'twoFactor.secret': encrypt(secret) } });
 
     // Générer le QR code
     const otpauth = await totpURI(user.username, 'EbookRequest', secret);
@@ -73,7 +86,7 @@ router.post('/verify-setup', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Aucun secret trouvé. Lancez d\'abord /setup.' });
     }
 
-    const result = await totpVerify(code, user.twoFactor.secret);
+    const result = await totpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(400).json({ error: 'Code invalide' });
 
@@ -121,7 +134,7 @@ router.post('/disable', requireAuth, async (req, res) => {
       if (!user.twoFactor?.secret) {
         return res.status(400).json({ error: '2FA non configuré' });
       }
-      const result = await totpVerify(code, user.twoFactor.secret);
+      const result = await totpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
       const validCode = result?.valid ?? result === true;
       if (!validCode) return res.status(401).json({ error: 'Code invalide' });
     }
@@ -164,14 +177,20 @@ router.post('/verify-login', async (req, res) => {
       return res.status(400).json({ error: '2FA non configuré' });
     }
 
-    const result = await totpVerify(code, user.twoFactor.secret);
+    const plainSecret = decryptTOTPSecret(user.twoFactor.secret);
+    const result = await totpVerify(code, plainSecret);
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(401).json({ error: 'Code invalide' });
 
-    // Émettre le JWT complet
-    await User.updateOne({ _id: user._id }, {
-      $set: { lastLogin: new Date(), lastActivity: new Date() }
-    });
+    // Migration silencieuse : si le secret était encore en clair (compte
+    // ayant activé la 2FA avant le chiffrement de ce champ), on le
+    // re-sauvegarde chiffré maintenant qu'on sait qu'il est valide — chaque
+    // compte se migre tout seul à sa prochaine connexion, sans action requise.
+    const updates = { lastLogin: new Date(), lastActivity: new Date() };
+    if (plainSecret === user.twoFactor.secret) {
+      updates['twoFactor.secret'] = encrypt(plainSecret);
+    }
+    await User.updateOne({ _id: user._id }, { $set: updates });
 
     const sid = await createSession(user._id, {
       ip: getClientIP(req),

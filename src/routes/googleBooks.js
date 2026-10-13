@@ -4,6 +4,7 @@ import { parseStringPromise } from 'xml2js';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
 import { getHardcoverApiKey, takeHardcoverQuota } from '../services/hardcoverConfig.js';
 import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -651,7 +652,7 @@ const SERIES_EXCLUDE_PATTERNS = [
 ];
 
 // Recherche des autres tomes d'une série
-router.get('/series-tomes', async (req, res) => {
+router.get('/series-tomes', requireAuth, async (req, res) => {
   try {
     const { name, excludeId } = req.query;
     if (!name) return res.status(400).json({ error: 'Nom de série requis' });
@@ -723,7 +724,7 @@ router.get('/series-tomes', async (req, res) => {
 });
 
 // Recherche de livres via Google Books API
-router.get('/search', async (req, res) => {
+router.get('/search', requireAuth, async (req, res) => {
   try {
     const { q, author, combined, strictTitle, maxResults = 10, startIndex = 0 } = req.query;
 

@@ -1042,11 +1042,19 @@ export const downloadEbook = async (req, res) => {
   try {
     const { id } = req.params;
     const request = await BookRequest.findById(id);
-    
+
     if (!request) {
       return res.status(404).json({ error: 'Demande non trouvée' });
     }
-    
+
+    // Même vérification que sendEbookByEmail : seul le propriétaire de la
+    // demande ou un admin peut récupérer le fichier.
+    const isOwner = request.user?.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
     // Vérifier si c'est un fichier local ou un lien externe
     if (request.filePath) {
       const uploadsDir = path.resolve(__dirname, '../../uploads');
