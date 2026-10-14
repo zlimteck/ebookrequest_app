@@ -169,6 +169,7 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Gestionnaire de fichiers :** lister, envoyer, renommer et supprimer les ebooks stockés sur le serveur, avec avertissement listant les demandes concernées avant toute suppression d'un fichier encore lié
 - **Upload en chunks :** les fichiers de plus de 80 Mo (envoi manuel sur une demande ou dans le gestionnaire de fichiers) sont automatiquement découpés et réassemblés côté serveur, pour contourner la limite de taille de payload d'un éventuel proxy devant l'instance (voir [Cloudflare Tunnel et gros fichiers](#cloudflare-tunnel-et-gros-fichiers))
 - **Recherche globale :** (`⌘K` / `Ctrl+K` ou barre dans le menu) résultats groupés par catégorie : demandes, bibliothèque, utilisateurs (admin)
+- **Sauvegarde et restauration des données** (onglet admin dédié) : export/import en zip de toutes les données de l'instance (demandes, utilisateurs, réglages, connecteurs...), secrets déjà chiffrés gardés tels quels, ceux stockés en clair (Apprise, Pushover) exclus et à ressaisir après une restauration ; mot de passe optionnel de chiffrement du zip (AES-256) ; sauvegardes automatiques planifiées avec historique et rétention configurable, local et/ou envoyées vers une ou plusieurs destinations distantes (S3-compatible et/ou WebDAV) ; restauration en remplacement complet, confirmation explicite requise, date de la dernière restauration affichée en permanence
 
 **Intégration (MCP)**
 - Serveur MCP pour gérer ses demandes directement depuis un assistant IA

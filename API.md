@@ -787,6 +787,108 @@ curl -X POST https://app.ndd.fr/api/admin/chunked-upload/abort \
   -d '{"uploadId": "<uploadId>"}'
 ```
 
+### `POST /api/admin/backup/export`
+Génère un export zip de toutes les données de l'instance (demandes, utilisateurs, réglages, connecteurs...). Mot de passe optionnel dans le body (pas en query string, pour ne pas finir dans les logs) : si fourni, le zip renvoyé est chiffré (AES-256-GCM, dérivation scrypt). Les secrets déjà chiffrés en base (clés API, mots de passe Valentine/Calibre-Web...) restent chiffrés tels quels dans le dump, lisibles sur la même instance (même `JWT_SECRET`) seulement. Les fichiers ebooks eux-mêmes ne sont pas inclus (volume Docker séparé).
+```bash
+curl -X POST https://app.ndd.fr/api/admin/backup/export \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"password": "optionnel"}' \
+  -o backup.zip
+```
+
+### `POST /api/admin/backup/restore`
+Restaure une sauvegarde précédemment exportée, en remplacement complet (purge puis réimport, transaction Mongo atomique : soit tout passe, soit rien n'est modifié). Action destructive et irréversible. `multipart/form-data` : champ `file` (le zip), champ `password` optionnel si la sauvegarde est chiffrée. Mauvais mot de passe ou archive invalide : `400` sans toucher à la base. Invalide automatiquement les caches en mémoire des connecteurs concernés (Google Books, Email, Hardcover admin, Fournisseur IA, APNs, Proxy, RSS) pour que les réglages restaurés soient pris en compte immédiatement.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/backup/restore \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@backup.zip" \
+  -F "password=optionnel"
+```
+
+### `GET /api/admin/backup/auto-config`
+Réglages de la sauvegarde automatique périodique (cron) : activation, intervalle, nombre de sauvegardes locales conservées, mot de passe de chiffrement (masqué, `_hasBackupEncryptionPassword` indique sa présence), date de la dernière restauration (`lastRestoreAt`).
+```bash
+curl https://app.ndd.fr/api/admin/backup/auto-config \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/admin/backup/auto-config`
+```bash
+curl -X PUT https://app.ndd.fr/api/admin/backup/auto-config \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "cronInterval": 24, "backupRetentionCount": 7, "backupEncryptionPassword": "optionnel"}'
+```
+
+### `GET /api/admin/backup/destinations`
+Liste les destinations distantes configurées (S3-compatible et/ou WebDAV, plusieurs en parallèle possibles), secrets masqués.
+```bash
+curl https://app.ndd.fr/api/admin/backup/destinations \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/admin/backup/destinations`
+Crée une destination distante.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/backup/destinations \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "s3", "label": "Backblaze", "enabled": true, "s3Endpoint": "...", "s3Bucket": "...", "s3AccessKey": "...", "s3SecretKey": "..."}'
+```
+
+### `PUT /api/admin/backup/destinations/:id`
+Modifie une destination existante (mêmes champs que la création, secrets laissés tels quels si non renvoyés).
+```bash
+curl -X PUT https://app.ndd.fr/api/admin/backup/destinations/<id> \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+### `DELETE /api/admin/backup/destinations/:id`
+```bash
+curl -X DELETE https://app.ndd.fr/api/admin/backup/destinations/<id> \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/admin/backup/destinations/test`
+Teste une destination avec les valeurs du formulaire, enregistrée ou pas encore.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/backup/destinations/test \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "webdav", "webdavUrl": "...", "webdavUsername": "...", "webdavPassword": "..."}'
+```
+
+### `POST /api/admin/backup/auto-run-now`
+Force une sauvegarde automatique immédiate (local + destinations distantes configurées), indépendamment du réglage `enabled`.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/backup/auto-run-now \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/backup/history`
+Liste les sauvegardes automatiques déjà générées (nom, date, taille), `.zip` pour les non chiffrées, `.zip.enc` pour les chiffrées.
+```bash
+curl https://app.ndd.fr/api/admin/backup/history \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/backup/history/:filename`
+Télécharge une sauvegarde automatique passée.
+```bash
+curl https://app.ndd.fr/api/admin/backup/history/ebookrequest-backup-auto-2026-10-14T15-17-22.zip \
+  -H "Authorization: Bearer <token>" \
+  -o backup.zip
+```
+
+### `DELETE /api/admin/backup/history/:filename`
+```bash
+curl -X DELETE https://app.ndd.fr/api/admin/backup/history/ebookrequest-backup-auto-2026-10-14T15-17-22.zip \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/requests/all`
 ```bash
 curl https://app.ndd.fr/api/requests/all \
