@@ -21,6 +21,13 @@ import DeviceToken from '../models/DeviceToken.js';
 import PushSubscription from '../models/PushSubscription.js';
 import AppriseConfig from '../models/AppriseConfig.js';
 import PushoverConfig from '../models/PushoverConfig.js';
+import { invalidateGoogleBooksKeyCache } from './googleBooksConfig.js';
+import { invalidateEmailConfigCache } from './emailConfig.js';
+import { invalidateHardcoverKeyCache } from './hardcoverConfig.js';
+import { invalidateAIProviderConfigCache } from './aiProviderConfig.js';
+import { invalidateApnsConfigCache } from './apnsService.js';
+import { invalidateProxyConfigCache } from './proxyConfig.js';
+import { invalidateRSSUrlCache } from './rssConfig.js';
 
 const require = createRequire(import.meta.url);
 const { version: APP_VERSION } = require('../../package.json');
@@ -258,6 +265,17 @@ export async function restoreBackup(fileBuffer, password) {
         }
       }
     });
+    // Plusieurs connecteurs (Google Books, Email, Hardcover admin, Fournisseur
+    // IA, APNs, Proxy, RSS) mettent leur config en cache 60s en mémoire — sans
+    // ça, un connecteur réactivé par la restauration semble encore désactivé
+    // jusqu'à expiration du cache.
+    invalidateGoogleBooksKeyCache();
+    invalidateEmailConfigCache();
+    invalidateHardcoverKeyCache();
+    invalidateAIProviderConfigCache();
+    invalidateApnsConfigCache();
+    invalidateProxyConfigCache();
+    invalidateRSSUrlCache();
   } finally {
     await session.endSession();
   }

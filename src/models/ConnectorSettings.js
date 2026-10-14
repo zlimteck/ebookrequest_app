@@ -97,6 +97,10 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // non chiffré). Distinct du mot de passe de l'export manuel, qui lui n'est
   // jamais stocké nulle part.
   backupEncryptionPassword: { type: String, default: '' },
+  // Date de la dernière restauration réussie (manuelle, via l'admin) — affichage
+  // permanent dans l'onglet Sauvegarde, pour savoir à tout moment si/quand une
+  // restauration a eu lieu sans avoir à fouiller les logs admin.
+  lastRestoreAt: { type: Date, default: null },
   // ── Anciens champs destination unique (remplacés par remoteBackupDestinations
   // ci-dessous, issue #43 suite) — gardés uniquement pour la migration à la
   // volée d'une config déjà enregistrée avant ce changement, jamais réécrits

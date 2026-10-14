@@ -577,6 +577,9 @@ select.fieldInput {
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .miniCardClickable {

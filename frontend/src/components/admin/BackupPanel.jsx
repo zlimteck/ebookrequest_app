@@ -23,7 +23,14 @@ function BackupCard() {
   const [confirmModal, setConfirmModal] = useState(null); // File en attente de confirmation
   const [confirmInput, setConfirmInput] = useState('');
   const [restorePassword, setRestorePassword] = useState('');
+  const [lastRestoreAt, setLastRestoreAt] = useState(null);
   const fileInputRef = React.useRef(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/admin/backup/auto-config')
+      .then(res => setLastRestoreAt(res.data?.lastRestoreAt || null))
+      .catch(() => {});
+  }, []);
 
   const showAlertMsg = (type, message) => {
     setAlert({ type, message });
@@ -73,6 +80,7 @@ function BackupCard() {
       });
       setConfirmModal(null);
       const r = res.data;
+      setLastRestoreAt(r.lastRestoreAt || new Date().toISOString());
       showAlertMsg('success',
         `Restauration terminée (sauvegarde du ${new Date(r.exportedAt).toLocaleString('fr-FR')}).${r.versionMismatch ? ' Attention : version différente de celle actuelle, vérifiez que tout fonctionne correctement.' : ''}`
       );
@@ -130,6 +138,12 @@ function BackupCard() {
           </button>
           <input ref={fileInputRef} type="file" accept=".zip,.enc" style={{ display: 'none' }} onChange={handleFileSelected} />
         </div>
+
+        {lastRestoreAt && (
+          <p className={styles.fieldHint}>
+            Dernière restauration : {new Date(lastRestoreAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
 
         {alert && (
           <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
@@ -536,7 +550,7 @@ function DestinationsCard() {
                     <div className={styles.miniCardName} title={d.label || d.type}>
                       {d.label || (d.type === 's3' ? 'S3' : 'WebDAV')}
                     </div>
-                    <div className={styles.miniCardMeta}>
+                    <div className={styles.miniCardMeta} title={d.type === 's3' ? d.s3Bucket : d.webdavUrl}>
                       {d.type === 's3' ? (d.s3Bucket || 'Bucket non configuré') : (d.webdavUrl || 'URL non configurée')}
                     </div>
                   </div>

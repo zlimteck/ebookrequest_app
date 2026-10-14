@@ -363,6 +363,11 @@ router.post('/backup/restore', backupUpload.single('file'), async (req, res) => 
     }
     const result = await restoreBackup(req.file.buffer, req.body?.password?.trim() || undefined);
 
+    const restoredAt = new Date();
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'backup' }, { lastRestoreAt: restoredAt }, { upsert: true }
+    ).catch(() => {});
+
     const adminUser = req.user;
     await AdminLog.create({
       admin: adminUser.id,
@@ -371,7 +376,7 @@ router.post('/backup/restore', backupUpload.single('file'), async (req, res) => 
       details: `Sauvegarde du ${result.exportedAt} restaurée (${result.restored.map(r => `${r.name}: ${r.count}`).join(', ')})`,
     }).catch(() => {});
 
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, lastRestoreAt: restoredAt });
   } catch (err) {
     console.error('Erreur restauration backup:', err);
     // 400 (pas 500) spécifiquement pour une faute utilisateur (mauvais mot de
@@ -393,6 +398,7 @@ router.get('/backup/auto-config', async (req, res) => {
       cronInterval: doc?.cronInterval || 24,
       backupRetentionCount: doc?.backupRetentionCount || 7,
       _hasBackupEncryptionPassword: !!doc?.backupEncryptionPassword,
+      lastRestoreAt: doc?.lastRestoreAt || null,
     });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
