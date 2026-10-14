@@ -236,9 +236,24 @@ export async function restoreBackup(fileBuffer, password) {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      for (const { model, docs } of toRestore) {
+      for (const { name, model, docs } of toRestore) {
         await model.deleteMany({}, { session });
         if (docs.length) {
+          // User.readingShare.token a `default: null` côté schéma — un export
+          // contient donc ce champ explicitement à `null` pour chaque compte
+          // n'ayant jamais activé le partage, au lieu d'être simplement absent.
+          // Un index sparse+unique ne saute QUE les documents où le champ est
+          // absent, jamais ceux où il vaut `null` : réinsérer tel quel plusieurs
+          // comptes à la fois fait exploser la contrainte d'unicité dès le 2e.
+          // On retire la clé ici pour retrouver le comportement "vraiment absent"
+          // attendu par l'index.
+          if (name === 'users') {
+            for (const doc of docs) {
+              if (doc.readingShare && doc.readingShare.token === null) {
+                delete doc.readingShare.token;
+              }
+            }
+          }
           await model.insertMany(docs, { session, ordered: false });
         }
       }

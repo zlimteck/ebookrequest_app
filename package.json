@@ -10,7 +10,8 @@
     "build:frontend": "cd frontend && npm ci && npm run build",
     "build": "npm run build:frontend",
     "init-admin": "node src/scripts/initAdmin.js",
-    "migrate-reading-list": "node src/scripts/migrateReadingList.js"
+    "migrate-reading-list": "node src/scripts/migrateReadingList.js",
+    "migrate-reading-share-token": "node src/scripts/migrateReadingShareToken.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
