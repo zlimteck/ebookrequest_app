@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import multer from 'multer';
 import { getAdminStats, getServicesHealth } from '../controllers/adminController.js';
 import DownloadLog from '../models/DownloadLog.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -7,9 +8,22 @@ import { getLogBuffer, subscribeToLogs, unsubscribeFromLogs } from '../services/
 import BookRequest from '../models/BookRequest.js';
 import AdminLog from '../models/AdminLog.js';
 import upload from '../middleware/upload.js';
+import { exportBackup, restoreBackup, BackupValidationError } from '../services/backupService.js';
+import { BACKUP_DIR, listBackups, restartBackupCron } from '../services/backupCron.js';
+import {
+  uploadRemoteBackup, testDestination,
+  listDestinationsMasked, createDestination, updateDestination, deleteDestination,
+} from '../services/remoteBackupService.js';
+import ConnectorSettings from '../models/ConnectorSettings.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+
+// Stockage en mémoire pour le zip de restauration (jamais écrit sur disque,
+// contrairement à `upload` qui écrit les ebooks dans uploads/books/) — un
+// dump JSON texte même volumineux reste minuscule comparé à un ebook.
+const backupUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,6 +333,214 @@ router.get('/logs/system', (req, res) => {
     logs = logs.filter(l => l.msg.includes(filter));
   }
   res.json({ logs });
+});
+
+// ── Export/sauvegarde des données (issue #43) ───────────────────────────────
+// POST /api/admin/backup/export — zip téléchargé directement par le
+// navigateur. POST (pas GET) pour que le mot de passe optionnel passe dans le
+// body plutôt que dans l'URL (query string loggée par défaut côté serveur/proxy).
+router.post('/backup/export', async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const zipBuffer = await exportBackup(password?.trim() || undefined);
+    const filename = `ebookrequest-backup-${new Date().toISOString().slice(0, 10)}.zip${password ? '.enc' : ''}`;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(zipBuffer);
+  } catch (err) {
+    console.error('Erreur export backup:', err);
+    res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
+  }
+});
+
+// POST /api/admin/backup/restore — remplacement complet des données depuis un
+// zip exporté par la route ci-dessus. Action destructive et irréversible,
+// confirmation à double niveau gérée côté frontend avant cet appel.
+router.post('/backup/restore', backupUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier reçu.' });
+    }
+    const result = await restoreBackup(req.file.buffer, req.body?.password?.trim() || undefined);
+
+    const restoredAt = new Date();
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'backup' }, { lastRestoreAt: restoredAt }, { upsert: true }
+    ).catch(() => {});
+
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'restore_backup',
+      details: `Sauvegarde du ${result.exportedAt} restaurée (${result.restored.map(r => `${r.name}: ${r.count}`).join(', ')})`,
+    }).catch(() => {});
+
+    res.json({ success: true, ...result, lastRestoreAt: restoredAt });
+  } catch (err) {
+    console.error('Erreur restauration backup:', err);
+    // 400 (pas 500) spécifiquement pour une faute utilisateur (mauvais mot de
+    // passe, archive invalide/trop grosse) — une vraie panne serveur (ex.
+    // transaction Mongo) reste 500.
+    const status = err instanceof BackupValidationError ? 400 : 500;
+    res.status(status).json({ error: err.message || 'Erreur lors de la restauration.' });
+  }
+});
+
+// ── Sauvegarde automatique périodique (issue #43) ───────────────────────────
+// GET /api/admin/backup/auto-config — réglages locaux uniquement (planning +
+// rétention). Les destinations distantes sont gérées à part, voir plus bas.
+router.get('/backup/auto-config', async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'backup' }).lean();
+    res.json({
+      enabled: doc?.enabled ?? false,
+      cronInterval: doc?.cronInterval || 24,
+      backupRetentionCount: doc?.backupRetentionCount || 7,
+      _hasBackupEncryptionPassword: !!doc?.backupEncryptionPassword,
+      lastRestoreAt: doc?.lastRestoreAt || null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/backup/auto-config
+router.put('/backup/auto-config', async (req, res) => {
+  try {
+    const { enabled, cronInterval, backupRetentionCount, backupEncryptionPassword, _hasBackupEncryptionPassword } = req.body;
+    const update = {
+      enabled: !!enabled,
+      cronInterval: Number(cronInterval) || 24,
+      backupRetentionCount: Math.max(1, Number(backupRetentionCount) || 7),
+    };
+    // Même pattern que les autres secrets de ce schéma : garder le mot de
+    // passe existant si le champ est laissé vide/masqué, l'effacer
+    // explicitement sinon.
+    if (backupEncryptionPassword && backupEncryptionPassword !== '••••••••') {
+      update.backupEncryptionPassword = encrypt(backupEncryptionPassword);
+    } else if (!backupEncryptionPassword && !_hasBackupEncryptionPassword) {
+      update.backupEncryptionPassword = '';
+    }
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'backup' }, update, { upsert: true, runValidators: true }
+    );
+    await restartBackupCron();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
+  }
+});
+
+// ── Destinations distantes multiples (issue #43 suite) ──────────────────────
+// GET /api/admin/backup/destinations
+router.get('/backup/destinations', async (req, res) => {
+  try {
+    res.json({ destinations: await listDestinationsMasked() });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/admin/backup/destinations — crée une nouvelle destination
+router.post('/backup/destinations', async (req, res) => {
+  try {
+    const destination = await createDestination(req.body);
+    res.json({ success: true, destination });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la création.' });
+  }
+});
+
+// PUT /api/admin/backup/destinations/:id
+router.put('/backup/destinations/:id', async (req, res) => {
+  try {
+    const destination = await updateDestination(req.params.id, req.body);
+    res.json({ success: true, destination });
+  } catch (err) {
+    res.status(err.message === 'Destination introuvable.' ? 404 : 500).json({ error: err.message || 'Erreur lors de la sauvegarde.' });
+  }
+});
+
+// DELETE /api/admin/backup/destinations/:id
+router.delete('/backup/destinations/:id', async (req, res) => {
+  try {
+    await deleteDestination(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// POST /api/admin/backup/destinations/test — teste une destination avec les
+// valeurs du formulaire (enregistrée ou pas encore), même pattern que les
+// boutons "Tester" des autres connecteurs.
+router.post('/backup/destinations/test', async (req, res) => {
+  try {
+    await testDestination(req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible.' });
+  }
+});
+
+// POST /api/admin/backup/auto-run-now — force une sauvegarde automatique
+// immédiate, indépendamment du réglage `enabled` (cohérent avec le bouton
+// "Vérifier maintenant" déjà utilisé pour Prowlarr). Envoie aussi vers la
+// destination distante si configurée, comme le ferait le cron.
+router.post('/backup/auto-run-now', async (req, res) => {
+  try {
+    const { backupRetentionCount, backupEncryptionPassword } = await ConnectorSettings.findOne({ service: 'backup' }).lean() || {};
+    const password = backupEncryptionPassword ? decrypt(backupEncryptionPassword) : null;
+    const zipBuffer = await exportBackup(password || undefined);
+    const filename = `ebookrequest-backup-auto-${new Date().toISOString().replace(/[:.]/g, '-')}.zip${password ? '.enc' : ''}`;
+    fs.writeFileSync(path.join(BACKUP_DIR, filename), zipBuffer);
+    try {
+      await uploadRemoteBackup(zipBuffer, filename, backupRetentionCount || 7);
+    } catch (err) {
+      console.error('[Backup] Échec de la copie distante:', err.message);
+    }
+    res.json({ success: true, filename });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
+  }
+});
+
+// GET /api/admin/backup/history
+router.get('/backup/history', (req, res) => {
+  try {
+    res.json({ backups: listBackups() });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/admin/backup/history/:filename — téléchargement d'une sauvegarde
+// automatique passée. Filtre strict sur le nom (pas de traversal possible).
+router.get('/backup/history/:filename', (req, res) => {
+  const { filename } = req.params;
+  if (!/^[a-zA-Z0-9_-]+\.zip(\.enc)?$/.test(filename)) {
+    return res.status(400).json({ error: 'Nom de fichier invalide.' });
+  }
+  const filePath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Sauvegarde introuvable.' });
+  }
+  res.download(filePath);
+});
+
+// DELETE /api/admin/backup/history/:filename
+router.delete('/backup/history/:filename', (req, res) => {
+  const { filename } = req.params;
+  if (!/^[a-zA-Z0-9_-]+\.zip(\.enc)?$/.test(filename)) {
+    return res.status(400).json({ error: 'Nom de fichier invalide.' });
+  }
+  const filePath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Sauvegarde introuvable.' });
+  }
+  fs.unlinkSync(filePath);
+  res.json({ success: true });
 });
 
 export default router;

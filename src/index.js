@@ -57,6 +57,7 @@ import { startValentineCron } from './services/valentineCron.js';
 import { initializeTrendingBooksCache, isTrendingPreloadEnabled } from './services/trendingBooksService.js';
 import { startHardcoverSyncCron } from './services/hardcoverSyncCron.js';
 import { startProviderHealthCron } from './services/providerHealthCron.js';
+import { startBackupCron } from './services/backupCron.js';
 import { checkPendingProwlarrDownloads } from './services/prowlarrDownloadService.js';
 import { startReleaseCheckCron } from './services/releaseCheckCron.js';
 import { startRecommendationsCron } from './services/recommendationsCron.js';
@@ -400,6 +401,10 @@ connectMongoWithRetry()
     // Cron de suivi des téléchargements Prowlarr (issue #42) : vérifie l'état
     // auprès du client torrent configuré et finalise les demandes terminées.
     setInterval(() => checkPendingProwlarrDownloads().catch(e => console.error('[ProwlarrDownloadCron]', e.message)), 5 * 60 * 1000);
+
+    // Sauvegarde automatique périodique (issue #43) : désactivée par défaut,
+    // l'admin doit l'activer explicitement depuis l'onglet Sauvegarde.
+    startBackupCron();
 
     // Cron de notification "date de sortie atteinte" : prévient l'utilisateur
     // quand publishedDate est dépassée sur une demande encore en attente

@@ -132,7 +132,12 @@ const userSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: false },
     // Généré à l'activation seulement (pas de default sur le schéma comme opdsToken,
     // voir issue #39) : sparse+unique pour ne pas collisionner entre utilisateurs.
-    token: { type: String, default: null },
+    // `default: undefined` (jamais null) est important ici : un index sparse ne
+    // saute que les documents où le champ est réellement ABSENT, jamais ceux où
+    // il vaut `null` — un `default: null` ferait collisionner tous les comptes
+    // n'ayant jamais activé le partage dès qu'il y en a plus d'un (vu en
+    // restaurant une sauvegarde, voir backupService.js).
+    token: { type: String, default: undefined },
     includeNotes: { type: Boolean, default: true },
   },
   twoFactor: {

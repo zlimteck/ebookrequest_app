@@ -87,6 +87,40 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // racine (ex: seedbox où /webdav pointe sur le home entier, torrents dans
   // un sous-dossier). Vide par défaut = racine WebDAV = dossier de téléchargement.
   fileAccessWebdavBasePath: { type: String, default: '' },
+  // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
+  // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
+  // conservées est spécifique à cette fonctionnalité.
+  backupRetentionCount: { type: Number, default: 7, min: 1 },
+  // Mot de passe optionnel pour chiffrer les zips générés automatiquement
+  // (local + toutes les destinations distantes) — chiffré via cryptoService
+  // comme les autres secrets de ce schéma. Vide = comportement inchangé (zip
+  // non chiffré). Distinct du mot de passe de l'export manuel, qui lui n'est
+  // jamais stocké nulle part.
+  backupEncryptionPassword: { type: String, default: '' },
+  // Date de la dernière restauration réussie (manuelle, via l'admin) — affichage
+  // permanent dans l'onglet Sauvegarde, pour savoir à tout moment si/quand une
+  // restauration a eu lieu sans avoir à fouiller les logs admin.
+  lastRestoreAt: { type: Date, default: null },
+  // ── Anciens champs destination unique (remplacés par remoteBackupDestinations
+  // ci-dessous, issue #43 suite) — gardés uniquement pour la migration à la
+  // volée d'une config déjà enregistrée avant ce changement, jamais réécrits
+  // après coup. Ne pas utiliser dans du code neuf.
+  remoteBackupType: { type: String, enum: ['', 'webdav', 's3'], default: '' },
+  remoteBackupWebdavUrl: { type: String, default: '' },
+  remoteBackupWebdavUsername: { type: String, default: '' },
+  remoteBackupS3Endpoint: { type: String, default: '' },
+  remoteBackupS3Bucket: { type: String, default: '' },
+  remoteBackupS3Region: { type: String, default: 'auto' },
+  remoteBackupS3AccessKeyId: { type: String, default: '' },
+  remoteBackupS3Prefix: { type: String, default: '' },
+  // Plusieurs destinations distantes possibles en parallèle, chacune avec son
+  // propre toggle actif/inactif — chaque élément : { id, type: 'webdav'|'s3',
+  // label, enabled, webdavUrl, webdavUsername, webdavPassword (chiffré),
+  // s3Endpoint, s3Bucket, s3Region, s3AccessKeyId, s3Prefix, s3SecretAccessKey
+  // (chiffré) }. Secrets chiffrés individuellement (même cryptoService que le
+  // reste de ce schéma), pas de champ générique partagé possible ici puisqu'il
+  // peut y en avoir plusieurs.
+  remoteBackupDestinations: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, { timestamps: true });
 
 export default mongoose.model('ConnectorSettings', ConnectorSettingsSchema);
