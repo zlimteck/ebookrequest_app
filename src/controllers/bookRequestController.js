@@ -218,6 +218,7 @@ export const createBookRequest = async (req, res) => {
     });
 
     await newRequest.save();
+    emitToAdmins('requests:changed', { reason: 'created', id: newRequest._id });
 
     // Gamification : série de jours consécutifs d'activité, best-effort.
     recordActivity(user._id).catch(() => {});
@@ -537,6 +538,7 @@ export const directDownloadRequest = async (req, res) => {
     });
 
     await newRequest.save();
+    emitToAdmins('requests:changed', { reason: 'created', id: newRequest._id });
 
     // Auto-ajout à la liste de lecture (best-effort, non bloquant)
     try {
@@ -812,10 +814,10 @@ export const applyMetadataCandidate = async (req, res) => {
 
     await request.save();
 
-    // Même propagation que editUserRequest (voir issue #40 / session du 1er octobre) :
-    // sans ça, une couverture récupérée via Google Books après complétion ne se
-    // reflète jamais côté Bibliothèque. Best-effort, ne doit jamais faire échouer la réponse.
-    if (request.status === 'completed' && request.thumbnail && request.thumbnail !== previousThumbnail) {
+    // Même propagation que editUserRequest : sans ça, une couverture récupérée via Google
+    // Books ne se reflète jamais côté Bibliothèque, même une fois la demande complétée.
+    // Best-effort, ne doit jamais faire échouer la réponse.
+    if (request.thumbnail && request.thumbnail !== previousThumbnail) {
       ReadingList.updateOne({ requestId: request._id }, { $set: { thumbnail: request.thumbnail } }).catch(() => {});
     }
 
@@ -1031,6 +1033,7 @@ export const updateRequestStatus = async (req, res) => {
     await logAdminAction(req.user.id, adminUser?.username || 'admin', logAction, request,
       reason ? `Raison : ${reason}` : status);
 
+    emitToAdmins('requests:changed', { reason: 'status', id: request._id, status });
     res.json(request);
   } catch (error) {
     console.error('Erreur lors de la mise à jour du statut:', error);
@@ -1042,11 +1045,19 @@ export const downloadEbook = async (req, res) => {
   try {
     const { id } = req.params;
     const request = await BookRequest.findById(id);
-    
+
     if (!request) {
       return res.status(404).json({ error: 'Demande non trouvée' });
     }
-    
+
+    // Même vérification que sendEbookByEmail : seul le propriétaire de la
+    // demande ou un admin peut récupérer le fichier.
+    const isOwner = request.user?.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
     // Vérifier si c'est un fichier local ou un lien externe
     if (request.filePath) {
       const uploadsDir = path.resolve(__dirname, '../../uploads');
@@ -1392,6 +1403,7 @@ export const deleteRequest = async (req, res) => {
 
     // Supprimer la demande
     await BookRequest.findByIdAndDelete(id);
+    emitToAdmins('requests:changed', { reason: 'deleted', id });
 
     res.json({ message: 'Demande supprimée avec succès.' });
   } catch (error) {
@@ -1581,10 +1593,10 @@ export const editUserRequest = async (req, res) => {
     );
 
     // Propage titre/auteur/couverture vers l'entrée Bibliothèque liée (ReadingList.requestId,
-    // rempli une seule fois à la création) — sinon une correction post-complétion (ex. titre/
-    // auteur inversés) ne se reflète jamais côté Bibliothèque. Best-effort, comme les
-    // ReadingList.create existants : ne doit jamais faire échouer la réponse.
-    if (updated.status === 'completed') {
+    // rempli une seule fois à la création, dès la création — pas seulement une fois complétée)
+    // — sinon une correction de titre/auteur (ex. inversés) sur une demande encore en attente
+    // ne se reflète jamais côté Bibliothèque. Best-effort, ne doit jamais faire échouer la réponse.
+    {
       const readingListUpdates = {};
       if (title?.trim() && title.trim() !== request.title) readingListUpdates.title = updated.title;
       if (author?.trim() && author.trim() !== request.author) readingListUpdates.author = updated.author;
@@ -1667,6 +1679,7 @@ export const reportRequest = async (req, res) => {
     request.reportSeenByAdmin = false;
 
     await request.save();
+    emitToAdmins('requests:changed', { reason: 'reported', id: request._id });
 
     appriseService.notifyReport(request, reason).catch(() => {});
     // Email + push aux admins — signalement

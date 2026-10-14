@@ -8,6 +8,7 @@ import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createSession, getClientIP } from '../utils/sessionUtils.js';
 import { COOKIE_OPTIONS } from '../utils/cookieOptions.js';
+import { encrypt, decrypt } from '../services/cryptoService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
@@ -35,6 +36,34 @@ const totpGenerate = (secret) => generate({ secret, type: 'totp' });
 const totpVerify = (token, secret) => verify({ token, secret, type: 'totp' });
 const totpURI = (label, issuer, secret) => generateURI({ type: 'totp', label, issuer, secret });
 
+// Le secret TOTP est chiffré via cryptoService (même garanties que les autres
+// secrets de l'app) — mais les comptes ayant activé la 2FA avant ce
+// changement l'ont encore en clair en base. decrypt() renvoie null sur une
+// valeur qui n'est pas au format "iv:hex" (jamais le cas d'un secret base32
+// TOTP, qui ne contient pas de ':'), d'où ce fallback : si le déchiffrement
+// échoue, on suppose un ancien secret pas encore migré et on l'utilise tel
+// quel plutôt que de bloquer la connexion de l'utilisateur.
+function decryptTOTPSecret(stored) {
+  return decrypt(stored) ?? stored;
+}
+
+// Un vrai secret TOTP (déchiffré ou legacy en clair) est toujours en base32
+// RFC 4648 (A-Z, 2-7). Si decrypt() échoue silencieusement (ex: JWT_SECRET a
+// changé depuis le chiffrement), le fallback ci-dessus renvoie le texte
+// chiffré brut tel quel ("iv:hex") — jamais du base32 valide. Sans ce
+// contrôle, otplib plante avec une exception non maîtrisée sur ce genre de
+// valeur (chiffres/deux-points hors de l'alphabet autorisé), remontée en 500
+// générique au lieu d'un message exploitable.
+const BASE32_SECRET_RE = /^[A-Z2-7]+=*$/;
+function safeTotpVerify(code, secret) {
+  if (!BASE32_SECRET_RE.test(secret)) {
+    const err = new Error('Secret 2FA invalide ou corrompu (JWT_SECRET a peut-être changé depuis sa création) — réinitialisez la 2FA ou utilisez un code de récupération.');
+    err.isCorruptedSecret = true;
+    throw err;
+  }
+  return totpVerify(code, secret);
+}
+
 // GET /setup — génère le secret et le QR code (authentifié, 2FA pas encore activé)
 router.get('/setup', requireAuth, async (req, res) => {
   try {
@@ -46,8 +75,9 @@ router.get('/setup', requireAuth, async (req, res) => {
     // Générer un nouveau secret (via crypto natif Node.js)
     const secret = generateTOTPSecret();
 
-    // Stocker le secret temporairement (enabled reste false)
-    await User.updateOne({ _id: user._id }, { $set: { 'twoFactor.secret': secret } });
+    // Stocker le secret temporairement (enabled reste false), chiffré comme
+    // les autres secrets de l'app.
+    await User.updateOne({ _id: user._id }, { $set: { 'twoFactor.secret': encrypt(secret) } });
 
     // Générer le QR code
     const otpauth = await totpURI(user.username, 'EbookRequest', secret);
@@ -73,7 +103,7 @@ router.post('/verify-setup', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Aucun secret trouvé. Lancez d\'abord /setup.' });
     }
 
-    const result = await totpVerify(code, user.twoFactor.secret);
+    const result = await safeTotpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(400).json({ error: 'Code invalide' });
 
@@ -98,6 +128,7 @@ router.post('/verify-setup', requireAuth, async (req, res) => {
     res.json({ success: true, recoveryCodes: plainCodes });
   } catch (err) {
     console.error('Erreur 2FA verify-setup:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -121,7 +152,7 @@ router.post('/disable', requireAuth, async (req, res) => {
       if (!user.twoFactor?.secret) {
         return res.status(400).json({ error: '2FA non configuré' });
       }
-      const result = await totpVerify(code, user.twoFactor.secret);
+      const result = await safeTotpVerify(code, decryptTOTPSecret(user.twoFactor.secret));
       const validCode = result?.valid ?? result === true;
       if (!validCode) return res.status(401).json({ error: 'Code invalide' });
     }
@@ -134,6 +165,7 @@ router.post('/disable', requireAuth, async (req, res) => {
     res.json({ success: true, message: '2FA désactivé' });
   } catch (err) {
     console.error('Erreur 2FA disable:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -164,14 +196,20 @@ router.post('/verify-login', async (req, res) => {
       return res.status(400).json({ error: '2FA non configuré' });
     }
 
-    const result = await totpVerify(code, user.twoFactor.secret);
+    const plainSecret = decryptTOTPSecret(user.twoFactor.secret);
+    const result = await safeTotpVerify(code, plainSecret);
     const valid = result?.valid ?? result === true;
     if (!valid) return res.status(401).json({ error: 'Code invalide' });
 
-    // Émettre le JWT complet
-    await User.updateOne({ _id: user._id }, {
-      $set: { lastLogin: new Date(), lastActivity: new Date() }
-    });
+    // Migration silencieuse : si le secret était encore en clair (compte
+    // ayant activé la 2FA avant le chiffrement de ce champ), on le
+    // re-sauvegarde chiffré maintenant qu'on sait qu'il est valide — chaque
+    // compte se migre tout seul à sa prochaine connexion, sans action requise.
+    const updates = { lastLogin: new Date(), lastActivity: new Date() };
+    if (plainSecret === user.twoFactor.secret) {
+      updates['twoFactor.secret'] = encrypt(plainSecret);
+    }
+    await User.updateOne({ _id: user._id }, { $set: updates });
 
     const sid = await createSession(user._id, {
       ip: getClientIP(req),
@@ -187,6 +225,7 @@ router.post('/verify-login', async (req, res) => {
     });
   } catch (err) {
     console.error('Erreur 2FA verify-login:', err);
+    if (err.isCorruptedSecret) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

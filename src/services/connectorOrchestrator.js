@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { sendPushToUser } from './webPushService.js';
-import { emitToUser } from './socketService.js';
+import { emitToUser, emitToAdmins } from './socketService.js';
 import { decrypt } from './cryptoService.js';
 
 export async function logDownload({ bookRequest, connector, success, error = null, triggeredBy = 'auto', searchMode = 'detailed' }) {
@@ -85,6 +85,7 @@ function extractVolumeNumber(title) {
  */
 export async function notifyCompletion(bookRequest, meta = {}) {
   try {
+    emitToAdmins('requests:changed', { reason: 'auto-completed', id: bookRequest._id });
     appriseService.notifyBookCompleted(bookRequest, meta).catch(() => {});
 
     // Email aux admins — complétion (même gate que les autres chemins de complétion)
@@ -158,6 +159,7 @@ async function flagAutoDownloadFailed(bookRequest, reason) {
     // pour que le bandeau apparaisse sans rechargement.
     if (isFirstFailure && prev.user) {
       emitToUser(prev.user, 'request:updated', { id: bookRequest._id, status: 'pending' });
+      emitToAdmins('requests:changed', { reason: 'auto-failed', id: bookRequest._id });
     }
     return isFirstFailure;
   } catch (e) {
