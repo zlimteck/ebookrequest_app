@@ -1,5 +1,5 @@
 # ── Stage 1 : build React frontend ────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -14,7 +14,7 @@ ENV VITE_API_URL=""
 RUN npm run build
 
 # ── Stage 2 : image finale Node.js ────────────────────────────────────────────
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 
