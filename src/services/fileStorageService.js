@@ -270,9 +270,21 @@ export async function copyAllLocalToRemote(onProgress) {
     throw new Error('Aucune destination distante active.');
   }
   const localFiles = fs.readdirSync(BOOKS_DIR).filter(name => fs.statSync(path.join(BOOKS_DIR, name)).isFile());
+  // Un seul listing du distant pour savoir quoi est déjà là (par taille, pas
+  // juste par nom — un fichier du même nom mais de taille différente est
+  // réécrit) plutôt qu'une vérification par fichier, pour ne pas multiplier
+  // les allers-retours réseau sur une grosse collection.
+  const remoteFiles = await listBookFiles();
+  const remoteSizeByName = new Map(remoteFiles.map(f => [f.name, f.size]));
   console.log(`[FileStorage] Migration : ${localFiles.length} fichier(s) local(aux) à copier vers le distant.`);
-  let copied = 0, failed = 0;
+  let copied = 0, failed = 0, skipped = 0;
   for (const name of localFiles) {
+    const localSize = fs.statSync(path.join(BOOKS_DIR, name)).size;
+    if (remoteSizeByName.get(name) === localSize) {
+      skipped++;
+      onProgress?.({ copied, failed, skipped, total: localFiles.length, done: false });
+      continue;
+    }
     try {
       const buffer = fs.readFileSync(path.join(BOOKS_DIR, name));
       // Réutilise writeBookFile (crée le dossier distant manquant, timeout
@@ -284,8 +296,64 @@ export async function copyAllLocalToRemote(onProgress) {
       console.error(`[FileStorage] Migration : échec copie "${name}" vers le distant :`, err.message);
       failed++;
     }
-    onProgress?.({ copied, failed, total: localFiles.length, done: false });
+    onProgress?.({ copied, failed, skipped, total: localFiles.length, done: false });
   }
-  console.log(`[FileStorage] Migration terminée : ${copied} copié(s), ${failed} échec(s), ${localFiles.length} au total.`);
-  return { copied, failed, total: localFiles.length };
+  console.log(`[FileStorage] Migration terminée : ${copied} copié(s), ${skipped} déjà présent(s), ${failed} échec(s), ${localFiles.length} au total.`);
+  return { copied, failed, skipped, total: localFiles.length };
+}
+
+/**
+ * Sens inverse de copyAllLocalToRemote() : récupère tous les fichiers
+ * actuellement sur la destination distante configurée et les écrit dans le
+ * dossier local (books/) — nécessaire pour pouvoir revenir au mode local
+ * sans perdre l'accès aux fichiers déjà migrés vers le distant.
+ */
+export async function copyAllRemoteToLocal(onProgress) {
+  const config = await getConfig();
+  // Volontairement indépendant du mode actif : l'admin peut déjà avoir
+  // basculé sur "local" avant de lancer cette récupération (les identifiants
+  // WebDAV restent en base après un changement de mode, pour pouvoir
+  // justement revenir en arrière).
+  if (!config.bookStorageWebdavUrl) {
+    throw new Error('Aucune destination WebDAV configurée.');
+  }
+  const client = getWebdavClient(config);
+  let items;
+  try {
+    items = await withTimeout(client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR)), 20000, 'listing dossier distant');
+  } catch (err) {
+    if (err.status === 404) items = [];
+    else throw err;
+  }
+  const remoteItems = items.filter(i => i.type === 'file');
+  fs.mkdirSync(BOOKS_DIR, { recursive: true });
+  // Même raisonnement que copyAllLocalToRemote : par nom ET taille, pas par
+  // nom seul, pour ne pas sauter un fichier qui aurait changé entre-temps.
+  const localSizeByName = new Map(
+    fs.readdirSync(BOOKS_DIR)
+      .filter(name => fs.statSync(path.join(BOOKS_DIR, name)).isFile())
+      .map(name => [name, fs.statSync(path.join(BOOKS_DIR, name)).size])
+  );
+  console.log(`[FileStorage] Migration inverse : ${remoteItems.length} fichier(s) distant(s) à copier vers le local.`);
+  let copied = 0, failed = 0, skipped = 0;
+  for (const item of remoteItems) {
+    const name = item.basename;
+    if (localSizeByName.get(name) === item.size) {
+      skipped++;
+      onProgress?.({ copied, failed, skipped, total: remoteItems.length, done: false });
+      continue;
+    }
+    try {
+      const buffer = await withTimeout(client.getFileContents(webdavRemotePath(`${BOOKS_SUBDIR}/${name}`), { format: 'binary' }), 60000, 'lecture fichier distant');
+      fs.writeFileSync(path.join(BOOKS_DIR, name), Buffer.from(buffer));
+      copied++;
+      console.log(`[FileStorage] Migration inverse : "${name}" copié (${copied}/${remoteItems.length}).`);
+    } catch (err) {
+      console.error(`[FileStorage] Migration inverse : échec copie "${name}" vers le local :`, err.message);
+      failed++;
+    }
+    onProgress?.({ copied, failed, skipped, total: remoteItems.length, done: false });
+  }
+  console.log(`[FileStorage] Migration inverse terminée : ${copied} copié(s), ${skipped} déjà présent(s), ${failed} échec(s), ${remoteItems.length} au total.`);
+  return { copied, failed, skipped, total: remoteItems.length };
 }

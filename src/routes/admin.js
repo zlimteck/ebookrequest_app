@@ -21,7 +21,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
   listBookFiles, bookFileExists, renameBookFile, deleteBookFile, promoteUploadedFile,
-  getStorageStats, copyAllLocalToRemote, invalidateBookStorageConfigCache,
+  getStorageStats, copyAllLocalToRemote, copyAllRemoteToLocal, invalidateBookStorageConfigCache,
 } from '../services/fileStorageService.js';
 import { createClient as createWebdavClient } from 'webdav';
 
@@ -223,10 +223,20 @@ router.put('/book-storage/config', async (req, res) => {
     } else if (!bookStorageWebdavPassword && !_hasBookStorageWebdavPassword) {
       update.bookStorageWebdavPassword = '';
     }
+    const previous = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
     await ConnectorSettings.findOneAndUpdate(
       { service: 'bookStorage' }, update, { upsert: true, runValidators: true }
     );
     invalidateBookStorageConfigCache();
+    if (previous && previous.fileStorageMode !== fileStorageMode) {
+      const adminUser = req.user;
+      await AdminLog.create({
+        admin: adminUser.id,
+        adminUsername: adminUser.username || 'admin',
+        action: 'storage_mode_change',
+        details: `Stockage des ebooks : ${previous.fileStorageMode || 'local'} → ${fileStorageMode}`,
+      }).catch(() => {});
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
@@ -280,22 +290,68 @@ router.post('/book-storage/test', async (req, res) => {
 // une seule requête qui finirait par être coupée en cours de route.
 let migrationStatus = { running: false, copied: 0, failed: 0, total: 0, error: null };
 
-// POST /api/admin/book-storage/migrate — démarre la migration, répond
-// immédiatement sans attendre la fin.
+// POST /api/admin/book-storage/migrate — démarre la migration local → distant,
+// répond immédiatement sans attendre la fin.
 router.post('/book-storage/migrate', async (req, res) => {
   if (migrationStatus.running) {
     return res.status(409).json({ error: 'Une migration est déjà en cours.' });
   }
-  migrationStatus = { running: true, copied: 0, failed: 0, total: 0, error: null };
+  migrationStatus = { running: true, direction: 'toRemote', copied: 0, failed: 0, total: 0, error: null };
   res.json({ success: true, started: true });
+  const adminUser = req.user;
 
   try {
     const result = await copyAllLocalToRemote((progress) => {
       migrationStatus = { ...migrationStatus, ...progress };
     });
-    migrationStatus = { running: false, ...result, error: null };
+    migrationStatus = { ...migrationStatus, running: false, ...result, error: null };
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'storage_migration',
+      details: `Migration local → distant : ${result.copied} copié(s), ${result.skipped} déjà présent(s), ${result.failed} échec(s), ${result.total} au total.`,
+    }).catch(() => {});
   } catch (err) {
     migrationStatus = { ...migrationStatus, running: false, error: err.message || 'Erreur lors de la migration.' };
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'storage_migration',
+      details: `Migration local → distant : échec (${err.message || 'erreur inconnue'}).`,
+    }).catch(() => {});
+  }
+});
+
+// POST /api/admin/book-storage/migrate-back — sens inverse (distant → local),
+// utile pour revenir au mode local sans perdre l'accès aux fichiers déjà
+// migrés vers le distant.
+router.post('/book-storage/migrate-back', async (req, res) => {
+  if (migrationStatus.running) {
+    return res.status(409).json({ error: 'Une migration est déjà en cours.' });
+  }
+  migrationStatus = { running: true, direction: 'toLocal', copied: 0, failed: 0, total: 0, error: null };
+  res.json({ success: true, started: true });
+  const adminUser = req.user;
+
+  try {
+    const result = await copyAllRemoteToLocal((progress) => {
+      migrationStatus = { ...migrationStatus, ...progress };
+    });
+    migrationStatus = { ...migrationStatus, running: false, ...result, error: null };
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'storage_migration',
+      details: `Migration distant → local : ${result.copied} copié(s), ${result.skipped} déjà présent(s), ${result.failed} échec(s), ${result.total} au total.`,
+    }).catch(() => {});
+  } catch (err) {
+    migrationStatus = { ...migrationStatus, running: false, error: err.message || 'Erreur lors de la migration.' };
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'storage_migration',
+      details: `Migration distant → local : échec (${err.message || 'erreur inconnue'}).`,
+    }).catch(() => {});
   }
 });
 
@@ -459,6 +515,13 @@ router.post('/backup/export', async (req, res) => {
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(zipBuffer);
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'backup_export',
+      details: `Export manuel "${filename}"${password ? ' (chiffré)' : ''}`,
+    }).catch(() => {});
   } catch (err) {
     console.error('Erreur export backup:', err);
     res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
@@ -538,6 +601,13 @@ router.put('/backup/auto-config', async (req, res) => {
       { service: 'backup' }, update, { upsert: true, runValidators: true }
     );
     await restartBackupCron();
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'settings_change',
+      details: `Sauvegarde automatique : ${update.enabled ? 'activée' : 'désactivée'}, toutes les ${update.cronInterval}h, rétention ${update.backupRetentionCount}`,
+    }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
@@ -558,6 +628,13 @@ router.get('/backup/destinations', async (req, res) => {
 router.post('/backup/destinations', async (req, res) => {
   try {
     const destination = await createDestination(req.body);
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'backup_destination_change',
+      details: `Destination distante créée : "${destination.label || destination.type}" (${destination.type})`,
+    }).catch(() => {});
     res.json({ success: true, destination });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erreur lors de la création.' });
@@ -568,6 +645,13 @@ router.post('/backup/destinations', async (req, res) => {
 router.put('/backup/destinations/:id', async (req, res) => {
   try {
     const destination = await updateDestination(req.params.id, req.body);
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'backup_destination_change',
+      details: `Destination distante modifiée : "${destination.label || destination.type}" (${destination.type})`,
+    }).catch(() => {});
     res.json({ success: true, destination });
   } catch (err) {
     res.status(err.message === 'Destination introuvable.' ? 404 : 500).json({ error: err.message || 'Erreur lors de la sauvegarde.' });
@@ -578,6 +662,13 @@ router.put('/backup/destinations/:id', async (req, res) => {
 router.delete('/backup/destinations/:id', async (req, res) => {
   try {
     await deleteDestination(req.params.id);
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'backup_destination_change',
+      details: `Destination distante supprimée (id ${req.params.id})`,
+    }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la suppression.' });
@@ -612,6 +703,13 @@ router.post('/backup/auto-run-now', async (req, res) => {
     } catch (err) {
       console.error('[Backup] Échec de la copie distante:', err.message);
     }
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'backup_export',
+      details: `Sauvegarde automatique lancée manuellement : "${filename}"`,
+    }).catch(() => {});
     res.json({ success: true, filename });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la génération de la sauvegarde.' });
@@ -642,7 +740,7 @@ router.get('/backup/history/:filename', (req, res) => {
 });
 
 // DELETE /api/admin/backup/history/:filename
-router.delete('/backup/history/:filename', (req, res) => {
+router.delete('/backup/history/:filename', async (req, res) => {
   const { filename } = req.params;
   if (!/^[a-zA-Z0-9_-]+\.zip(\.enc)?$/.test(filename)) {
     return res.status(400).json({ error: 'Nom de fichier invalide.' });
@@ -652,6 +750,13 @@ router.delete('/backup/history/:filename', (req, res) => {
     return res.status(404).json({ error: 'Sauvegarde introuvable.' });
   }
   fs.unlinkSync(filePath);
+  const adminUser = req.user;
+  await AdminLog.create({
+    admin: adminUser.id,
+    adminUsername: adminUser.username || 'admin',
+    action: 'backup_history_delete',
+    details: `Sauvegarde supprimée de l'historique : "${filename}"`,
+  }).catch(() => {});
   res.json({ success: true });
 });
 

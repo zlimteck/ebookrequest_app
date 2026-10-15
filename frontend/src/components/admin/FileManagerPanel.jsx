@@ -127,13 +127,13 @@ export default function FileManagerPanel() {
     }
   };
 
-  const migrateToRemote = async () => {
+  const runMigration = async (endpoint) => {
     setMigrating(true);
     try {
       // Lancée en arrière-plan côté serveur (peut dépasser la limite de
       // temps d'une requête HTTP classique), suivie par polling plutôt
       // qu'attendue sur un seul appel.
-      await axiosAdmin.post('/api/admin/book-storage/migrate');
+      await axiosAdmin.post(endpoint);
       let status;
       do {
         await new Promise(r => setTimeout(r, 2000));
@@ -144,7 +144,7 @@ export default function FileManagerPanel() {
       if (status.error) {
         showStorageAlertMsg('error', status.error);
       } else {
-        showStorageAlertMsg('success', `Migration terminée : ${status.copied}/${status.total} fichier(s) copié(s)${status.failed > 0 ? `, ${status.failed} échec(s)` : ''}.`);
+        showStorageAlertMsg('success', `Migration terminée : ${status.copied}/${status.total} fichier(s) copié(s)${status.skipped > 0 ? `, ${status.skipped} déjà présent(s)` : ''}${status.failed > 0 ? `, ${status.failed} échec(s)` : ''}.`);
       }
       await loadFiles();
     } catch (err) {
@@ -154,6 +154,9 @@ export default function FileManagerPanel() {
       setMigrationProgress(null);
     }
   };
+
+  const migrateToRemote = () => runMigration('/api/admin/book-storage/migrate');
+  const migrateToLocal = () => runMigration('/api/admin/book-storage/migrate-back');
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -345,10 +348,17 @@ export default function FileManagerPanel() {
                 </button>
                 <button type="button" className={styles.btnTest} disabled={migrating} onClick={migrateToRemote}>
                   {migrating
-                    ? (migrationProgress?.total ? `Migration… (${migrationProgress.copied + migrationProgress.failed}/${migrationProgress.total})` : 'Migration…')
+                    ? (migrationProgress?.total ? `Migration… (${migrationProgress.copied + migrationProgress.failed + (migrationProgress.skipped || 0)}/${migrationProgress.total})` : 'Migration…')
                     : 'Copier les fichiers locaux vers le distant'}
                 </button>
               </>
+            )}
+            {storageConfig.fileStorageMode === 'local' && storageConfig.bookStorageWebdavUrl && (
+              <button type="button" className={styles.btnTest} disabled={migrating} onClick={migrateToLocal}>
+                {migrating
+                  ? (migrationProgress?.total ? `Récupération… (${migrationProgress.copied + migrationProgress.failed + (migrationProgress.skipped || 0)}/${migrationProgress.total})` : 'Récupération…')
+                  : 'Récupérer les fichiers distants vers le local'}
+              </button>
             )}
             <button type="button" className={styles.btnPrimary} disabled={savingStorage} onClick={saveStorageConfig}>
               {savingStorage ? 'Enregistrement…' : 'Enregistrer'}
