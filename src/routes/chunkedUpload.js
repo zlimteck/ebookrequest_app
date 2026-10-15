@@ -40,13 +40,13 @@ router.post('/chunk', chunkUpload.single('chunk'), (req, res) => {
 });
 
 // POST /api/admin/chunked-upload/finalize — { uploadId, totalChunks, filename } -> { filePath }
-router.post('/finalize', (req, res) => {
+router.post('/finalize', async (req, res) => {
   try {
     const { uploadId, totalChunks, filename } = req.body;
     if (!uploadId || !totalChunks || !filename) {
       return res.status(400).json({ error: 'uploadId, totalChunks et filename sont requis.' });
     }
-    const result = finalizeUpload(uploadId, Number(totalChunks), filename);
+    const result = await finalizeUpload(uploadId, Number(totalChunks), filename);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ error: err.message });

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sanitizeUploadFilename, ALLOWED_UPLOAD_EXTS, UPLOAD_DIR } from '../middleware/upload.js';
+import { promoteUploadedFile } from './fileStorageService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,10 +45,11 @@ export function saveChunk(uploadId, index, buffer) {
   fs.writeFileSync(path.join(dir, String(index)), buffer);
 }
 
-// Concatène les chunks dans l'ordre et écrit le fichier final dans uploads/books,
-// avec le même format de nom que multer (voir sanitizeUploadFilename) — pour que le
-// résultat soit indiscernable d'un upload classique côté reste de l'app.
-export function finalizeUpload(uploadId, totalChunks, originalName) {
+// Concatène les chunks dans l'ordre et écrit le fichier final localement dans
+// uploads/books (toujours, même en stockage distant — zone de staging), avec
+// le même format de nom que multer (voir sanitizeUploadFilename). Promu vers
+// le stockage réellement configuré ensuite (no-op en mode local).
+export async function finalizeUpload(uploadId, totalChunks, originalName) {
   const dir = uploadDir(uploadId);
   if (!fs.existsSync(dir)) throw new Error('Upload inconnu ou expiré.');
 
@@ -55,17 +57,25 @@ export function finalizeUpload(uploadId, totalChunks, originalName) {
   const destPath = path.join(UPLOAD_DIR, filename);
   const writeStream = fs.createWriteStream(destPath);
 
-  try {
-    for (let i = 0; i < totalChunks; i++) {
-      const chunkPath = path.join(dir, String(i));
-      if (!fs.existsSync(chunkPath)) throw new Error(`Chunk ${i} manquant.`);
-      writeStream.write(fs.readFileSync(chunkPath));
+  await new Promise((resolve, reject) => {
+    writeStream.on('error', reject);
+    writeStream.on('finish', resolve);
+    try {
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkPath = path.join(dir, String(i));
+        if (!fs.existsSync(chunkPath)) throw new Error(`Chunk ${i} manquant.`);
+        writeStream.write(fs.readFileSync(chunkPath));
+      }
+    } catch (err) {
+      writeStream.destroy();
+      reject(err);
+      return;
     }
-  } finally {
     writeStream.end();
-  }
+  });
 
   fs.rmSync(dir, { recursive: true, force: true });
+  await promoteUploadedFile(destPath, `books/${filename}`);
   return { filename, filePath: `books/${filename}` };
 }
 

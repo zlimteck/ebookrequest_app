@@ -19,6 +19,9 @@ import { encrypt, decrypt } from '../services/cryptoService.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import {
+  listBookFiles, bookFileExists, renameBookFile, deleteBookFile, promoteUploadedFile,
+} from '../services/fileStorageService.js';
 
 // Stockage en mémoire pour le zip de restauration (jamais écrit sur disque,
 // contrairement à `upload` qui écrit les ebooks dans uploads/books/) — un
@@ -156,25 +159,11 @@ router.get('/user-stats/:userId', async (req, res) => {
   }
 });
 
-// Liste des fichiers dans le dossier uploads/books
-router.get('/uploads-list', (req, res) => {
+// Liste des fichiers dans le stockage ebooks configuré (local ou distant)
+router.get('/uploads-list', async (req, res) => {
   try {
-    const uploadDir = path.join(__dirname, '../../uploads/books');
-    if (!fs.existsSync(uploadDir)) {
-      return res.json({ success: true, files: [] });
-    }
-    const files = fs.readdirSync(uploadDir)
-      .filter(name => !name.startsWith('.'))
-      .map(name => {
-        const fullPath = path.join(uploadDir, name);
-        const stat = fs.statSync(fullPath);
-        return {
-          name,
-          filePath: `books/${name}`,
-          size: stat.size,
-          modifiedAt: stat.mtime,
-        };
-      })
+    const files = (await listBookFiles())
+      .map(f => ({ name: f.name, filePath: `books/${f.name}`, size: f.size, modifiedAt: f.mtime }))
       .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
     res.json({ success: true, files });
   } catch (err) {
@@ -183,30 +172,24 @@ router.get('/uploads-list', (req, res) => {
   }
 });
 
-// ── Gestionnaire de fichiers (uploads/books) ────────────────────────────────
+// ── Gestionnaire de fichiers ─────────────────────────────────────────────────
 // Distinct de /uploads-list (déjà utilisé par le sélecteur "fichier existant"
 // à la création d'une demande) : renvoie aussi les demandes liées à chaque
 // fichier, nécessaire pour l'avertissement avant suppression/renommage. Un
 // même fichier physique peut être référencé par plusieurs BookRequest (étagères
 // additionnelles multi-utilisateurs) — voir BookRequest.filePath.
-const filesUploadDir = path.join(__dirname, '../../uploads/books');
-
-// Empêche toute traversée de répertoire : le nom résolu doit rester strictement
-// dans uploads/books, jamais utiliser un chemin fourni par le client tel quel.
+// Empêche toute traversée de répertoire : le nom résolu doit rester un nom de
+// fichier nu, jamais un chemin fourni par le client tel quel.
 function resolveSafeFileName(name) {
   const safe = path.basename(String(name || ''));
   if (!safe || safe !== name) return null;
-  const fullPath = path.join(filesUploadDir, safe);
-  if (!fullPath.startsWith(filesUploadDir + path.sep)) return null;
-  return { safe, fullPath };
+  return { safe, filePath: `books/${safe}` };
 }
 
 router.get('/files', async (req, res) => {
   try {
-    if (!fs.existsSync(filesUploadDir)) return res.json({ success: true, files: [] });
-
-    const names = fs.readdirSync(filesUploadDir).filter(name => !name.startsWith('.'));
-    const relPaths = names.map(name => `books/${name}`);
+    const rawFiles = await listBookFiles();
+    const relPaths = rawFiles.map(f => `books/${f.name}`);
     const linkedRequests = await BookRequest.find({ filePath: { $in: relPaths } })
       .select('title author username status filePath')
       .lean();
@@ -216,15 +199,13 @@ router.get('/files', async (req, res) => {
       linkedByPath.get(r.filePath).push({ _id: r._id, title: r.title, author: r.author, username: r.username, status: r.status });
     }
 
-    const files = names.map(name => {
-      const fullPath = path.join(filesUploadDir, name);
-      const stat = fs.statSync(fullPath);
-      const filePath = `books/${name}`;
+    const files = rawFiles.map(f => {
+      const filePath = `books/${f.name}`;
       return {
-        name,
+        name: f.name,
         filePath,
-        size: stat.size,
-        modifiedAt: stat.mtime,
+        size: f.size,
+        modifiedAt: f.mtime,
         linkedRequests: linkedByPath.get(filePath) || [],
       };
     }).sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
@@ -239,6 +220,10 @@ router.get('/files', async (req, res) => {
 router.post('/files', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'Aucun fichier reçu.' });
+    // multer écrit toujours d'abord dans uploads/books/ en local (middleware/
+    // upload.js) ; promoteUploadedFile l'envoie vers le stockage réellement
+    // configuré si un mode distant est actif, sans rien faire sinon.
+    await promoteUploadedFile(req.file.path, `books/${req.file.filename}`);
     res.json({ success: true, file: { name: req.file.filename, filePath: `books/${req.file.filename}` } });
   } catch (err) {
     console.error('Erreur POST /files:', err);
@@ -250,7 +235,7 @@ router.patch('/files/rename', async (req, res) => {
   try {
     const { name, newName } = req.body;
     const from = resolveSafeFileName(name);
-    if (!from || !fs.existsSync(from.fullPath)) {
+    if (!from || !(await bookFileExists(from.filePath))) {
       return res.status(404).json({ success: false, error: 'Fichier introuvable.' });
     }
     const ext = path.extname(from.safe);
@@ -259,12 +244,12 @@ router.patch('/files/rename', async (req, res) => {
     const finalNewName = requestedNewName.toLowerCase().endsWith(ext.toLowerCase()) ? requestedNewName : `${requestedNewName}${ext}`;
     const to = resolveSafeFileName(finalNewName);
     if (!to) return res.status(400).json({ success: false, error: 'Nouveau nom invalide.' });
-    if (fs.existsSync(to.fullPath)) return res.status(409).json({ success: false, error: 'Un fichier porte déjà ce nom.' });
+    if (await bookFileExists(to.filePath)) return res.status(409).json({ success: false, error: 'Un fichier porte déjà ce nom.' });
 
-    fs.renameSync(from.fullPath, to.fullPath);
+    await renameBookFile(from.filePath, to.filePath);
 
-    const oldFilePath = `books/${from.safe}`;
-    const newFilePath = `books/${to.safe}`;
+    const oldFilePath = from.filePath;
+    const newFilePath = to.filePath;
     const result = await BookRequest.updateMany({ filePath: oldFilePath }, { filePath: newFilePath });
 
     const adminUser = req.user;
@@ -286,17 +271,17 @@ router.delete('/files', async (req, res) => {
   try {
     const { name, confirm } = req.body;
     const target = resolveSafeFileName(name);
-    if (!target || !fs.existsSync(target.fullPath)) {
+    if (!target || !(await bookFileExists(target.filePath))) {
       return res.status(404).json({ success: false, error: 'Fichier introuvable.' });
     }
-    const filePath = `books/${target.safe}`;
+    const filePath = target.filePath;
 
     const linked = await BookRequest.find({ filePath }).select('title author username status').lean();
     if (linked.length && !confirm) {
       return res.json({ success: false, requiresConfirmation: true, linkedRequests: linked });
     }
 
-    fs.unlinkSync(target.fullPath);
+    await deleteBookFile(filePath);
 
     if (linked.length) {
       await BookRequest.updateMany(

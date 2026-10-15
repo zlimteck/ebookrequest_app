@@ -102,6 +102,23 @@ export async function writeBookFile(relativePath, buffer) {
   fs.writeFileSync(fullPath, buffer);
 }
 
+/**
+ * Promeut un fichier déjà écrit sur disque LOCAL par multer (middleware/
+ * upload.js, destination toujours `uploads/books/` quel que soit le mode
+ * configuré) vers le stockage réellement actif. En mode local, ne fait
+ * rien (le fichier est déjà à sa place). En mode distant, l'envoie vers la
+ * destination configurée puis supprime la copie locale temporaire.
+ * `localPath` = chemin absolu réel écrit par multer, `relativePath` = chemin
+ * logique à utiliser ensuite (ex. "books/foo.epub").
+ */
+export async function promoteUploadedFile(localPath, relativePath) {
+  const config = await getConfig();
+  if (config.fileStorageMode === 'local') return;
+  const buffer = fs.readFileSync(localPath);
+  await writeBookFile(relativePath, buffer);
+  fs.unlinkSync(localPath);
+}
+
 /** Vérifie l'existence d'un ebook. */
 export async function bookFileExists(relativePath) {
   if (!relativePath) return false;

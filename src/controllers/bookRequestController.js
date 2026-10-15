@@ -60,7 +60,7 @@ async function getAdminEmailPrefs() {
 // Invalide le cache quand les préférences sont modifiées
 export function invalidateAdminEmailPrefsCache() { _adminEmailPrefsCache = null; }
 import { runPostCompletionHooks } from '../services/postCompletionHooks.js';
-import { readBookFile, bookFileExists, getBookFileSize } from '../services/fileStorageService.js';
+import { readBookFile, bookFileExists, getBookFileSize, promoteUploadedFile } from '../services/fileStorageService.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -1216,6 +1216,10 @@ export const addDownloadLink = async (req, res) => {
 
     // Si un fichier a été téléversé
     if (file) {
+      // multer écrit toujours d'abord dans uploads/books/ en local ;
+      // promoteUploadedFile l'envoie vers le stockage réellement configuré
+      // si un mode distant est actif, sans rien faire sinon.
+      await promoteUploadedFile(file.path, `books/${file.filename}`);
       updateData.filePath = `books/${file.filename}`;
       updateData.downloadLink = ''; // Effacer l'ancien lien s'il existe
       console.log(`Fichier téléversé: ${file.filename}`);
