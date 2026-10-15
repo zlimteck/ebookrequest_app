@@ -22,11 +22,28 @@ const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191
 
 // Stockage distant des ebooks (issue #45) — WebDAV uniquement pour l'instant.
 async function checkBookStorage() {
+  const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
+  const mode = doc?.fileStorageMode || 'local';
+  if (mode === 'local') return { mode, connected: null, url: null, error: null };
   try {
+    if (mode === 's3') {
+      if (!doc?.bookStorageS3Endpoint || !doc?.bookStorageS3Bucket) {
+        return { mode, connected: false, url: null, error: 'Endpoint ou bucket S3 non configuré' };
+      }
+      const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      const client = new S3Client({
+        endpoint: doc.bookStorageS3Endpoint,
+        region: doc.bookStorageS3Region || 'auto',
+        credentials: {
+          accessKeyId: doc.bookStorageS3AccessKeyId || '',
+          secretAccessKey: doc.bookStorageS3SecretAccessKey ? decrypt(doc.bookStorageS3SecretAccessKey) : '',
+        },
+        forcePathStyle: true,
+      });
+      await client.send(new ListObjectsV2Command({ Bucket: doc.bookStorageS3Bucket, MaxKeys: 1 }));
+      return { mode, connected: true, url: doc.bookStorageS3Bucket, error: null };
+    }
     const { createClient } = await import('webdav');
-    const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
-    const mode = doc?.fileStorageMode || 'local';
-    if (mode !== 'webdav') return { mode, connected: null, url: null, error: null };
     if (!doc?.bookStorageWebdavUrl) return { mode, connected: false, url: null, error: 'URL WebDAV non configurée' };
     const client = createClient(doc.bookStorageWebdavUrl, {
       username: doc.bookStorageWebdavUsername || undefined,
@@ -35,7 +52,7 @@ async function checkBookStorage() {
     await client.getDirectoryContents('/');
     return { mode, connected: true, url: doc.bookStorageWebdavUrl, error: null };
   } catch (err) {
-    return { mode: 'webdav', connected: false, url: null, error: err.message };
+    return { mode, connected: false, url: null, error: err.message };
   }
 }
 

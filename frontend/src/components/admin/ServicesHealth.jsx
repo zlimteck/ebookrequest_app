@@ -217,11 +217,13 @@ const SERVICE_DEFS = [
     ),
     // Mode local : rien à vérifier (pas de connexion distante), carte affichée
     // "désactivée" (grisée) plutôt qu'en erreur — ce n'est pas un problème.
-    isEnabled: (s) => s.mode === 'webdav',
+    isEnabled: (s) => s.mode === 'webdav' || s.mode === 's3',
     isConnected: (s) => s.connected,
     details: (s) => {
-      const lines = [`Mode : ${s.mode === 'webdav' ? 'WebDAV' : 'Local'}`];
+      const modeLabel = s.mode === 'webdav' ? 'WebDAV' : s.mode === 's3' ? 'S3' : 'Local';
+      const lines = [`Mode : ${modeLabel}`];
       if (s.mode === 'webdav' && s.url) lines.push(`URL : ${s.url}`);
+      if (s.mode === 's3' && s.url) lines.push(`Bucket : ${s.url}`);
       return lines;
     },
     error: (s) => s.error,

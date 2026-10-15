@@ -89,12 +89,17 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   fileAccessWebdavBasePath: { type: String, default: '' },
   // Stockage principal des ebooks (service: 'bookStorage', issue #45) — un seul
   // mode actif à la fois, contrairement aux destinations de sauvegarde qui
-  // peuvent être multiples en parallèle. 's3' viendra dans un second temps,
-  // une fois le mode 'webdav' posé et vérifié.
+  // peuvent être multiples en parallèle.
   fileStorageMode: { type: String, enum: ['local', 'webdav', 's3'], default: 'local' },
   bookStorageWebdavUrl: { type: String, default: '' },
   bookStorageWebdavUsername: { type: String, default: '' },
   bookStorageWebdavPassword: { type: String, default: '' }, // chiffré via cryptoService
+  bookStorageS3Endpoint: { type: String, default: '' },
+  bookStorageS3Bucket: { type: String, default: '' },
+  bookStorageS3Region: { type: String, default: 'auto' },
+  bookStorageS3AccessKeyId: { type: String, default: '' },
+  bookStorageS3SecretAccessKey: { type: String, default: '' }, // chiffré via cryptoService
+  bookStorageS3Prefix: { type: String, default: '' },
   // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.

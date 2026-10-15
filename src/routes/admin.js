@@ -198,6 +198,12 @@ router.get('/book-storage/config', async (req, res) => {
       bookStorageWebdavUrl: doc?.bookStorageWebdavUrl || '',
       bookStorageWebdavUsername: doc?.bookStorageWebdavUsername || '',
       _hasBookStorageWebdavPassword: !!doc?.bookStorageWebdavPassword,
+      bookStorageS3Endpoint: doc?.bookStorageS3Endpoint || '',
+      bookStorageS3Bucket: doc?.bookStorageS3Bucket || '',
+      bookStorageS3Region: doc?.bookStorageS3Region || 'auto',
+      bookStorageS3AccessKeyId: doc?.bookStorageS3AccessKeyId || '',
+      bookStorageS3Prefix: doc?.bookStorageS3Prefix || '',
+      _hasBookStorageS3SecretAccessKey: !!doc?.bookStorageS3SecretAccessKey,
     });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -207,7 +213,11 @@ router.get('/book-storage/config', async (req, res) => {
 // PUT /api/admin/book-storage/config
 router.put('/book-storage/config', async (req, res) => {
   try {
-    const { fileStorageMode, bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword, _hasBookStorageWebdavPassword } = req.body;
+    const {
+      fileStorageMode, bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword, _hasBookStorageWebdavPassword,
+      bookStorageS3Endpoint, bookStorageS3Bucket, bookStorageS3Region, bookStorageS3AccessKeyId, bookStorageS3Prefix,
+      bookStorageS3SecretAccessKey, _hasBookStorageS3SecretAccessKey,
+    } = req.body;
     if (!['local', 'webdav', 's3'].includes(fileStorageMode)) {
       return res.status(400).json({ error: 'Mode de stockage invalide.' });
     }
@@ -215,13 +225,24 @@ router.put('/book-storage/config', async (req, res) => {
       fileStorageMode,
       bookStorageWebdavUrl: bookStorageWebdavUrl || '',
       bookStorageWebdavUsername: bookStorageWebdavUsername || '',
+      bookStorageS3Endpoint: bookStorageS3Endpoint || '',
+      bookStorageS3Bucket: bookStorageS3Bucket || '',
+      bookStorageS3Region: bookStorageS3Region?.trim() || 'auto',
+      bookStorageS3AccessKeyId: bookStorageS3AccessKeyId || '',
+      bookStorageS3Prefix: bookStorageS3Prefix?.trim() || '',
     };
     // Même pattern que les autres secrets de ce schéma : garder le mot de
-    // passe existant si le champ est laissé vide/masqué, l'effacer sinon.
+    // passe/la clé existante si le champ est laissé vide/masqué, l'effacer
+    // sinon.
     if (bookStorageWebdavPassword && bookStorageWebdavPassword !== '••••••••') {
       update.bookStorageWebdavPassword = encrypt(bookStorageWebdavPassword);
     } else if (!bookStorageWebdavPassword && !_hasBookStorageWebdavPassword) {
       update.bookStorageWebdavPassword = '';
+    }
+    if (bookStorageS3SecretAccessKey && bookStorageS3SecretAccessKey !== '••••••••') {
+      update.bookStorageS3SecretAccessKey = encrypt(bookStorageS3SecretAccessKey);
+    } else if (!bookStorageS3SecretAccessKey && !_hasBookStorageS3SecretAccessKey) {
+      update.bookStorageS3SecretAccessKey = '';
     }
     const previous = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
     await ConnectorSettings.findOneAndUpdate(
@@ -243,16 +264,42 @@ router.put('/book-storage/config', async (req, res) => {
   }
 });
 
-// POST /api/admin/book-storage/test — teste la connexion WebDAV avec les
-// valeurs du formulaire (enregistrées ou pas encore), même pattern que le
-// test des destinations de sauvegarde distantes.
+const withAdminTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, reject) => setTimeout(() => reject(new Error('Délai dépassé, le serveur distant ne répond pas.')), ms)),
+]);
+
+// POST /api/admin/book-storage/test — teste la connexion WebDAV ou S3 avec
+// les valeurs du formulaire (enregistrées ou pas encore), même pattern que
+// le test des destinations de sauvegarde distantes.
 router.post('/book-storage/test', async (req, res) => {
   try {
-    const { bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword } = req.body;
+    const {
+      fileStorageMode, bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword,
+      bookStorageS3Endpoint, bookStorageS3Bucket, bookStorageS3Region, bookStorageS3AccessKeyId, bookStorageS3SecretAccessKey,
+    } = req.body;
+    const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
+
+    if (fileStorageMode === 's3') {
+      if (!bookStorageS3Endpoint || !bookStorageS3Bucket) return res.status(400).json({ error: 'Endpoint et bucket S3 requis.' });
+      let secretAccessKey = bookStorageS3SecretAccessKey;
+      if (!secretAccessKey || secretAccessKey === '••••••••') {
+        secretAccessKey = doc?.bookStorageS3SecretAccessKey ? decrypt(doc.bookStorageS3SecretAccessKey) : undefined;
+      }
+      const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      const client = new S3Client({
+        endpoint: bookStorageS3Endpoint,
+        region: bookStorageS3Region?.trim() || 'auto',
+        credentials: { accessKeyId: bookStorageS3AccessKeyId || '', secretAccessKey: secretAccessKey || '' },
+        forcePathStyle: true,
+      });
+      await withAdminTimeout(client.send(new ListObjectsV2Command({ Bucket: bookStorageS3Bucket, MaxKeys: 1 })), 20000);
+      return res.json({ success: true });
+    }
+
     if (!bookStorageWebdavUrl) return res.status(400).json({ error: 'URL WebDAV requise.' });
     let password = bookStorageWebdavPassword;
     if (!password || password === '••••••••') {
-      const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
       password = doc?.bookStorageWebdavPassword ? decrypt(doc.bookStorageWebdavPassword) : undefined;
     }
     const client = createWebdavClient(bookStorageWebdavUrl, {
@@ -264,15 +311,11 @@ router.post('/book-storage/test', async (req, res) => {
     // sur le serveur distant) — on le crée plutôt que de considérer ça
     // comme un échec de connexion, cohérent avec writeBookFile qui fait
     // la même chose avant chaque écriture.
-    const withTimeout = (promise, ms) => Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Délai dépassé, le serveur WebDAV ne répond pas.')), ms)),
-    ]);
     try {
-      await withTimeout(client.getDirectoryContents('/'), 20000);
+      await withAdminTimeout(client.getDirectoryContents('/'), 20000);
     } catch (err) {
       if (err.status === 404) {
-        await withTimeout(client.createDirectory('/', { recursive: true }), 20000);
+        await withAdminTimeout(client.createDirectory('/', { recursive: true }), 20000);
       } else {
         throw err;
       }

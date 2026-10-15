@@ -1,9 +1,9 @@
 /**
  * Abstraction du stockage des ebooks (issue #45) — un seul mode actif à la
- * fois (local | webdav, s3 à venir), jamais plusieurs en parallèle (contraire
- * aux destinations de sauvegarde où plusieurs cibles simultanées ont du
- * sens). Toute route qui lit/écrit/liste un ebook doit passer par ici plutôt
- * que par un accès `fs.*` direct — c'est le seul endroit qui connaît le mode
+ * fois (local | webdav | s3), jamais plusieurs en parallèle (contraire aux
+ * destinations de sauvegarde où plusieurs cibles simultanées ont du sens).
+ * Toute route qui lit/écrit/liste un ebook doit passer par ici plutôt que
+ * par un accès `fs.*` direct — c'est le seul endroit qui connaît le mode
  * configuré.
  *
  * Convention de chemin IMPORTANTE : `relativePath` dans toutes les fonctions
@@ -15,13 +15,18 @@
  *
  * Mode 'local' implémenté en premier : reprend exactement le comportement
  * actuel (aucun changement fonctionnel), pour servir de base de référence
- * avant d'ajouter le mode 'webdav'. Même principe que fileAccessService.js,
+ * avant d'ajouter 'webdav' puis 's3'. Même principe que fileAccessService.js,
  * déjà existant pour la récupération des fichiers Prowlarr.
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient as createWebdavClient } from 'webdav';
+import {
+  S3Client, GetObjectCommand, DeleteObjectCommand,
+  HeadObjectCommand, CopyObjectCommand, ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { decrypt } from './cryptoService.js';
 
@@ -62,10 +67,27 @@ function getWebdavClient(config) {
   });
 }
 
+function getS3Client(config) {
+  if (!config.bookStorageS3Endpoint || !config.bookStorageS3Bucket) {
+    throw new Error('Endpoint ou bucket S3 non configuré.');
+  }
+  const secretAccessKey = config.bookStorageS3SecretAccessKey ? decrypt(config.bookStorageS3SecretAccessKey) : '';
+  return new S3Client({
+    endpoint: config.bookStorageS3Endpoint,
+    region: config.bookStorageS3Region || 'auto',
+    credentials: { accessKeyId: config.bookStorageS3AccessKeyId || '', secretAccessKey },
+    // Requis par la plupart des fournisseurs S3-compatibles hors AWS (Hetzner
+    // Object Storage, Backblaze B2, MinIO, SeaweedFS...) — sans ça le SDK
+    // génère des URLs virtual-hosted-style (bucket.endpoint) que ces
+    // fournisseurs ne servent pas. Même réglage que remoteBackupService.js.
+    forcePathStyle: true,
+  });
+}
+
 // La lib `webdav` ne pose aucun timeout par défaut sur ses requêtes — un
 // serveur qui ne répond jamais (réseau, mauvaise config) bloque l'appelant
 // indéfiniment plutôt que de renvoyer une erreur claire. Enveloppe tout
-// appel webdav avec une limite de temps explicite.
+// appel webdav/S3 avec une limite de temps explicite.
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -73,22 +95,37 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+// Retire le préfixe "books/" d'un relativePath ("books/foo.epub" → "foo.epub",
+// "books" seul → ""), pour les deux modes distants : le dossier/préfixe
+// configuré désigne directement l'équivalent du dossier final des ebooks,
+// pas un équivalent du dossier parent avec un sous-dossier "books/" en plus
+// comme en local.
+function stripBooksPrefix(relativePath) {
+  return relativePath.replace(/^\/+/, '').replace(/^books(\/|$)/, '');
+}
+
 // `relativePath` (ex. "books/foo.epub") est reproduit tel quel sous la racine
 // WebDAV configurée — même arborescence relative que côté local.
-// L'URL WebDAV configurée désigne directement le dossier équivalent à
-// BOOKS_DIR (le dossier final où vivent les ebooks), pas un équivalent de
-// UPLOADS_ROOT avec un sous-dossier "books/" en plus — contrairement au
-// mode local où relativePath ("books/foo.epub") reste relatif à
-// UPLOADS_ROOT. Le préfixe "books/" est donc retiré ici avant de
-// reproduire le reste du chemin sous la racine WebDAV, sinon chaque
-// fichier finit dans un sous-dossier "books/" en double sur le serveur
-// distant (ex. ".../ebookrequest/books/books/foo.epub").
 function webdavRemotePath(relativePath) {
-  // "books/foo.epub" perd son préfixe normalement, mais "books" seul (passé
-  // par le listing, sans nom de fichier derrière) doit aussi être reconnu,
-  // pas seulement "books/" suivi de quelque chose.
-  const stripped = relativePath.replace(/^\/+/, '').replace(/^books(\/|$)/, '');
-  return `/${stripped}`;
+  return `/${stripBooksPrefix(relativePath)}`;
+}
+
+// Normalise le préfixe S3 (sous-dossier du bucket) : pas de slash au début,
+// un seul slash à la fin si non vide. Vide par défaut = racine du bucket.
+// Même logique que remoteBackupService.js.
+function normalizeS3Prefix(prefix) {
+  if (!prefix) return '';
+  return `${prefix.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+}
+
+function s3Key(config, relativePath) {
+  return `${normalizeS3Prefix(config.bookStorageS3Prefix)}${stripBooksPrefix(relativePath)}`;
+}
+
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
 }
 
 // Chemin absolu local, confiné à UPLOADS_ROOT — refuse toute tentative de
@@ -109,6 +146,11 @@ export async function readBookFile(relativePath) {
     const buffer = await withTimeout(client.getFileContents(webdavRemotePath(relativePath), { format: 'binary' }), 60000, 'lecture fichier distant');
     return Buffer.from(buffer);
   }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    const res = await withTimeout(client.send(new GetObjectCommand({ Bucket: config.bookStorageS3Bucket, Key: s3Key(config, relativePath) })), 60000, 'lecture fichier S3');
+    return streamToBuffer(res.Body);
+  }
   return fs.readFileSync(resolveLocalPath(relativePath));
 }
 
@@ -128,6 +170,23 @@ export async function writeBookFile(relativePath, buffer) {
       await withTimeout(client.createDirectory(remoteDir, { recursive: true }), 20000, 'création dossier distant').catch(() => {});
     }
     await withTimeout(client.putFileContents(remotePath, buffer, { overwrite: true }), 60000, 'écriture fichier distant');
+    return;
+  }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    // Un gros ebook (BD/manga en .cbz, souvent >100 Mo) dépasse la limite de
+    // taille de requête unique de certains fournisseurs/reverse proxy
+    // S3-compatibles (réponse HTML d'erreur au lieu du XML attendu par le
+    // SDK, "mismatched tags" côté parseur). L'upload multipart (lib-storage)
+    // découpe automatiquement en parts de 5 Mo, comme pour n'importe quel
+    // client S3 standard sur des fichiers volumineux.
+    const upload = new Upload({
+      client,
+      params: { Bucket: config.bookStorageS3Bucket, Key: s3Key(config, relativePath), Body: buffer },
+      queueSize: 4,
+      partSize: 10 * 1024 * 1024,
+    });
+    await withTimeout(upload.done(), 10 * 60 * 1000, 'écriture fichier S3');
     return;
   }
   const fullPath = resolveLocalPath(relativePath);
@@ -160,6 +219,16 @@ export async function bookFileExists(relativePath) {
     const client = getWebdavClient(config);
     return withTimeout(client.exists(webdavRemotePath(relativePath)), 20000, 'vérification existence distante');
   }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    try {
+      await withTimeout(client.send(new HeadObjectCommand({ Bucket: config.bookStorageS3Bucket, Key: s3Key(config, relativePath) })), 20000, 'vérification existence S3');
+      return true;
+    } catch (err) {
+      if (err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) return false;
+      throw err;
+    }
+  }
   return fs.existsSync(resolveLocalPath(relativePath));
 }
 
@@ -175,6 +244,13 @@ export async function deleteBookFile(relativePath) {
     }
     return;
   }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    // DeleteObject S3 ne renvoie pas d'erreur si la clé n'existe pas déjà
+    // (comportement natif de l'API), cohérent avec les deux autres modes.
+    await withTimeout(client.send(new DeleteObjectCommand({ Bucket: config.bookStorageS3Bucket, Key: s3Key(config, relativePath) })), 20000, 'suppression fichier S3');
+    return;
+  }
   const fullPath = resolveLocalPath(relativePath);
   if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
 }
@@ -187,6 +263,11 @@ export async function getBookFileSize(relativePath) {
     const stat = await withTimeout(client.stat(webdavRemotePath(relativePath)), 20000, 'lecture taille distante');
     return stat.size;
   }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    const res = await withTimeout(client.send(new HeadObjectCommand({ Bucket: config.bookStorageS3Bucket, Key: s3Key(config, relativePath) })), 20000, 'lecture taille S3');
+    return res.ContentLength;
+  }
   return fs.statSync(resolveLocalPath(relativePath)).size;
 }
 
@@ -196,6 +277,17 @@ export async function renameBookFile(oldRelativePath, newRelativePath) {
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
     await withTimeout(client.moveFile(webdavRemotePath(oldRelativePath), webdavRemotePath(newRelativePath)), 20000, 'renommage fichier distant');
+    return;
+  }
+  if (config.fileStorageMode === 's3') {
+    // S3 n'a pas de vraie opération "renommer" : copie vers la nouvelle clé
+    // puis suppression de l'ancienne.
+    const client = getS3Client(config);
+    const bucket = config.bookStorageS3Bucket;
+    const oldKey = s3Key(config, oldRelativePath);
+    const newKey = s3Key(config, newRelativePath);
+    await withTimeout(client.send(new CopyObjectCommand({ Bucket: bucket, CopySource: `${bucket}/${encodeURIComponent(oldKey)}`, Key: newKey })), 20000, 'copie fichier S3');
+    await withTimeout(client.send(new DeleteObjectCommand({ Bucket: bucket, Key: oldKey })), 20000, 'suppression ancien fichier S3');
     return;
   }
   fs.renameSync(resolveLocalPath(oldRelativePath), resolveLocalPath(newRelativePath));
@@ -226,6 +318,25 @@ export async function listBookFiles() {
       .filter(i => i.type === 'file')
       .map(i => ({ name: i.basename, size: i.size, mtime: new Date(i.lastmod) }));
   }
+  if (config.fileStorageMode === 's3') {
+    const client = getS3Client(config);
+    const prefix = normalizeS3Prefix(config.bookStorageS3Prefix);
+    const objects = [];
+    let continuationToken;
+    do {
+      const res = await withTimeout(client.send(new ListObjectsV2Command({
+        Bucket: config.bookStorageS3Bucket, Prefix: prefix, ContinuationToken: continuationToken,
+      })), 20000, 'listing bucket S3');
+      objects.push(...(res.Contents || []));
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return objects
+      // Les ebooks sont stockés à plat sous le préfixe, jamais dans des
+      // "sous-dossiers" — ignore toute clé qui en simulerait un (prudence si
+      // le bucket/préfixe est partagé avec autre chose).
+      .filter(o => !o.Key.slice(prefix.length).includes('/'))
+      .map(o => ({ name: o.Key.slice(prefix.length), size: o.Size, mtime: o.LastModified }));
+  }
   return fs.readdirSync(BOOKS_DIR)
     .filter(name => fs.statSync(path.join(BOOKS_DIR, name)).isFile())
     .map(name => {
@@ -252,7 +363,7 @@ export async function getStorageStats() {
  */
 export async function ensureLocalCopy(relativePath) {
   const config = await getConfig();
-  if (config.fileStorageMode !== 'webdav') {
+  if (config.fileStorageMode === 'local') {
     return { path: resolveLocalPath(relativePath), isTemp: false };
   }
   const tmpDir = path.join(UPLOADS_ROOT, 'tmp-remote-fetch');
@@ -266,7 +377,7 @@ export async function ensureLocalCopy(relativePath) {
 /** Copie tous les fichiers actuellement en local (dossier books/) vers la destination distante configurée — outil de migration manuelle, pas automatique au changement de mode. */
 export async function copyAllLocalToRemote(onProgress) {
   const config = await getConfig();
-  if (config.fileStorageMode !== 'webdav') {
+  if (config.fileStorageMode === 'local') {
     throw new Error('Aucune destination distante active.');
   }
   const localFiles = fs.readdirSync(BOOKS_DIR).filter(name => fs.statSync(path.join(BOOKS_DIR, name)).isFile());
@@ -287,8 +398,9 @@ export async function copyAllLocalToRemote(onProgress) {
     }
     try {
       const buffer = fs.readFileSync(path.join(BOOKS_DIR, name));
-      // Réutilise writeBookFile (crée le dossier distant manquant, timeout
-      // sur chaque appel webdav) plutôt que de dupliquer cette logique ici.
+      // Réutilise writeBookFile (crée le dossier distant manquant en WebDAV,
+      // timeout sur chaque appel réseau) plutôt que de dupliquer cette
+      // logique ici.
       await writeBookFile(`${BOOKS_SUBDIR}/${name}`, buffer);
       copied++;
       console.log(`[FileStorage] Migration : "${name}" copié (${copied}/${localFiles.length}).`);
@@ -312,20 +424,45 @@ export async function copyAllRemoteToLocal(onProgress) {
   const config = await getConfig();
   // Volontairement indépendant du mode actif : l'admin peut déjà avoir
   // basculé sur "local" avant de lancer cette récupération (les identifiants
-  // WebDAV restent en base après un changement de mode, pour pouvoir
+  // distants restent en base après un changement de mode, pour pouvoir
   // justement revenir en arrière).
-  if (!config.bookStorageWebdavUrl) {
-    throw new Error('Aucune destination WebDAV configurée.');
+  const hasWebdav = !!config.bookStorageWebdavUrl;
+  const hasS3 = !!(config.bookStorageS3Endpoint && config.bookStorageS3Bucket);
+  if (!hasWebdav && !hasS3) {
+    throw new Error('Aucune destination distante configurée.');
   }
-  const client = getWebdavClient(config);
-  let items;
-  try {
-    items = await withTimeout(client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR)), 20000, 'listing dossier distant');
-  } catch (err) {
-    if (err.status === 404) items = [];
-    else throw err;
+  // Si les deux sont configurées (résidu d'un ancien mode), privilégie le
+  // dernier mode actif connu ; sinon celle qui est réellement renseignée.
+  const useS3 = config.fileStorageMode === 's3' || (!hasWebdav && hasS3);
+
+  let remoteItems; // [{ name, size }]
+  if (useS3) {
+    const client = getS3Client(config);
+    const prefix = normalizeS3Prefix(config.bookStorageS3Prefix);
+    const objects = [];
+    let continuationToken;
+    do {
+      const res = await withTimeout(client.send(new ListObjectsV2Command({
+        Bucket: config.bookStorageS3Bucket, Prefix: prefix, ContinuationToken: continuationToken,
+      })), 20000, 'listing bucket S3');
+      objects.push(...(res.Contents || []));
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+    remoteItems = objects
+      .filter(o => !o.Key.slice(prefix.length).includes('/'))
+      .map(o => ({ name: o.Key.slice(prefix.length), size: o.Size }));
+  } else {
+    const client = getWebdavClient(config);
+    let items;
+    try {
+      items = await withTimeout(client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR)), 20000, 'listing dossier distant');
+    } catch (err) {
+      if (err.status === 404) items = [];
+      else throw err;
+    }
+    remoteItems = items.filter(i => i.type === 'file').map(i => ({ name: i.basename, size: i.size }));
   }
-  const remoteItems = items.filter(i => i.type === 'file');
+
   fs.mkdirSync(BOOKS_DIR, { recursive: true });
   // Même raisonnement que copyAllLocalToRemote : par nom ET taille, pas par
   // nom seul, pour ne pas sauter un fichier qui aurait changé entre-temps.
@@ -337,15 +474,24 @@ export async function copyAllRemoteToLocal(onProgress) {
   console.log(`[FileStorage] Migration inverse : ${remoteItems.length} fichier(s) distant(s) à copier vers le local.`);
   let copied = 0, failed = 0, skipped = 0;
   for (const item of remoteItems) {
-    const name = item.basename;
+    const { name } = item;
     if (localSizeByName.get(name) === item.size) {
       skipped++;
       onProgress?.({ copied, failed, skipped, total: remoteItems.length, done: false });
       continue;
     }
     try {
-      const buffer = await withTimeout(client.getFileContents(webdavRemotePath(`${BOOKS_SUBDIR}/${name}`), { format: 'binary' }), 60000, 'lecture fichier distant');
-      fs.writeFileSync(path.join(BOOKS_DIR, name), Buffer.from(buffer));
+      let buffer;
+      if (useS3) {
+        const client = getS3Client(config);
+        const res = await withTimeout(client.send(new GetObjectCommand({ Bucket: config.bookStorageS3Bucket, Key: s3Key(config, `${BOOKS_SUBDIR}/${name}`) })), 60000, 'lecture fichier S3');
+        buffer = await streamToBuffer(res.Body);
+      } else {
+        const client = getWebdavClient(config);
+        const raw = await withTimeout(client.getFileContents(webdavRemotePath(`${BOOKS_SUBDIR}/${name}`), { format: 'binary' }), 60000, 'lecture fichier distant');
+        buffer = Buffer.from(raw);
+      }
+      fs.writeFileSync(path.join(BOOKS_DIR, name), buffer);
       copied++;
       console.log(`[FileStorage] Migration inverse : "${name}" copié (${copied}/${remoteItems.length}).`);
     } catch (err) {
