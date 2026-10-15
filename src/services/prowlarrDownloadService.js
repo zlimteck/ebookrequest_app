@@ -1,6 +1,4 @@
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import BookRequest from '../models/BookRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
@@ -11,9 +9,7 @@ import { runPostCompletionHooks } from './postCompletionHooks.js';
 import { grabRelease } from './prowlarrService.js';
 import { getTorrentStatus } from './downloadClients/index.js';
 import { fetchCompletedFile } from './fileAccessService.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { writeBookFile } from './fileStorageService.js';
 
 const KNOWN_EBOOK_EXTS = new Set(['epub', 'mobi', 'pdf', 'cbz', 'cbr', 'cb7', 'azw', 'azw3', 'fb2', 'djvu']);
 
@@ -53,10 +49,7 @@ export async function startProwlarrDownload(requestId, release) {
 }
 
 async function finalizeRequest(request, fileBuffer, filename) {
-  const uploadsDir = path.join(__dirname, '../../uploads/books');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  const destPath = path.join(uploadsDir, filename);
-  fs.writeFileSync(destPath, fileBuffer);
+  await writeBookFile(`books/${filename}`, fileBuffer);
 
   request.status = 'completed';
   request.filePath = `books/${filename}`;

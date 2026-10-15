@@ -1,10 +1,6 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import AdminLog from '../models/AdminLog.js';
@@ -25,6 +21,7 @@ import { invalidateRSSUrlCache } from '../services/rssConfig.js';
 import { invalidateProxyConfigCache, getProxyAgent } from '../services/proxyConfig.js';
 import { invalidateEmailConfigCache } from '../services/emailConfig.js';
 import { invalidateApnsConfigCache } from '../services/apnsService.js';
+import { readBookFile, bookFileExists } from '../services/fileStorageService.js';
 
 async function triggerKindleIfEnabled(bookRequestLean) {
   try {
@@ -32,11 +29,10 @@ async function triggerKindleIfEnabled(bookRequestLean) {
     const user = await User.findById(bookRequestLean.user)
       .select('kindleEmail emailVerified notificationPreferences');
     if (!user?.emailVerified || !user?.kindleEmail || !user?.notificationPreferences?.kindle?.enabled) return;
-    const uploadsRoot = path.resolve(__dirname, '../../uploads');
-    const absolutePath = path.resolve(uploadsRoot, bookRequestLean.filePath);
-    if (!absolutePath.startsWith(uploadsRoot + path.sep) || !fs.existsSync(absolutePath)) return;
-    const filename = path.basename(absolutePath);
-    sendKindleDelivery(user.kindleEmail, absolutePath, filename)
+    if (!(await bookFileExists(bookRequestLean.filePath))) return;
+    const filename = path.basename(bookRequestLean.filePath);
+    const buffer = await readBookFile(bookRequestLean.filePath);
+    sendKindleDelivery(user.kindleEmail, buffer, filename)
       .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
       .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
   } catch (e) {

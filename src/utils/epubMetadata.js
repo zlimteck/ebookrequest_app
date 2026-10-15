@@ -1,4 +1,3 @@
-import fs from 'fs';
 import JSZip from 'jszip';
 import { parseStringPromise } from 'xml2js';
 
@@ -11,15 +10,18 @@ import { parseStringPromise } from 'xml2js';
  * (matchCalibreBookId) garantit donc une correspondance fiable, quel que
  * soit le libellé renvoyé par le fournisseur source (Valentine, etc.).
  *
- * @param {string} filePath
+ * Prend directement un Buffer (pas un chemin disque) : le fichier peut venir
+ * d'un stockage distant (WebDAV/S3), voir fileStorageService.js (issue #45).
+ *
+ * @param {Buffer} buffer
+ * @param {string} filename pour vérifier l'extension avant de tenter l'extraction
  * @returns {Promise<{title: string, author: string} | null>}
  */
-export async function extractEpubMetadata(filePath) {
-  if (!filePath || !filePath.toLowerCase().endsWith('.epub')) return null;
+export async function extractEpubMetadata(buffer, filename) {
+  if (!buffer || !filename || !filename.toLowerCase().endsWith('.epub')) return null;
 
   try {
-    const buf = fs.readFileSync(filePath);
-    const zip = await JSZip.loadAsync(buf);
+    const zip = await JSZip.loadAsync(buffer);
 
     const containerFile = zip.file('META-INF/container.xml');
     if (!containerFile) return null;
@@ -52,7 +54,7 @@ export async function extractEpubMetadata(filePath) {
     if (!title) return null;
     return { title, author: author || '' };
   } catch (err) {
-    console.warn(`[EpubMetadata] Extraction échouée pour ${filePath}: ${err.message}`);
+    console.warn(`[EpubMetadata] Extraction échouée pour ${filename}: ${err.message}`);
     return null;
   }
 }

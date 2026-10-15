@@ -527,11 +527,10 @@ export const MAX_EBOOK_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 Mo
  * de téléchargement généré : le fichier est directement joint, ce qui évite
  * toute surface d'attaque supplémentaire (aucun token/lien à protéger).
  */
-async function sendEbookAttachment(toEmail, filePath, filename, subject, text, html) {
+async function sendEbookAttachment(toEmail, fileBuffer, filename, subject, text, html) {
   const { cfg, transporter, resendClient, from } = await getEmailContext();
 
   if (cfg.provider === 'resend' && resendClient) {
-    const fileBuffer = fs.readFileSync(filePath);
     const { data, error } = await resendClient.emails.send({
       from,
       to: toEmail,
@@ -545,13 +544,16 @@ async function sendEbookAttachment(toEmail, filePath, filename, subject, text, h
   }
 
   if (transporter) {
+    // `content` (Buffer) plutôt que `path` : le fichier peut venir d'un
+    // stockage distant (WebDAV/S3), jamais forcément un chemin disque local
+    // lisible par nodemailer — voir fileStorageService.js (issue #45).
     await transporter.sendMail({
       from,
       to: toEmail,
       subject,
       text,
       ...(html && { html }),
-      attachments: [{ filename, path: filePath }],
+      attachments: [{ filename, content: fileBuffer }],
     });
     return;
   }
@@ -563,9 +565,9 @@ async function sendEbookAttachment(toEmail, filePath, filename, subject, text, h
  * Envoie un ebook directement sur une adresse Kindle via email avec pièce jointe.
  * L'expéditeur (EMAIL_FROM_ADDRESS) doit être dans les expéditeurs approuvés Amazon.
  */
-export const sendKindleDelivery = async (kindleEmail, filePath, filename, userId = null) => {
+export const sendKindleDelivery = async (kindleEmail, fileBuffer, filename, userId = null) => {
   const bookTitle = path.basename(filename, path.extname(filename));
-  const result = await sendEbookAttachment(kindleEmail, filePath, filename, bookTitle, `Votre livre "${bookTitle}" est joint à cet email.`);
+  const result = await sendEbookAttachment(kindleEmail, fileBuffer, filename, bookTitle, `Votre livre "${bookTitle}" est joint à cet email.`);
   // Journalisé (contrairement à avant) pour le succès "Kindle" — voir issue #41,
   // non rétroactif sur les envois faits avant l'ajout de ce log.
   if (userId) {
@@ -593,7 +595,7 @@ export const sendKindleDelivery = async (kindleEmail, filePath, filename, userId
  * fichier sur disque, qui peut être un slug de la source (Valentine, Fourtoutici…)
  * sans rapport avec le titre réel — fallback sur le nom de fichier si absents.
  */
-export const sendBookByEmail = async (toEmail, filePath, filename, { senderId, title, author } = {}) => {
+export const sendBookByEmail = async (toEmail, fileBuffer, filename, { senderId, title, author } = {}) => {
   const bookTitle = title?.trim() || path.basename(filename, path.extname(filename));
   const bodyText = author?.trim()
     ? `Le livre "${bookTitle}" de ${author.trim()} vous a été envoyé depuis EbookRequest.`
@@ -623,7 +625,7 @@ export const sendBookByEmail = async (toEmail, filePath, filename, { senderId, t
   });
 
   try {
-    await sendEbookAttachment(toEmail, filePath, filename, bookTitle, bodyText, html);
+    await sendEbookAttachment(toEmail, fileBuffer, filename, bookTitle, bodyText, html);
   } catch (err) {
     await EmailLog.updateOne({ _id: log._id }, {
       $set: { status: 'failed', error: err.message },

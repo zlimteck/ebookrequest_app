@@ -535,19 +535,15 @@ router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) =>
 
       if (uploaderUser) {
         const { pushToCalibre } = await import('../services/calibreService.js');
-        const { default: path } = await import('path');
-        const { default: fs } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-        const filePath = path.join(__dirname2, '../../uploads', request.filePath);
-        if (fs.existsSync(filePath)) {
+        const { bookFileExists } = await import('../services/fileStorageService.js');
+        if (await bookFileExists(request.filePath)) {
           try {
             // Étagères du propriétaire lui-même au passage, si c'est son compte
             // qui sert à l'upload — pas de raison de les perdre au passage.
             const ownerShelves = uploaderUser._id.toString() === request.user.toString()
               ? (request.selectedShelves || [])
               : [];
-            const result = await pushToCalibre(uploaderUser, filePath, request.title, ownerShelves);
+            const result = await pushToCalibre(uploaderUser, request.filePath, request.title, ownerShelves);
             calibreBookId = result?.calibreBookId || null;
             if (calibreBookId && uploaderUser._id.toString() === request.user.toString()) {
               request.selectedShelves = ownerShelves;

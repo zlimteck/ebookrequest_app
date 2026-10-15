@@ -87,6 +87,14 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // racine (ex: seedbox où /webdav pointe sur le home entier, torrents dans
   // un sous-dossier). Vide par défaut = racine WebDAV = dossier de téléchargement.
   fileAccessWebdavBasePath: { type: String, default: '' },
+  // Stockage principal des ebooks (service: 'bookStorage', issue #45) — un seul
+  // mode actif à la fois, contrairement aux destinations de sauvegarde qui
+  // peuvent être multiples en parallèle. 's3' viendra dans un second temps,
+  // une fois le mode 'webdav' posé et vérifié.
+  fileStorageMode: { type: String, enum: ['local', 'webdav', 's3'], default: 'local' },
+  bookStorageWebdavUrl: { type: String, default: '' },
+  bookStorageWebdavUsername: { type: String, default: '' },
+  bookStorageWebdavPassword: { type: String, default: '' }, // chiffré via cryptoService
   // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.

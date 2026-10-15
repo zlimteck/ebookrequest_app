@@ -1,13 +1,9 @@
 import axios from 'axios';
-import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import FormData from 'form-data';
 import { decrypt } from './cryptoService.js';
 import { extractEpubMetadata } from '../utils/epubMetadata.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { readBookFile } from './fileStorageService.js';
 
 const TIMEOUT = 120000;
 
@@ -408,9 +404,11 @@ export async function resolveCalibreBookId(request, url, username, password, { p
     // un libellé différent (ex. préfixe de série Valentine).
     let searchTitle = request.title;
     if (request.filePath) {
-      const absPath = path.join(__dirname, '../../uploads', request.filePath);
-      const epubMeta = await extractEpubMetadata(absPath);
-      if (epubMeta?.title) searchTitle = epubMeta.title;
+      try {
+        const buffer = await readBookFile(request.filePath);
+        const epubMeta = await extractEpubMetadata(buffer, request.filePath);
+        if (epubMeta?.title) searchTitle = epubMeta.title;
+      } catch {}
     }
 
     const attemptOpts = patient ? { maxAttempts: 6, retryDelayMs: 10000 } : { maxAttempts: 1 };
@@ -560,6 +558,11 @@ export async function pushToCalibre(user, filePath, bookTitle, shelfNames) {
     ? shelfNames
     : (cfg.shelves || []).filter(s => s.isDefault).map(s => s.name);
 
+  // Lu une seule fois (peut venir d'un stockage distant, voir
+  // fileStorageService.js) : réutilisé pour l'upload ET l'extraction des
+  // métadonnées epub plus bas, pour ne jamais lire deux fois le fichier.
+  const fileBuffer = await readBookFile(filePath);
+
   // 1. Login → session cookie
   const cookie = await getSessionCookie(url, username, password);
 
@@ -580,7 +583,7 @@ export async function pushToCalibre(user, filePath, bookTitle, shelfNames) {
 
   // 3. POST /upload
   const form = new FormData();
-  form.append('btn-upload', fs.createReadStream(filePath), {
+  form.append('btn-upload', fileBuffer, {
     filename: path.basename(filePath),
   });
   if (csrfToken) form.append('csrf_token', csrfToken);
@@ -675,7 +678,7 @@ export async function pushToCalibre(user, filePath, bookTitle, shelfNames) {
     // recherche OPDS ; si l'extraction échoue ou ne matche rien, on retombe
     // sur le titre fourni.
     let searchTitle = bookTitle;
-    const epubMeta = await extractEpubMetadata(filePath);
+    const epubMeta = await extractEpubMetadata(fileBuffer, filePath);
     if (epubMeta?.title) {
       console.log(`[Calibre] Titre epub extrait : "${epubMeta.title}" (source : "${bookTitle}")`);
       searchTitle = epubMeta.title;

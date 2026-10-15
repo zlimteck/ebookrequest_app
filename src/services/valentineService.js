@@ -1,8 +1,7 @@
 import axios from 'axios';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import ConnectorSettings from '../models/ConnectorSettings.js';
+import { writeBookFile } from './fileStorageService.js';
 import { cleanSeriesTitle } from '../utils/titleCleaning.js';
 import { normalizeForMatch, authorMatchScore } from '../utils/textMatch.js';
 import BookRequest from '../models/BookRequest.js';
@@ -12,9 +11,6 @@ import { sendBookCompletedEmail } from './emailService.js';
 import { sendPushToUser } from './webPushService.js';
 import { runPostCompletionHooks } from './postCompletionHooks.js';
 import { decrypt } from './cryptoService.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Pas d'URL par défaut : l'admin de l'instance doit la renseigner lui-même
 // dans Réglages → Connecteurs (anonymisation volontaire, par respect pour le
@@ -965,10 +961,7 @@ export async function downloadFromValentine(title, author, requestId, category =
     if (!filename) filename = `${cleanTitle}.epub`;
 
     // Save to uploads/books/
-    const uploadsDir = path.join(__dirname, '../../uploads/books');
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    const destPath = path.join(uploadsDir, filename);
-    fs.writeFileSync(destPath, Buffer.from(fileRes.data));
+    await writeBookFile(`books/${filename}`, Buffer.from(fileRes.data));
 
     console.log(`[Valentine] ✓ "${filename}" téléchargé`);
 
@@ -1160,9 +1153,7 @@ export function downloadFromValentineById(requestId, ebookId, userId) {
     let filename = fnMatch ? decodeURIComponent(fnMatch[1].trim()) : `valentine_${ebookId}.epub`;
     filename = filename.replace(/[<>:"/\\|?*]/g, '').trim() || `valentine_${ebookId}.epub`;
 
-    const uploadsDir = path.join(__dirname, '../../uploads/books');
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(fileRes.data));
+    await writeBookFile(`books/${filename}`, Buffer.from(fileRes.data));
 
     // Complete the request
     const request = await BookRequest.findById(requestId);

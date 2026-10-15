@@ -1,9 +1,8 @@
 import axios from 'axios';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import ConnectorSettings from '../models/ConnectorSettings.js';
 import { encrypt, decrypt } from './cryptoService.js';
+import { writeBookFile } from './fileStorageService.js';
 import BookRequest from '../models/BookRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
@@ -11,9 +10,6 @@ import { sendBookCompletedEmail } from './emailService.js';
 import { sendPushToUser } from './webPushService.js';
 import { runPostCompletionHooks } from './postCompletionHooks.js';
 import { getProxyConfig, getProxyAgent } from './proxyConfig.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const FALLBACK_URLS = [
   'https://annas-archive.pk',
@@ -730,10 +726,7 @@ export async function downloadFromAnnas(md5, requestId, hintFormat = null) {
     if (!filename) filename = `${md5}.epub`;
 
     // ── Save file ─────────────────────────────────────────────────────────────
-    const uploadsDir = path.join(__dirname, '../../uploads/books');
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    const destPath = path.join(uploadsDir, filename);
-    fs.writeFileSync(destPath, fileBuffer);
+    await writeBookFile(`books/${filename}`, fileBuffer);
     console.log(`[Annas] ✓ Fichier sauvegardé: ${filename}`);
 
     // ── Complete request ──────────────────────────────────────────────────────
