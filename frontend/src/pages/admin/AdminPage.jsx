@@ -161,7 +161,7 @@ function AdminPage() {
   const searchFakePlaceholderRef = useRef(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchPlaceholderScrolls, setSearchPlaceholderScrolls] = useState(false);
-  const SEARCH_PLACEHOLDER = 'Rechercher par utilisateur…';
+  const SEARCH_PLACEHOLDER = 'Rechercher par titre, auteur ou utilisateur…';
 
   // Même système que GoogleBooksSearch : sur un champ trop étroit (mobile), le
   // placeholder ne tient pas en entier et serait juste tronqué sans explication
@@ -221,7 +221,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
   const [uploadsList, setUploadsList] = useState([]);
   const [uploadsLoading, setUploadsLoading] = useState(false);
   const [uploadsSearch, setUploadsSearch] = useState('');
-  const [userFilter, setUserFilter] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
   const [connectorsModal, setConnectorsModal] = useState(null); // { _id, title, author }
   const [extraShelvesModal, setExtraShelvesModal] = useState(null); // request en cours d'édition (étagères additionnelles)
   const [connectorsQuery, setConnectorsQuery] = useState('');
@@ -1129,16 +1129,16 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
               <div className={styles.searchInputWrap} ref={searchInputWrapRef}>
                 <input
                   type="text"
-                  aria-label="Rechercher par utilisateur"
-                  value={userFilter}
+                  aria-label="Rechercher par titre, auteur ou utilisateur"
+                  value={searchFilter}
                   list="user-list"
-                  onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
+                  onChange={e => { setSearchFilter(e.target.value); setCurrentPage(1); }}
                   onFocus={() => setSearchFocused(true)}
                   onBlur={() => setSearchFocused(false)}
                   className={styles.searchInput}
                 />
                 <span
-                  className={`${styles.fakePlaceholder} ${(userFilter || searchFocused) ? styles.fakePlaceholderHidden : ''}`}
+                  className={`${styles.fakePlaceholder} ${(searchFilter || searchFocused) ? styles.fakePlaceholderHidden : ''}`}
                   aria-hidden="true"
                 >
                   <span
@@ -1149,8 +1149,8 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                   </span>
                 </span>
               </div>
-              {userFilter && (
-                <button className={styles.searchClear} onClick={() => { setUserFilter(''); setCurrentPage(1); }}>×</button>
+              {searchFilter && (
+                <button className={styles.searchClear} onClick={() => { setSearchFilter(''); setCurrentPage(1); }}>×</button>
               )}
               <datalist id="user-list">
                 {[...new Set(requests.map(r => r.username).filter(Boolean))].sort().map(u => <option key={u} value={u} />)}
@@ -1205,7 +1205,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                       onClick={() => {
                         const savedScroll = filterBarRef.current?.scrollLeft ?? 0;
                         setFilter(key);
-                        setUserFilter('');
+                        setSearchFilter('');
                         requestAnimationFrame(() => {
                           if (filterBarRef.current) filterBarRef.current.scrollLeft = savedScroll;
                         });
@@ -1239,8 +1239,15 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
 
   const renderRequestsList = () => {
     const STATUS_ORDER = { reported: 1, completed: 2, pending: 3, canceled: 4 };
-    const base = userFilter
-      ? requests.filter(r => r.username?.toLowerCase().includes(userFilter.toLowerCase()))
+    // Recherche multi-mots, insensible à la casse et aux accents, sur le titre,
+    // l'auteur et l'utilisateur : chaque mot saisi doit apparaître dans l'un d'eux.
+    const normalize = (str) => (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const terms = normalize(searchFilter).split(/\s+/).filter(Boolean);
+    const base = terms.length
+      ? requests.filter(r => {
+          const haystack = normalize([r.title, r.author, r.username].join(' '));
+          return terms.every(t => haystack.includes(t));
+        })
       : requests;
     const filtered = sortConfig.key ? [...base].sort((a, b) => {
       let va, vb;
@@ -1262,7 +1269,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
             <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
-            <span>Aucune demande trouvée{userFilter ? ` pour « ${userFilter} »` : ''}</span>
+            <span>Aucune demande trouvée{searchFilter ? ` pour « ${searchFilter} »` : ''}</span>
           </div>
         ) : viewMode === 'table' ? (
           <div className={styles.adminTableWrapper}>
