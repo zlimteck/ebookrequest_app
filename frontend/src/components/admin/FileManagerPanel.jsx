@@ -67,9 +67,76 @@ export default function FileManagerPanel() {
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc | date-asc | name-asc | name-desc | size-desc | size-asc
   const fileInputRef = useRef(null);
 
-  const showAlertMsg = (type, message) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 6000);
+  const [storageConfig, setStorageConfig] = useState({
+    fileStorageMode: 'local',
+    bookStorageWebdavUrl: '',
+    bookStorageWebdavUsername: '',
+    bookStorageWebdavPassword: '',
+    _hasBookStorageWebdavPassword: false,
+  });
+  const [storageAlert, setStorageAlert] = useState(null);
+  const [savingStorage, setSavingStorage] = useState(false);
+  const [testingStorage, setTestingStorage] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+
+  const showStorageAlertMsg = (type, message) => {
+    setStorageAlert({ type, message });
+    setTimeout(() => setStorageAlert(null), 8000);
+  };
+
+  const loadStorageConfig = useCallback(async () => {
+    try {
+      const res = await axiosAdmin.get('/api/admin/book-storage/config');
+      setStorageConfig({
+        fileStorageMode: res.data.fileStorageMode || 'local',
+        bookStorageWebdavUrl: res.data.bookStorageWebdavUrl || '',
+        bookStorageWebdavUsername: res.data.bookStorageWebdavUsername || '',
+        bookStorageWebdavPassword: '',
+        _hasBookStorageWebdavPassword: res.data._hasBookStorageWebdavPassword || false,
+      });
+    } catch {
+      showStorageAlertMsg('error', 'Impossible de charger la configuration de stockage.');
+    }
+  }, []);
+
+  useEffect(() => { loadStorageConfig(); }, [loadStorageConfig]);
+
+  const saveStorageConfig = async () => {
+    setSavingStorage(true);
+    try {
+      await axiosAdmin.put('/api/admin/book-storage/config', storageConfig);
+      showStorageAlertMsg('success', 'Configuration de stockage enregistrée.');
+      await loadStorageConfig();
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSavingStorage(false);
+    }
+  };
+
+  const testStorageConnection = async () => {
+    setTestingStorage(true);
+    try {
+      await axiosAdmin.post('/api/admin/book-storage/test', storageConfig);
+      showStorageAlertMsg('success', 'Connexion WebDAV réussie.');
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Connexion impossible.');
+    } finally {
+      setTestingStorage(false);
+    }
+  };
+
+  const migrateToRemote = async () => {
+    setMigrating(true);
+    try {
+      const res = await axiosAdmin.post('/api/admin/book-storage/migrate');
+      showStorageAlertMsg('success', `Migration terminée : ${res.data.copied}/${res.data.total} fichier(s) copié(s)${res.data.failed > 0 ? `, ${res.data.failed} échec(s)` : ''}.`);
+      await loadFiles();
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Erreur lors de la migration.');
+    } finally {
+      setMigrating(false);
+    }
   };
 
   const loadFiles = useCallback(async () => {
@@ -196,6 +263,87 @@ export default function FileManagerPanel() {
         <p className={styles.panelSubtitle}>
           Gère les fichiers ebook stockés sur le serveur (uploads/books). Renommer ou supprimer un fichier lié à une demande met à jour ou avertit avant toute perte de lien.
         </p>
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.form}>
+          <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>Stockage des ebooks</label>
+            <select
+              className={styles.fieldInput}
+              value={storageConfig.fileStorageMode}
+              onChange={e => setStorageConfig(c => ({ ...c, fileStorageMode: e.target.value }))}
+            >
+              <option value="local">Local (dossier du serveur)</option>
+              <option value="webdav">WebDAV (serveur distant)</option>
+            </select>
+            <p className={styles.fieldHint}>
+              Un seul mode actif à la fois. En changeant de mode, les fichiers déjà présents ne sont pas déplacés automatiquement, utilisez l'outil de migration ci-dessous.
+            </p>
+          </div>
+
+          {storageConfig.fileStorageMode === 'webdav' && (
+            <>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>URL WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="url"
+                  placeholder="https://serveur-distant/webdav/ebooks"
+                  value={storageConfig.bookStorageWebdavUrl}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavUrl: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Identifiant WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  autoComplete="off"
+                  value={storageConfig.bookStorageWebdavUsername}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavUsername: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Mot de passe WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={storageConfig._hasBookStorageWebdavPassword ? '••••••••' : ''}
+                  value={storageConfig.bookStorageWebdavPassword}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavPassword: e.target.value }))}
+                />
+                {storageConfig._hasBookStorageWebdavPassword && !storageConfig.bookStorageWebdavPassword && (
+                  <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className={styles.cardActions}>
+            <button type="button" className={styles.btnTest} disabled={savingStorage} onClick={saveStorageConfig}>
+              {savingStorage ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+            {storageConfig.fileStorageMode === 'webdav' && (
+              <>
+                <button type="button" className={styles.btnSecondary} disabled={testingStorage} onClick={testStorageConnection}>
+                  {testingStorage ? 'Test…' : 'Tester la connexion'}
+                </button>
+                <button type="button" className={styles.btnSecondary} disabled={migrating} onClick={migrateToRemote}>
+                  {migrating ? 'Migration…' : 'Copier les fichiers locaux vers le distant'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {storageAlert && (
+            <div className={`${styles.alert} ${storageAlert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+              {storageAlert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+              {storageAlert.message}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className={styles.card}>

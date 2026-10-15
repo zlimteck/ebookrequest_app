@@ -21,7 +21,9 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
   listBookFiles, bookFileExists, renameBookFile, deleteBookFile, promoteUploadedFile,
+  getStorageStats, copyAllLocalToRemote, invalidateBookStorageConfigCache,
 } from '../services/fileStorageService.js';
+import { createClient as createWebdavClient } from 'webdav';
 
 // Stockage en mémoire pour le zip de restauration (jamais écrit sur disque,
 // contrairement à `upload` qui écrit les ebooks dans uploads/books/) — un
@@ -185,6 +187,96 @@ function resolveSafeFileName(name) {
   if (!safe || safe !== name) return null;
   return { safe, filePath: `books/${safe}` };
 }
+
+// ── Stockage distant des ebooks (issue #45) ─────────────────────────────────
+// GET /api/admin/book-storage/config
+router.get('/book-storage/config', async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
+    res.json({
+      fileStorageMode: doc?.fileStorageMode || 'local',
+      bookStorageWebdavUrl: doc?.bookStorageWebdavUrl || '',
+      bookStorageWebdavUsername: doc?.bookStorageWebdavUsername || '',
+      _hasBookStorageWebdavPassword: !!doc?.bookStorageWebdavPassword,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/book-storage/config
+router.put('/book-storage/config', async (req, res) => {
+  try {
+    const { fileStorageMode, bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword, _hasBookStorageWebdavPassword } = req.body;
+    if (!['local', 'webdav', 's3'].includes(fileStorageMode)) {
+      return res.status(400).json({ error: 'Mode de stockage invalide.' });
+    }
+    const update = {
+      fileStorageMode,
+      bookStorageWebdavUrl: bookStorageWebdavUrl || '',
+      bookStorageWebdavUsername: bookStorageWebdavUsername || '',
+    };
+    // Même pattern que les autres secrets de ce schéma : garder le mot de
+    // passe existant si le champ est laissé vide/masqué, l'effacer sinon.
+    if (bookStorageWebdavPassword && bookStorageWebdavPassword !== '••••••••') {
+      update.bookStorageWebdavPassword = encrypt(bookStorageWebdavPassword);
+    } else if (!bookStorageWebdavPassword && !_hasBookStorageWebdavPassword) {
+      update.bookStorageWebdavPassword = '';
+    }
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'bookStorage' }, update, { upsert: true, runValidators: true }
+    );
+    invalidateBookStorageConfigCache();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
+  }
+});
+
+// POST /api/admin/book-storage/test — teste la connexion WebDAV avec les
+// valeurs du formulaire (enregistrées ou pas encore), même pattern que le
+// test des destinations de sauvegarde distantes.
+router.post('/book-storage/test', async (req, res) => {
+  try {
+    const { bookStorageWebdavUrl, bookStorageWebdavUsername, bookStorageWebdavPassword } = req.body;
+    if (!bookStorageWebdavUrl) return res.status(400).json({ error: 'URL WebDAV requise.' });
+    let password = bookStorageWebdavPassword;
+    if (!password || password === '••••••••') {
+      const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
+      password = doc?.bookStorageWebdavPassword ? decrypt(doc.bookStorageWebdavPassword) : undefined;
+    }
+    const client = createWebdavClient(bookStorageWebdavUrl, {
+      username: bookStorageWebdavUsername || undefined,
+      password: password || undefined,
+    });
+    await client.getDirectoryContents('/');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Connexion impossible.' });
+  }
+});
+
+// POST /api/admin/book-storage/migrate — copie tous les fichiers locaux
+// actuels (uploads/books) vers la destination distante actuellement
+// configurée. Outil manuel, jamais déclenché automatiquement au changement
+// de mode (l'admin doit savoir qu'un vrai transfert de fichiers a lieu).
+router.post('/book-storage/migrate', async (req, res) => {
+  try {
+    const result = await copyAllLocalToRemote();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur lors de la migration.' });
+  }
+});
+
+// GET /api/admin/book-storage/stats
+router.get('/book-storage/stats', async (req, res) => {
+  try {
+    res.json(await getStorageStats());
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 router.get('/files', async (req, res) => {
   try {
