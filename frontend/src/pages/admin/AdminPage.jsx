@@ -944,6 +944,11 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
     settings_change: { label: 'Réglages modifiés', color: '#8b5cf6' },
     account_deleted: { label: 'Compte auto-supprimé', color: '#ef4444' },
     cron_run: { label: 'Tâche automatique', color: '#8b5cf6' },
+    storage_mode_change: { label: 'Mode de stockage modifié', color: '#8b5cf6' },
+    storage_migration: { label: 'Migration de stockage', color: '#3b82f6' },
+    backup_export: { label: 'Sauvegarde générée', color: '#3b82f6' },
+    backup_destination_change: { label: 'Destination de sauvegarde modifiée', color: '#8b5cf6' },
+    backup_history_delete: { label: 'Sauvegarde supprimée', color: '#ef4444' },
   };
 
   const renderTabContent = () => {

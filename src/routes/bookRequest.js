@@ -535,19 +535,15 @@ router.post('/:id/extra-shelves', requireAuth, requireAdmin, async (req, res) =>
 
       if (uploaderUser) {
         const { pushToCalibre } = await import('../services/calibreService.js');
-        const { default: path } = await import('path');
-        const { default: fs } = await import('fs');
-        const { fileURLToPath } = await import('url');
-        const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-        const filePath = path.join(__dirname2, '../../uploads', request.filePath);
-        if (fs.existsSync(filePath)) {
+        const { bookFileExists } = await import('../services/fileStorageService.js');
+        if (await bookFileExists(request.filePath)) {
           try {
             // Étagères du propriétaire lui-même au passage, si c'est son compte
             // qui sert à l'upload — pas de raison de les perdre au passage.
             const ownerShelves = uploaderUser._id.toString() === request.user.toString()
               ? (request.selectedShelves || [])
               : [];
-            const result = await pushToCalibre(uploaderUser, filePath, request.title, ownerShelves);
+            const result = await pushToCalibre(uploaderUser, request.filePath, request.title, ownerShelves);
             calibreBookId = result?.calibreBookId || null;
             if (calibreBookId && uploaderUser._id.toString() === request.user.toString()) {
               request.selectedShelves = ownerShelves;
@@ -627,14 +623,10 @@ router.get('/:id/convert-formats', requireAuth, async (req, res) => {
 
     const ext = fp.split('.').pop().toLowerCase();
     const { EBOOK_CONVERT_FORMATS, COMIC_CONVERT_FORMATS } = await import('../services/calibreConvertService.js');
-    const { default: pathMod } = await import('path');
-    const { default: fsMod }   = await import('fs');
-    const { fileURLToPath: ftu } = await import('url');
-    const __d = pathMod.dirname(ftu(import.meta.url));
-    const srcPath = pathMod.join(__d, '../../uploads', fp);
+    const { getBookFileSize } = await import('../services/fileStorageService.js');
 
     let fileSize = null;
-    try { fileSize = fsMod.statSync(srcPath).size; } catch {}
+    try { fileSize = await getBookFileSize(fp); } catch {}
 
     let formats = [];
     let type = null;
@@ -667,29 +659,31 @@ router.post('/:id/convert', requireAuth, async (req, res) => {
     if (!request.filePath) return res.status(400).json({ error: 'Fichier source indisponible' });
 
     const srcExt = request.filePath.split('.').pop().toLowerCase();
-    const { default: path } = await import('path');
     const { default: fs } = await import('fs');
-    const { fileURLToPath } = await import('url');
-    const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-    const uploadsDir = path.resolve(__dirname2, '../../uploads');
-    const srcPath = path.join(uploadsDir, request.filePath);
-    if (!srcPath.startsWith(uploadsDir + path.sep)) {
-      return res.status(403).json({ error: 'Accès refusé' });
-    }
+    const { bookFileExists, ensureLocalCopy } = await import('../services/fileStorageService.js');
 
-    if (!fs.existsSync(srcPath)) return res.status(404).json({ error: 'Fichier source introuvable sur le serveur' });
+    if (!(await bookFileExists(request.filePath))) return res.status(404).json({ error: 'Fichier source introuvable sur le serveur' });
+
+    // ebook-convert/cbzToPdf exigent un VRAI fichier sur disque — en mode
+    // distant, ensureLocalCopy en rapatrie une copie temporaire (supprimée
+    // juste après, isTemp indique si c'est le cas ou si c'est déjà le
+    // fichier réel local, qu'il ne faut alors jamais supprimer).
+    const { path: srcPath, isTemp } = await ensureLocalCopy(request.filePath);
 
     const targetFmt = format.toLowerCase();
     let convertedPath;
-
-    if (['cbz', 'cbr'].includes(srcExt) && targetFmt === 'pdf') {
-      // CBZ → PDF en Node.js pur
-      const { cbzToPdf } = await import('../services/cbzToPdfService.js');
-      convertedPath = await cbzToPdf(srcPath, request.title);
-    } else {
-      // Ebook → autre format via Calibre-Web
-      const { convertViaCalibреWeb } = await import('../services/calibreConvertService.js');
-      convertedPath = await convertViaCalibреWeb(srcPath, srcExt, targetFmt, request.title);
+    try {
+      if (['cbz', 'cbr'].includes(srcExt) && targetFmt === 'pdf') {
+        // CBZ → PDF en Node.js pur
+        const { cbzToPdf } = await import('../services/cbzToPdfService.js');
+        convertedPath = await cbzToPdf(srcPath, request.title);
+      } else {
+        // Ebook → autre format via Calibre-Web
+        const { convertViaCalibреWeb } = await import('../services/calibreConvertService.js');
+        convertedPath = await convertViaCalibреWeb(srcPath, srcExt, targetFmt, request.title);
+      }
+    } finally {
+      if (isTemp) fs.rm(srcPath, { force: true }, () => {});
     }
 
     // Envoyer le fichier

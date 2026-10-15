@@ -208,6 +208,27 @@ const SERVICE_DEFS = [
     error: (s) => s.error,
   },
   {
+    key: 'bookStorage',
+    label: () => 'Stockage des ebooks',
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
+      </svg>
+    ),
+    // Mode local : rien à vérifier (pas de connexion distante), carte affichée
+    // "désactivée" (grisée) plutôt qu'en erreur — ce n'est pas un problème.
+    isEnabled: (s) => s.mode === 'webdav' || s.mode === 's3',
+    isConnected: (s) => s.connected,
+    details: (s) => {
+      const modeLabel = s.mode === 'webdav' ? 'WebDAV' : s.mode === 's3' ? 'S3' : 'Local';
+      const lines = [`Mode : ${modeLabel}`];
+      if (s.mode === 'webdav' && s.url) lines.push(`URL : ${s.url}`);
+      if (s.mode === 's3' && s.url) lines.push(`Bucket : ${s.url}`);
+      return lines;
+    },
+    error: (s) => s.error,
+  },
+  {
     key: 'mcp',
     label: () => 'Serveur MCP',
     icon: (
@@ -416,6 +437,31 @@ const ServicesHealth = () => {
             </div>
           );
         })}
+
+        {(services.remoteBackupDestinations || []).map((d) => (
+          <div key={`backup-dest-${d.id}`} className={styles.card}>
+            <div className={styles.cardIcon}>
+              <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: "'Arial Black', Arial, Helvetica, sans-serif", color: 'var(--color-text-muted)', lineHeight: 1, letterSpacing: '-0.03em', width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {d.type === 's3' ? 'S3' : 'W'}
+              </span>
+            </div>
+            <div className={styles.cardBody}>
+              <div className={styles.cardTop}>
+                <span className={styles.cardName}>Sauvegarde distante · {d.label}</span>
+                <span className={styles.dotWrap}>
+                  {d.connected && <span className={styles.dotPing} />}
+                  <span className={`${styles.dot} ${d.connected ? styles.dotOk : styles.dotError}`} />
+                </span>
+              </div>
+              <ul className={styles.details}>
+                <li>{d.type === 's3' ? 'Bucket' : 'URL'} : {d.target}</li>
+              </ul>
+              {!d.connected && d.error && (
+                <p className={styles.cardError}>{d.error.length > 120 ? d.error.slice(0, 120) + '…' : d.error}</p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -490,12 +490,11 @@ router.post('/calibre/requests/:id/shelves', requireAuth, async (req, res) => {
       // Pas encore dans Calibre (ou plus : ID périmé) : upload complet au lieu
       // d'échouer, étagères demandées appliquées dans la foulée (pushToCalibre
       // fait les deux).
-      const { existsSync } = await import('fs');
-      const filePath = path.join(__dirname, '../../uploads', request.filePath);
-      if (!existsSync(filePath)) {
+      const { bookFileExists } = await import('../services/fileStorageService.js');
+      if (!(await bookFileExists(request.filePath))) {
         return res.status(404).json({ error: 'Fichier introuvable sur le serveur — impossible d\'envoyer vers Calibre.' });
       }
-      const result = await pushToCalibre(owner, filePath, request.title, shelves);
+      const result = await pushToCalibre(owner, request.filePath, request.title, shelves);
       if (!result?.calibreBookId) {
         return res.status(500).json({ error: 'Échec de l\'envoi vers Calibre-Web.' });
       }
@@ -574,7 +573,7 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
 
   (async () => {
     let pushed = 0, failed = 0, skipped = 0;
-    const { existsSync } = await import('fs');
+    const { bookFileExists } = await import('../services/fileStorageService.js');
     const url = user.calibreWeb.url.replace(/\/$/, '');
     const rawPassword = user.calibreWeb.password || '';
     const password = decrypt(rawPassword) ?? rawPassword;
@@ -600,14 +599,13 @@ router.post('/calibre/sync', requireAuth, async (req, res) => {
           continue;
         }
 
-        const filePath = path.join(__dirname, '../../uploads', request.filePath);
-        if (!existsSync(filePath)) {
+        if (!(await bookFileExists(request.filePath))) {
           skipped++;
           console.warn(`[Calibre] Sync skip "${request.title}": fichier introuvable`);
           continue;
         }
 
-        const result = await pushToCalibre(user, filePath, request.title, shelfNames);
+        const result = await pushToCalibre(user, request.filePath, request.title, shelfNames);
         const hasShelfFailures = result?.shelfResult?.failed?.length > 0;
         request.calibrePush = {
           status: hasShelfFailures ? 'partial' : 'success',

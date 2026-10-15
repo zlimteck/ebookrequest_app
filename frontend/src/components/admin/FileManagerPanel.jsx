@@ -67,10 +67,110 @@ export default function FileManagerPanel() {
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc | date-asc | name-asc | name-desc | size-desc | size-asc
   const fileInputRef = useRef(null);
 
-  const showAlertMsg = (type, message) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 6000);
+  const [storageConfig, setStorageConfig] = useState({
+    fileStorageMode: 'local',
+    bookStorageWebdavUrl: '',
+    bookStorageWebdavUsername: '',
+    bookStorageWebdavPassword: '',
+    _hasBookStorageWebdavPassword: false,
+    bookStorageS3Endpoint: '',
+    bookStorageS3Bucket: '',
+    bookStorageS3Region: 'auto',
+    bookStorageS3AccessKeyId: '',
+    bookStorageS3SecretAccessKey: '',
+    bookStorageS3Prefix: '',
+    _hasBookStorageS3SecretAccessKey: false,
+  });
+  const [storageAlert, setStorageAlert] = useState(null);
+  const [savingStorage, setSavingStorage] = useState(false);
+  const [testingStorage, setTestingStorage] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState(null);
+
+  const showStorageAlertMsg = (type, message) => {
+    setStorageAlert({ type, message });
+    setTimeout(() => setStorageAlert(null), 8000);
   };
+
+  const loadStorageConfig = useCallback(async () => {
+    try {
+      const res = await axiosAdmin.get('/api/admin/book-storage/config');
+      setStorageConfig({
+        fileStorageMode: res.data.fileStorageMode || 'local',
+        bookStorageWebdavUrl: res.data.bookStorageWebdavUrl || '',
+        bookStorageWebdavUsername: res.data.bookStorageWebdavUsername || '',
+        bookStorageWebdavPassword: '',
+        _hasBookStorageWebdavPassword: res.data._hasBookStorageWebdavPassword || false,
+        bookStorageS3Endpoint: res.data.bookStorageS3Endpoint || '',
+        bookStorageS3Bucket: res.data.bookStorageS3Bucket || '',
+        bookStorageS3Region: res.data.bookStorageS3Region || 'auto',
+        bookStorageS3AccessKeyId: res.data.bookStorageS3AccessKeyId || '',
+        bookStorageS3SecretAccessKey: '',
+        bookStorageS3Prefix: res.data.bookStorageS3Prefix || '',
+        _hasBookStorageS3SecretAccessKey: res.data._hasBookStorageS3SecretAccessKey || false,
+      });
+    } catch {
+      showStorageAlertMsg('error', 'Impossible de charger la configuration de stockage.');
+    }
+  }, []);
+
+  useEffect(() => { loadStorageConfig(); }, [loadStorageConfig]);
+
+  const saveStorageConfig = async () => {
+    setSavingStorage(true);
+    try {
+      await axiosAdmin.put('/api/admin/book-storage/config', storageConfig);
+      showStorageAlertMsg('success', 'Configuration de stockage enregistrée.');
+      await loadStorageConfig();
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSavingStorage(false);
+    }
+  };
+
+  const testStorageConnection = async () => {
+    setTestingStorage(true);
+    try {
+      await axiosAdmin.post('/api/admin/book-storage/test', storageConfig);
+      showStorageAlertMsg('success', storageConfig.fileStorageMode === 's3' ? 'Connexion S3 réussie.' : 'Connexion WebDAV réussie.');
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Connexion impossible.');
+    } finally {
+      setTestingStorage(false);
+    }
+  };
+
+  const runMigration = async (endpoint) => {
+    setMigrating(true);
+    try {
+      // Lancée en arrière-plan côté serveur (peut dépasser la limite de
+      // temps d'une requête HTTP classique), suivie par polling plutôt
+      // qu'attendue sur un seul appel.
+      await axiosAdmin.post(endpoint);
+      let status;
+      do {
+        await new Promise(r => setTimeout(r, 2000));
+        status = (await axiosAdmin.get('/api/admin/book-storage/migrate/status')).data;
+        setMigrationProgress(status);
+      } while (status.running);
+
+      if (status.error) {
+        showStorageAlertMsg('error', status.error);
+      } else {
+        showStorageAlertMsg('success', `Migration terminée : ${status.copied}/${status.total} fichier(s) copié(s)${status.skipped > 0 ? `, ${status.skipped} déjà présent(s)` : ''}${status.failed > 0 ? `, ${status.failed} échec(s)` : ''}.`);
+      }
+      await loadFiles();
+    } catch (err) {
+      showStorageAlertMsg('error', err.response?.data?.error || 'Erreur lors de la migration.');
+    } finally {
+      setMigrating(false);
+      setMigrationProgress(null);
+    }
+  };
+
+  const migrateToRemote = () => runMigration('/api/admin/book-storage/migrate');
+  const migrateToLocal = () => runMigration('/api/admin/book-storage/migrate-back');
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -201,6 +301,170 @@ export default function FileManagerPanel() {
       <div className={styles.card}>
         <div className={styles.form}>
           <div className={styles.fieldRow}>
+            <label className={styles.fieldLabel}>
+              Stockage des ebooks
+              <span className={styles.betaBadge} title="Fonctionnalité récente, encore en rodage">Bêta</span>
+            </label>
+            <select
+              className={styles.fieldInput}
+              value={storageConfig.fileStorageMode}
+              onChange={e => setStorageConfig(c => ({ ...c, fileStorageMode: e.target.value }))}
+            >
+              <option value="local">Local (dossier du serveur)</option>
+              <option value="webdav">WebDAV (serveur distant)</option>
+              <option value="s3">S3 (compatible S3)</option>
+            </select>
+            <p className={styles.fieldHint}>
+              Un seul mode actif à la fois. En changeant de mode, les fichiers déjà présents ne sont pas déplacés automatiquement, utilisez l'outil de migration ci-dessous.
+              Pour passer d'un WebDAV à un S3 (ou l'inverse), il n'y a pas de copie directe entre les deux : repassez d'abord en local (récupération depuis l'ancien distant), puis basculez vers le nouveau mode et migrez à nouveau.
+            </p>
+          </div>
+
+          {storageConfig.fileStorageMode === 'webdav' && (
+            <>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>URL WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="url"
+                  placeholder="https://serveur-distant/webdav/ebooks"
+                  value={storageConfig.bookStorageWebdavUrl}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavUrl: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Identifiant WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  autoComplete="off"
+                  value={storageConfig.bookStorageWebdavUsername}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavUsername: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Mot de passe WebDAV</label>
+                <input
+                  className={styles.fieldInput}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={storageConfig._hasBookStorageWebdavPassword ? '••••••••' : ''}
+                  value={storageConfig.bookStorageWebdavPassword}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageWebdavPassword: e.target.value }))}
+                />
+                {storageConfig._hasBookStorageWebdavPassword && !storageConfig.bookStorageWebdavPassword && (
+                  <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {storageConfig.fileStorageMode === 's3' && (
+            <>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Endpoint S3</label>
+                <input
+                  className={styles.fieldInput}
+                  type="url"
+                  placeholder="https://s3.exemple.com"
+                  value={storageConfig.bookStorageS3Endpoint}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3Endpoint: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Bucket</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  value={storageConfig.bookStorageS3Bucket}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3Bucket: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Préfixe (facultatif)</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  placeholder="ebooks/"
+                  value={storageConfig.bookStorageS3Prefix}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3Prefix: e.target.value }))}
+                />
+                <p className={styles.fieldHint}>Vide = racine du bucket. Sinon, les ebooks sont rangés dans ce sous-dossier du bucket.</p>
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Région</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  placeholder="auto"
+                  value={storageConfig.bookStorageS3Region}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3Region: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Access Key ID</label>
+                <input
+                  className={styles.fieldInput}
+                  type="text"
+                  autoComplete="off"
+                  value={storageConfig.bookStorageS3AccessKeyId}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3AccessKeyId: e.target.value }))}
+                />
+              </div>
+              <div className={styles.fieldRow}>
+                <label className={styles.fieldLabel}>Secret Access Key</label>
+                <input
+                  className={styles.fieldInput}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={storageConfig._hasBookStorageS3SecretAccessKey ? '••••••••' : ''}
+                  value={storageConfig.bookStorageS3SecretAccessKey}
+                  onChange={e => setStorageConfig(c => ({ ...c, bookStorageS3SecretAccessKey: e.target.value }))}
+                />
+                {storageConfig._hasBookStorageS3SecretAccessKey && !storageConfig.bookStorageS3SecretAccessKey && (
+                  <p className={styles.fieldHint}>Déjà enregistré, laissez vide pour conserver.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className={styles.cardActions}>
+            {(storageConfig.fileStorageMode === 'webdav' || storageConfig.fileStorageMode === 's3') && (
+              <>
+                <button type="button" className={styles.btnTest} disabled={testingStorage} onClick={testStorageConnection}>
+                  {testingStorage ? 'Test…' : 'Tester la connexion'}
+                </button>
+                <button type="button" className={styles.btnTest} disabled={migrating} onClick={migrateToRemote}>
+                  {migrating
+                    ? (migrationProgress?.total ? `Migration… (${migrationProgress.copied + migrationProgress.failed + (migrationProgress.skipped || 0)}/${migrationProgress.total})` : 'Migration…')
+                    : 'Copier les fichiers locaux vers le distant'}
+                </button>
+              </>
+            )}
+            {storageConfig.fileStorageMode === 'local' && (storageConfig.bookStorageWebdavUrl || (storageConfig.bookStorageS3Endpoint && storageConfig.bookStorageS3Bucket)) && (
+              <button type="button" className={styles.btnTest} disabled={migrating} onClick={migrateToLocal}>
+                {migrating
+                  ? (migrationProgress?.total ? `Récupération… (${migrationProgress.copied + migrationProgress.failed + (migrationProgress.skipped || 0)}/${migrationProgress.total})` : 'Récupération…')
+                  : 'Récupérer les fichiers distants vers le local'}
+              </button>
+            )}
+            <button type="button" className={styles.btnPrimary} disabled={savingStorage} onClick={saveStorageConfig}>
+              {savingStorage ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+
+          {storageAlert && (
+            <div className={`${styles.alert} ${storageAlert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+              {storageAlert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+              {storageAlert.message}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.form}>
+          <div className={styles.fieldRow}>
             <label className={styles.fieldLabel}>Ajouter un fichier</label>
             <label className={styles.dropZone}>
               <input
@@ -239,6 +503,9 @@ export default function FileManagerPanel() {
       <div className={`${styles.card} ${styles.filesSection}`}>
         <p className={styles.filesSectionTitle}>
           Fichiers ({files.length}{files.length > 0 ? ` · ${formatSize(files.reduce((sum, f) => sum + f.size, 0))}` : ''})
+          <span className={styles.linkedBadge}>
+            {storageConfig.fileStorageMode === 'webdav' ? 'WebDAV' : storageConfig.fileStorageMode === 's3' ? 'S3' : 'Local'}
+          </span>
         </p>
 
         {files.length > 0 && (

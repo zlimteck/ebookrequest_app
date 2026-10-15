@@ -12,10 +12,7 @@ import { startProwlarrDownload } from './prowlarrDownloadService.js';
 import appriseService from './appriseService.js';
 import { sendDownloadFailedToAdminsEmail, sendBookCompletedToAdminsEmail, sendKindleDelivery } from './emailService.js';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { readBookFile, bookFileExists } from './fileStorageService.js';
 import { sendPushToUser } from './webPushService.js';
 import { emitToUser, emitToAdmins } from './socketService.js';
 import { decrypt } from './cryptoService.js';
@@ -123,16 +120,16 @@ export async function notifyCompletion(bookRequest, meta = {}) {
         user.kindleEmail &&
         user.notificationPreferences?.kindle?.enabled
       ) {
-        const uploadsRoot = path.resolve(__dirname, '../../uploads');
-        const absolutePath = path.resolve(uploadsRoot, bookRequest.filePath);
-        if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
-          const filename = path.basename(absolutePath);
-          sendKindleDelivery(user.kindleEmail, absolutePath, filename)
-            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
-            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
-        } else {
-          console.error('[Kindle] Fichier introuvable ou chemin invalide:', bookRequest.filePath);
-        }
+        const filename = path.basename(bookRequest.filePath);
+        bookFileExists(bookRequest.filePath).then(async exists => {
+          if (!exists) {
+            console.error('[Kindle] Fichier introuvable:', bookRequest.filePath);
+            return;
+          }
+          const buffer = await readBookFile(bookRequest.filePath);
+          await sendKindleDelivery(user.kindleEmail, buffer, filename);
+          console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`);
+        }).catch(e => console.error('[Kindle] Erreur envoi:', e.message));
       }
     }
   } catch (e) {

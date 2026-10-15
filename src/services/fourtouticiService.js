@@ -1,8 +1,7 @@
 import axios from 'axios';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import ConnectorSettings from '../models/ConnectorSettings.js';
+import { writeBookFile } from './fileStorageService.js';
 import BookRequest from '../models/BookRequest.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
@@ -19,9 +18,6 @@ import { isGoogleBooksSearchEnabled } from './googleBooksConfig.js';
 // l'URL reste donc configurable côté admin, comme pour LibGen.
 // Couverture : EBOOK, BD, MANGA, JOURNAL, MAGAZINE, AUDIO, AUTRES — on ne recherche
 // que les catégories livres par défaut (EBOOK, BD, MANGA).
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const DEFAULT_URL = 'https://fourtoutici.cc';
 
@@ -373,10 +369,7 @@ export async function downloadFromFourtoutici(fileId, requestId) {
   const filename = `${baseName}.${ext}`.replace(/[<>:"/\\|?*]/g, '').trim() || `${fileId}.${ext}`;
 
   // ── Save file ─────────────────────────────────────────────────────────────
-  const uploadsDir = path.join(__dirname, '../../uploads/books');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  const destPath = path.join(uploadsDir, filename);
-  fs.writeFileSync(destPath, fileBuffer);
+  await writeBookFile(`books/${filename}`, fileBuffer);
   console.log(`[Fourtoutici] ✓ Fichier sauvegardé: ${filename} (${(fileBuffer.length / 1024).toFixed(0)} Ko)`);
 
   // ── Complete request ──────────────────────────────────────────────────────

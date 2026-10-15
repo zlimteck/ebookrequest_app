@@ -20,6 +20,79 @@ const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
+// Stockage distant des ebooks (issue #45) — WebDAV uniquement pour l'instant.
+async function checkBookStorage() {
+  const doc = await ConnectorSettings.findOne({ service: 'bookStorage' }).lean();
+  const mode = doc?.fileStorageMode || 'local';
+  if (mode === 'local') return { mode, connected: null, url: null, error: null };
+  try {
+    if (mode === 's3') {
+      if (!doc?.bookStorageS3Endpoint || !doc?.bookStorageS3Bucket) {
+        return { mode, connected: false, url: null, error: 'Endpoint ou bucket S3 non configuré' };
+      }
+      const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      const client = new S3Client({
+        endpoint: doc.bookStorageS3Endpoint,
+        region: doc.bookStorageS3Region || 'auto',
+        credentials: {
+          accessKeyId: doc.bookStorageS3AccessKeyId || '',
+          secretAccessKey: doc.bookStorageS3SecretAccessKey ? decrypt(doc.bookStorageS3SecretAccessKey) : '',
+        },
+        forcePathStyle: true,
+      });
+      await client.send(new ListObjectsV2Command({ Bucket: doc.bookStorageS3Bucket, MaxKeys: 1 }));
+      return { mode, connected: true, url: doc.bookStorageS3Bucket, error: null };
+    }
+    const { createClient } = await import('webdav');
+    if (!doc?.bookStorageWebdavUrl) return { mode, connected: false, url: null, error: 'URL WebDAV non configurée' };
+    const client = createClient(doc.bookStorageWebdavUrl, {
+      username: doc.bookStorageWebdavUsername || undefined,
+      password: doc.bookStorageWebdavPassword ? decrypt(doc.bookStorageWebdavPassword) : undefined,
+    });
+    await client.getDirectoryContents('/');
+    return { mode, connected: true, url: doc.bookStorageWebdavUrl, error: null };
+  } catch (err) {
+    return { mode, connected: false, url: null, error: err.message };
+  }
+}
+
+// Destinations de sauvegarde distantes (S3/WebDAV, potentiellement plusieurs
+// à la fois) — une entrée par destination activée, même raisonnement que
+// pour le bouton "Tester" du panneau Sauvegarde mais en lecture seule ici.
+async function checkRemoteBackupDestinations() {
+  try {
+    const { getDestinations } = await import('../services/remoteBackupService.js');
+    const { createClient } = await import('webdav');
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const destinations = (await getDestinations()).filter(d => d.enabled);
+    return Promise.all(destinations.map(async (d) => {
+      const label = d.label || (d.type === 's3' ? 'S3' : 'WebDAV');
+      try {
+        if (d.type === 's3') {
+          const client = new S3Client({
+            endpoint: d.s3Endpoint,
+            region: d.s3Region || 'auto',
+            credentials: { accessKeyId: d.s3AccessKeyId, secretAccessKey: decrypt(d.s3SecretAccessKey) },
+            forcePathStyle: true,
+          });
+          await client.send(new ListObjectsV2Command({ Bucket: d.s3Bucket, MaxKeys: 1 }));
+          return { id: d.id, type: 's3', label, connected: true, target: d.s3Bucket, error: null };
+        }
+        const client = createClient(d.webdavUrl, {
+          username: d.webdavUsername || undefined,
+          password: d.webdavPassword ? decrypt(d.webdavPassword) : undefined,
+        });
+        await client.getDirectoryContents('/');
+        return { id: d.id, type: 'webdav', label, connected: true, target: d.webdavUrl, error: null };
+      } catch (err) {
+        return { id: d.id, type: d.type, label, connected: false, target: d.type === 's3' ? d.s3Bucket : d.webdavUrl, error: err.message };
+      }
+    }));
+  } catch (err) {
+    return [];
+  }
+}
+
 async function checkMcpServer() {
   const mcpUrl = (process.env.MCP_URL || '').replace(/\/$/, '');
   const mcpInternalUrl = (process.env.MCP_INTERNAL_URL || mcpUrl).replace(/\/$/, '');
@@ -460,7 +533,7 @@ function withTimeout(promise, ms, fallback) {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations] = await Promise.all([
       withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
       withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
       withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
@@ -474,6 +547,8 @@ export const getServicesHealth = async (req, res) => {
       withTimeout(checkFourtouticiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkUltimZoneConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkProwlarrConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkBookStorage(), 8000, { mode: 'local', connected: null, url: null, error: 'timeout' }),
+      withTimeout(checkRemoteBackupDestinations(), 8000, []),
     ]);
 
     res.json({
@@ -563,6 +638,13 @@ export const getServicesHealth = async (req, res) => {
           downloadClientsTotal: prowlarr.downloadClientsTotal ?? null,
           error: prowlarr.error || null,
         },
+        bookStorage: {
+          mode: bookStorage.mode,
+          connected: bookStorage.connected,
+          url: bookStorage.url || null,
+          error: bookStorage.error || null,
+        },
+        remoteBackupDestinations,
       },
     });
   } catch (error) {

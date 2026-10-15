@@ -1,13 +1,9 @@
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import User from '../models/User.js';
 import BookRequest from '../models/BookRequest.js';
 import OpdsLog from '../models/OpdsLog.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { readBookFile, bookFileExists } from '../services/fileStorageService.js';
 
 const router = express.Router();
 
@@ -183,10 +179,11 @@ router.get('/:token/download/:requestId', async (req, res) => {
 
     if (book.filePath) {
       // Fichier uploadé — on le sert directement
-      const filePath = path.join(__dirname, '../../uploads', book.filePath);
-      if (!fs.existsSync(filePath)) return res.status(404).send('Fichier introuvable sur le serveur');
-      const fileName = path.basename(filePath);
-      return res.download(filePath, fileName);
+      if (!(await bookFileExists(book.filePath))) return res.status(404).send('Fichier introuvable sur le serveur');
+      const fileName = path.basename(book.filePath);
+      const buffer = await readBookFile(book.filePath);
+      res.attachment(fileName);
+      return res.send(buffer);
     }
 
     res.redirect(book.downloadLink);

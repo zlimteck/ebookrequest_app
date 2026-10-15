@@ -60,6 +60,7 @@ async function getAdminEmailPrefs() {
 // Invalide le cache quand les préférences sont modifiées
 export function invalidateAdminEmailPrefsCache() { _adminEmailPrefsCache = null; }
 import { runPostCompletionHooks } from '../services/postCompletionHooks.js';
+import { readBookFile, bookFileExists, getBookFileSize, promoteUploadedFile } from '../services/fileStorageService.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -285,14 +286,13 @@ export const createBookRequest = async (req, res) => {
         user.kindleEmail &&
         user.notificationPreferences?.kindle?.enabled
       ) {
-        const uploadsRoot = path.resolve(__dirname, '../../uploads');
-        const absolutePath = path.resolve(uploadsRoot, newRequest.filePath);
-        if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
-          const filename = path.basename(absolutePath);
-          sendKindleDelivery(user.kindleEmail, absolutePath, filename, user._id)
-            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
-            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
-        }
+        const filename = path.basename(newRequest.filePath);
+        bookFileExists(newRequest.filePath).then(async exists => {
+          if (!exists) return;
+          const buffer = await readBookFile(newRequest.filePath);
+          await sendKindleDelivery(user.kindleEmail, buffer, filename, user._id);
+          console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`);
+        }).catch(e => console.error('[Kindle] Erreur envoi:', e.message));
       }
 
       // Post-completion hooks (non-blocking) — même flux que les autres voies
@@ -975,14 +975,13 @@ export const updateRequestStatus = async (req, res) => {
             appriseService.notifyUserBookCompleted(u, currentRequest).catch(() => {});
             // Kindle
             if (currentRequest.filePath && u.emailVerified && u.kindleEmail && u.notificationPreferences?.kindle?.enabled) {
-              const uploadsRoot = path.resolve(__dirname, '../../uploads');
-              const absolutePath = path.resolve(uploadsRoot, currentRequest.filePath);
-              if (absolutePath.startsWith(uploadsRoot + path.sep) && fs.existsSync(absolutePath)) {
-                const filename = path.basename(absolutePath);
-                sendKindleDelivery(u.kindleEmail, absolutePath, filename, u._id)
-                  .then(() => console.log(`[Kindle] Envoyé à ${u.kindleEmail} : ${filename}`))
-                  .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
-              }
+              const filename = path.basename(currentRequest.filePath);
+              bookFileExists(currentRequest.filePath).then(async exists => {
+                if (!exists) return;
+                const buffer = await readBookFile(currentRequest.filePath);
+                await sendKindleDelivery(u.kindleEmail, buffer, filename, u._id);
+                console.log(`[Kindle] Envoyé à ${u.kindleEmail} : ${filename}`);
+              }).catch(e => console.error('[Kindle] Erreur envoi:', e.message));
             }
           }).catch(() => {});
         // Email aux admins — complétion
@@ -1060,35 +1059,33 @@ export const downloadEbook = async (req, res) => {
 
     // Vérifier si c'est un fichier local ou un lien externe
     if (request.filePath) {
-      const uploadsDir = path.resolve(__dirname, '../../uploads');
-      const filePath = path.join(uploadsDir, request.filePath);
-      if (!filePath.startsWith(uploadsDir + path.sep)) {
-        return res.status(403).json({ error: 'Accès refusé' });
-      }
-
-      if (!fs.existsSync(filePath)) {
-        console.error(`Fichier introuvable: ${filePath}`);
-        return res.status(404).json({ 
+      if (!(await bookFileExists(request.filePath))) {
+        console.error(`Fichier introuvable: ${request.filePath}`);
+        return res.status(404).json({
           error: 'Fichier introuvable sur le serveur',
           details: `Le fichier ${request.filePath} n'existe pas dans le répertoire de téléchargement`
         });
       }
-      
+
       // Mettre à jour la date de téléchargement
       request.downloadedAt = new Date();
       await request.save();
-      
-      // Définir les en-têtes pour le téléchargement
-      const fileName = path.basename(filePath);
-      res.download(filePath, fileName, (err) => {
-        if (err) {
-          console.error('Erreur lors de l\'envoi du fichier:', err);
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'Erreur lors de l\'envoi du fichier' });
-          }
+
+      // Lu en mémoire puis servi via res.attachment : le fichier peut venir
+      // d'un stockage distant (WebDAV/S3), jamais forcément un chemin disque
+      // local — voir fileStorageService.js (issue #45).
+      const fileName = path.basename(request.filePath);
+      try {
+        const buffer = await readBookFile(request.filePath);
+        res.attachment(fileName);
+        res.send(buffer);
+      } catch (err) {
+        console.error('Erreur lors de l\'envoi du fichier:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Erreur lors de l\'envoi du fichier' });
         }
-      });
-      
+      }
+
     } else if (request.downloadLink) {
       // Redirection vers un lien externe
       request.downloadedAt = new Date();
@@ -1175,24 +1172,20 @@ export const sendEbookByEmail = async (req, res) => {
       return res.status(400).json({ error: 'Aucun fichier disponible pour cette demande.' });
     }
 
-    const uploadsDir = path.resolve(__dirname, '../../uploads');
-    const absolutePath = path.resolve(uploadsDir, request.filePath);
-    if (!absolutePath.startsWith(uploadsDir + path.sep)) {
-      return res.status(403).json({ error: 'Accès refusé' });
-    }
-    if (!fs.existsSync(absolutePath)) {
+    if (!(await bookFileExists(request.filePath))) {
       return res.status(404).json({ error: 'Fichier introuvable sur le serveur.' });
     }
 
-    const { size } = fs.statSync(absolutePath);
+    const size = await getBookFileSize(request.filePath);
     if (size > MAX_EBOOK_ATTACHMENT_BYTES) {
       return res.status(413).json({
         error: `Le fichier dépasse la taille maximale autorisée par email (${Math.round(MAX_EBOOK_ATTACHMENT_BYTES / (1024 * 1024))} Mo). Utilisez le téléchargement classique.`,
       });
     }
 
-    const filename = path.basename(absolutePath);
-    await sendBookByEmail(targetEmail, absolutePath, filename, { senderId: req.user.id, title: request.title, author: request.author });
+    const filename = path.basename(request.filePath);
+    const buffer = await readBookFile(request.filePath);
+    await sendBookByEmail(targetEmail, buffer, filename, { senderId: req.user.id, title: request.title, author: request.author });
 
     // Aucun autre moyen de savoir que l'utilisateur a récupéré son livre une
     // fois envoyé par email (pas de requête de téléchargement classique) —
@@ -1223,6 +1216,10 @@ export const addDownloadLink = async (req, res) => {
 
     // Si un fichier a été téléversé
     if (file) {
+      // multer écrit toujours d'abord dans uploads/books/ en local ;
+      // promoteUploadedFile l'envoie vers le stockage réellement configuré
+      // si un mode distant est actif, sans rien faire sinon.
+      await promoteUploadedFile(file.path, `books/${file.filename}`);
       updateData.filePath = `books/${file.filename}`;
       updateData.downloadLink = ''; // Effacer l'ancien lien s'il existe
       console.log(`Fichier téléversé: ${file.filename}`);
@@ -1302,20 +1299,16 @@ export const addDownloadLink = async (req, res) => {
         user.kindleEmail &&
         user.notificationPreferences?.kindle?.enabled
       ) {
-        const uploadsRoot = path.resolve(__dirname, '../../uploads');
-        const absolutePath = path.resolve(uploadsRoot, request.filePath);
-
-        // Protection path traversal : le fichier doit rester dans uploads/
-        if (!absolutePath.startsWith(uploadsRoot + path.sep)) {
-          console.error('[Kindle] Chemin invalide bloqué:', request.filePath);
-        } else if (!fs.existsSync(absolutePath)) {
-          console.error('[Kindle] Fichier introuvable:', absolutePath);
-        } else {
-          const filename = path.basename(absolutePath);
-          sendKindleDelivery(user.kindleEmail, absolutePath, filename, user._id)
-            .then(() => console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`))
-            .catch(e => console.error('[Kindle] Erreur envoi:', e.message));
-        }
+        const filename = path.basename(request.filePath);
+        bookFileExists(request.filePath).then(async exists => {
+          if (!exists) {
+            console.error('[Kindle] Fichier introuvable:', request.filePath);
+            return;
+          }
+          const buffer = await readBookFile(request.filePath);
+          await sendKindleDelivery(user.kindleEmail, buffer, filename, user._id);
+          console.log(`[Kindle] Envoyé à ${user.kindleEmail} : ${filename}`);
+        }).catch(e => console.error('[Kindle] Erreur envoi:', e.message));
       }
     }
 

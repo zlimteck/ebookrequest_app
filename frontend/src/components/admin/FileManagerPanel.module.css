@@ -52,10 +52,27 @@
   letter-spacing: 0.04em;
 }
 
+.betaBadge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .fieldInput {
   width: 100%;
-  padding: 0.6rem 0.9rem;
+  height: 2.6rem;
+  padding: 0 0.9rem;
   font-size: 0.9rem;
+  line-height: 2.6rem;
   background: var(--color-bg3);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -136,21 +153,20 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.82rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.875rem;
   font-weight: 500;
   background: none;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
+  border: 1px solid rgba(16,185,129,0.4);
+  color: #10b981;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .btnTest:hover:not(:disabled) {
-  background: var(--color-bg3);
-  color: var(--color-accent);
-  border-color: var(--color-accent);
+  background: rgba(16,185,129,0.08);
+  border-color: #10b981;
 }
 
 .btnTest:disabled { opacity: 0.5; cursor: not-allowed; }
