@@ -249,7 +249,20 @@ router.post('/book-storage/test', async (req, res) => {
       username: bookStorageWebdavUsername || undefined,
       password: password || undefined,
     });
-    await client.getDirectoryContents('/');
+    // Le dossier pointé par l'URL peut ne pas encore exister (cas normal
+    // d'une première configuration, ex. "/ebookrequest/books" jamais créé
+    // sur le serveur distant) — on le crée plutôt que de considérer ça
+    // comme un échec de connexion, cohérent avec writeBookFile qui fait
+    // la même chose avant chaque écriture.
+    try {
+      await client.getDirectoryContents('/');
+    } catch (err) {
+      if (err.status === 404) {
+        await client.createDirectory('/', { recursive: true });
+      } else {
+        throw err;
+      }
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Connexion impossible.' });

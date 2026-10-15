@@ -94,7 +94,17 @@ export async function writeBookFile(relativePath, buffer) {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    await client.putFileContents(webdavRemotePath(relativePath), buffer, { overwrite: true });
+    // Beaucoup de serveurs WebDAV refusent d'écrire un fichier dans un
+    // dossier qui n'existe pas encore, contrairement à un vrai système de
+    // fichiers local qui l'aurait créé à la volée. Le dossier parent
+    // (ex. "books") n'est jamais créé ailleurs, donc on le garantit ici
+    // avant chaque écriture.
+    const remotePath = webdavRemotePath(relativePath);
+    const remoteDir = path.posix.dirname(remotePath);
+    if (remoteDir !== '/' && remoteDir !== '.') {
+      await client.createDirectory(remoteDir, { recursive: true }).catch(() => {});
+    }
+    await client.putFileContents(remotePath, buffer, { overwrite: true });
     return;
   }
   const fullPath = resolveLocalPath(relativePath);
@@ -178,7 +188,17 @@ export async function listBookFiles() {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    const items = await client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR));
+    // Le dossier "books" n'existe pas forcément encore côté distant (ex.
+    // juste après avoir activé le mode WebDAV, avant toute écriture) —
+    // même comportement que côté local où BOOKS_DIR est créé vide au
+    // démarrage : une liste vide, pas une erreur.
+    let items;
+    try {
+      items = await client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR));
+    } catch (err) {
+      if (err.status === 404) return [];
+      throw err;
+    }
     return items
       .filter(i => i.type === 'file')
       .map(i => ({ name: i.basename, size: i.size, mtime: new Date(i.lastmod) }));
