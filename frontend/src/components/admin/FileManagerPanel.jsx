@@ -78,6 +78,7 @@ export default function FileManagerPanel() {
   const [savingStorage, setSavingStorage] = useState(false);
   const [testingStorage, setTestingStorage] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState(null);
 
   const showStorageAlertMsg = (type, message) => {
     setStorageAlert({ type, message });
@@ -129,13 +130,28 @@ export default function FileManagerPanel() {
   const migrateToRemote = async () => {
     setMigrating(true);
     try {
-      const res = await axiosAdmin.post('/api/admin/book-storage/migrate');
-      showStorageAlertMsg('success', `Migration terminée : ${res.data.copied}/${res.data.total} fichier(s) copié(s)${res.data.failed > 0 ? `, ${res.data.failed} échec(s)` : ''}.`);
+      // Lancée en arrière-plan côté serveur (peut dépasser la limite de
+      // temps d'une requête HTTP classique), suivie par polling plutôt
+      // qu'attendue sur un seul appel.
+      await axiosAdmin.post('/api/admin/book-storage/migrate');
+      let status;
+      do {
+        await new Promise(r => setTimeout(r, 2000));
+        status = (await axiosAdmin.get('/api/admin/book-storage/migrate/status')).data;
+        setMigrationProgress(status);
+      } while (status.running);
+
+      if (status.error) {
+        showStorageAlertMsg('error', status.error);
+      } else {
+        showStorageAlertMsg('success', `Migration terminée : ${status.copied}/${status.total} fichier(s) copié(s)${status.failed > 0 ? `, ${status.failed} échec(s)` : ''}.`);
+      }
       await loadFiles();
     } catch (err) {
       showStorageAlertMsg('error', err.response?.data?.error || 'Erreur lors de la migration.');
     } finally {
       setMigrating(false);
+      setMigrationProgress(null);
     }
   };
 
@@ -322,19 +338,21 @@ export default function FileManagerPanel() {
           )}
 
           <div className={styles.cardActions}>
-            <button type="button" className={styles.btnTest} disabled={savingStorage} onClick={saveStorageConfig}>
-              {savingStorage ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
             {storageConfig.fileStorageMode === 'webdav' && (
               <>
-                <button type="button" className={styles.btnSecondary} disabled={testingStorage} onClick={testStorageConnection}>
+                <button type="button" className={styles.btnTest} disabled={testingStorage} onClick={testStorageConnection}>
                   {testingStorage ? 'Test…' : 'Tester la connexion'}
                 </button>
-                <button type="button" className={styles.btnSecondary} disabled={migrating} onClick={migrateToRemote}>
-                  {migrating ? 'Migration…' : 'Copier les fichiers locaux vers le distant'}
+                <button type="button" className={styles.btnTest} disabled={migrating} onClick={migrateToRemote}>
+                  {migrating
+                    ? (migrationProgress?.total ? `Migration… (${migrationProgress.copied + migrationProgress.failed}/${migrationProgress.total})` : 'Migration…')
+                    : 'Copier les fichiers locaux vers le distant'}
                 </button>
               </>
             )}
+            <button type="button" className={styles.btnPrimary} disabled={savingStorage} onClick={saveStorageConfig}>
+              {savingStorage ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
           </div>
 
           {storageAlert && (
@@ -387,6 +405,9 @@ export default function FileManagerPanel() {
       <div className={`${styles.card} ${styles.filesSection}`}>
         <p className={styles.filesSectionTitle}>
           Fichiers ({files.length}{files.length > 0 ? ` · ${formatSize(files.reduce((sum, f) => sum + f.size, 0))}` : ''})
+          <span className={styles.linkedBadge}>
+            {storageConfig.fileStorageMode === 'webdav' ? 'WebDAV' : storageConfig.fileStorageMode === 's3' ? 'S3' : 'Local'}
+          </span>
         </p>
 
         {files.length > 0 && (

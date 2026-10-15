@@ -62,10 +62,33 @@ function getWebdavClient(config) {
   });
 }
 
+// La lib `webdav` ne pose aucun timeout par défaut sur ses requêtes — un
+// serveur qui ne répond jamais (réseau, mauvaise config) bloque l'appelant
+// indéfiniment plutôt que de renvoyer une erreur claire. Enveloppe tout
+// appel webdav avec une limite de temps explicite.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Délai dépassé (${label})`)), ms)),
+  ]);
+}
+
 // `relativePath` (ex. "books/foo.epub") est reproduit tel quel sous la racine
 // WebDAV configurée — même arborescence relative que côté local.
+// L'URL WebDAV configurée désigne directement le dossier équivalent à
+// BOOKS_DIR (le dossier final où vivent les ebooks), pas un équivalent de
+// UPLOADS_ROOT avec un sous-dossier "books/" en plus — contrairement au
+// mode local où relativePath ("books/foo.epub") reste relatif à
+// UPLOADS_ROOT. Le préfixe "books/" est donc retiré ici avant de
+// reproduire le reste du chemin sous la racine WebDAV, sinon chaque
+// fichier finit dans un sous-dossier "books/" en double sur le serveur
+// distant (ex. ".../ebookrequest/books/books/foo.epub").
 function webdavRemotePath(relativePath) {
-  return `/${relativePath.replace(/^\/+/, '')}`;
+  // "books/foo.epub" perd son préfixe normalement, mais "books" seul (passé
+  // par le listing, sans nom de fichier derrière) doit aussi être reconnu,
+  // pas seulement "books/" suivi de quelque chose.
+  const stripped = relativePath.replace(/^\/+/, '').replace(/^books(\/|$)/, '');
+  return `/${stripped}`;
 }
 
 // Chemin absolu local, confiné à UPLOADS_ROOT — refuse toute tentative de
@@ -83,7 +106,7 @@ export async function readBookFile(relativePath) {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    const buffer = await client.getFileContents(webdavRemotePath(relativePath), { format: 'binary' });
+    const buffer = await withTimeout(client.getFileContents(webdavRemotePath(relativePath), { format: 'binary' }), 60000, 'lecture fichier distant');
     return Buffer.from(buffer);
   }
   return fs.readFileSync(resolveLocalPath(relativePath));
@@ -102,9 +125,9 @@ export async function writeBookFile(relativePath, buffer) {
     const remotePath = webdavRemotePath(relativePath);
     const remoteDir = path.posix.dirname(remotePath);
     if (remoteDir !== '/' && remoteDir !== '.') {
-      await client.createDirectory(remoteDir, { recursive: true }).catch(() => {});
+      await withTimeout(client.createDirectory(remoteDir, { recursive: true }), 20000, 'création dossier distant').catch(() => {});
     }
-    await client.putFileContents(remotePath, buffer, { overwrite: true });
+    await withTimeout(client.putFileContents(remotePath, buffer, { overwrite: true }), 60000, 'écriture fichier distant');
     return;
   }
   const fullPath = resolveLocalPath(relativePath);
@@ -135,7 +158,7 @@ export async function bookFileExists(relativePath) {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    return client.exists(webdavRemotePath(relativePath));
+    return withTimeout(client.exists(webdavRemotePath(relativePath)), 20000, 'vérification existence distante');
   }
   return fs.existsSync(resolveLocalPath(relativePath));
 }
@@ -146,7 +169,7 @@ export async function deleteBookFile(relativePath) {
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
     try {
-      await client.deleteFile(webdavRemotePath(relativePath));
+      await withTimeout(client.deleteFile(webdavRemotePath(relativePath)), 20000, 'suppression fichier distant');
     } catch (err) {
       if (err?.status !== 404) throw err;
     }
@@ -161,7 +184,7 @@ export async function getBookFileSize(relativePath) {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    const stat = await client.stat(webdavRemotePath(relativePath));
+    const stat = await withTimeout(client.stat(webdavRemotePath(relativePath)), 20000, 'lecture taille distante');
     return stat.size;
   }
   return fs.statSync(resolveLocalPath(relativePath)).size;
@@ -172,7 +195,7 @@ export async function renameBookFile(oldRelativePath, newRelativePath) {
   const config = await getConfig();
   if (config.fileStorageMode === 'webdav') {
     const client = getWebdavClient(config);
-    await client.moveFile(webdavRemotePath(oldRelativePath), webdavRemotePath(newRelativePath));
+    await withTimeout(client.moveFile(webdavRemotePath(oldRelativePath), webdavRemotePath(newRelativePath)), 20000, 'renommage fichier distant');
     return;
   }
   fs.renameSync(resolveLocalPath(oldRelativePath), resolveLocalPath(newRelativePath));
@@ -194,7 +217,7 @@ export async function listBookFiles() {
     // démarrage : une liste vide, pas une erreur.
     let items;
     try {
-      items = await client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR));
+      items = await withTimeout(client.getDirectoryContents(webdavRemotePath(BOOKS_SUBDIR)), 20000, 'listing dossier distant');
     } catch (err) {
       if (err.status === 404) return [];
       throw err;
@@ -241,23 +264,28 @@ export async function ensureLocalCopy(relativePath) {
 }
 
 /** Copie tous les fichiers actuellement en local (dossier books/) vers la destination distante configurée — outil de migration manuelle, pas automatique au changement de mode. */
-export async function copyAllLocalToRemote() {
+export async function copyAllLocalToRemote(onProgress) {
   const config = await getConfig();
   if (config.fileStorageMode !== 'webdav') {
     throw new Error('Aucune destination distante active.');
   }
-  const client = getWebdavClient(config);
   const localFiles = fs.readdirSync(BOOKS_DIR).filter(name => fs.statSync(path.join(BOOKS_DIR, name)).isFile());
+  console.log(`[FileStorage] Migration : ${localFiles.length} fichier(s) local(aux) à copier vers le distant.`);
   let copied = 0, failed = 0;
   for (const name of localFiles) {
     try {
       const buffer = fs.readFileSync(path.join(BOOKS_DIR, name));
-      await client.putFileContents(webdavRemotePath(`${BOOKS_SUBDIR}/${name}`), buffer, { overwrite: true });
+      // Réutilise writeBookFile (crée le dossier distant manquant, timeout
+      // sur chaque appel webdav) plutôt que de dupliquer cette logique ici.
+      await writeBookFile(`${BOOKS_SUBDIR}/${name}`, buffer);
       copied++;
+      console.log(`[FileStorage] Migration : "${name}" copié (${copied}/${localFiles.length}).`);
     } catch (err) {
-      console.error(`[FileStorage] Échec copie "${name}" vers le distant:`, err.message);
+      console.error(`[FileStorage] Migration : échec copie "${name}" vers le distant :`, err.message);
       failed++;
     }
+    onProgress?.({ copied, failed, total: localFiles.length, done: false });
   }
+  console.log(`[FileStorage] Migration terminée : ${copied} copié(s), ${failed} échec(s), ${localFiles.length} au total.`);
   return { copied, failed, total: localFiles.length };
 }

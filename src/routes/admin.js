@@ -254,11 +254,15 @@ router.post('/book-storage/test', async (req, res) => {
     // sur le serveur distant) — on le crée plutôt que de considérer ça
     // comme un échec de connexion, cohérent avec writeBookFile qui fait
     // la même chose avant chaque écriture.
+    const withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Délai dépassé, le serveur WebDAV ne répond pas.')), ms)),
+    ]);
     try {
-      await client.getDirectoryContents('/');
+      await withTimeout(client.getDirectoryContents('/'), 20000);
     } catch (err) {
       if (err.status === 404) {
-        await client.createDirectory('/', { recursive: true });
+        await withTimeout(client.createDirectory('/', { recursive: true }), 20000);
       } else {
         throw err;
       }
@@ -269,17 +273,35 @@ router.post('/book-storage/test', async (req, res) => {
   }
 });
 
-// POST /api/admin/book-storage/migrate — copie tous les fichiers locaux
-// actuels (uploads/books) vers la destination distante actuellement
-// configurée. Outil manuel, jamais déclenché automatiquement au changement
-// de mode (l'admin doit savoir qu'un vrai transfert de fichiers a lieu).
+// Migration en masse vers le distant — peut facilement dépasser la limite de
+// temps d'une requête HTTP classique (reverse proxy/Cloudflare) si beaucoup
+// de fichiers ou de gros fichiers. Lancée en arrière-plan (fire-and-forget),
+// suivie par polling via /book-storage/migrate/status plutôt qu'attendue sur
+// une seule requête qui finirait par être coupée en cours de route.
+let migrationStatus = { running: false, copied: 0, failed: 0, total: 0, error: null };
+
+// POST /api/admin/book-storage/migrate — démarre la migration, répond
+// immédiatement sans attendre la fin.
 router.post('/book-storage/migrate', async (req, res) => {
-  try {
-    const result = await copyAllLocalToRemote();
-    res.json({ success: true, ...result });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Erreur lors de la migration.' });
+  if (migrationStatus.running) {
+    return res.status(409).json({ error: 'Une migration est déjà en cours.' });
   }
+  migrationStatus = { running: true, copied: 0, failed: 0, total: 0, error: null };
+  res.json({ success: true, started: true });
+
+  try {
+    const result = await copyAllLocalToRemote((progress) => {
+      migrationStatus = { ...migrationStatus, ...progress };
+    });
+    migrationStatus = { running: false, ...result, error: null };
+  } catch (err) {
+    migrationStatus = { ...migrationStatus, running: false, error: err.message || 'Erreur lors de la migration.' };
+  }
+});
+
+// GET /api/admin/book-storage/migrate/status
+router.get('/book-storage/migrate/status', (req, res) => {
+  res.json(migrationStatus);
 });
 
 // GET /api/admin/book-storage/stats
