@@ -719,6 +719,59 @@ curl "https://app.ndd.fr/api/admin/download-logs?page=1&limit=50&searchMode=dire
   -H "Authorization: Bearer <token>"
 ```
 
+### `GET /api/admin/book-storage/config`
+Mode de stockage des ebooks actif (`local`, `webdav` ou `s3`) et champs de configuration associés. Les secrets ne sont jamais renvoyés en clair (`_hasBookStorageWebdavPassword`, `_hasBookStorageS3SecretAccessKey`).
+```bash
+curl https://app.ndd.fr/api/admin/book-storage/config \
+  -H "Authorization: Bearer <token>"
+```
+
+### `PUT /api/admin/book-storage/config`
+Change le mode de stockage et/ou met à jour la configuration WebDAV/S3. Un seul mode actif à la fois. Laisser un champ secret vide conserve la valeur déjà enregistrée.
+```bash
+curl -X PUT https://app.ndd.fr/api/admin/book-storage/config \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"fileStorageMode": "webdav", "bookStorageWebdavUrl": "https://serveur/webdav/ebooks", "bookStorageWebdavUsername": "user", "bookStorageWebdavPassword": "motdepasse"}'
+```
+
+### `POST /api/admin/book-storage/test`
+Teste la connexion WebDAV ou S3 avec les valeurs du formulaire (enregistrées ou pas encore).
+```bash
+curl -X POST https://app.ndd.fr/api/admin/book-storage/test \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"fileStorageMode": "s3", "bookStorageS3Endpoint": "https://s3.exemple.com", "bookStorageS3Bucket": "ebooks", "bookStorageS3AccessKeyId": "...", "bookStorageS3SecretAccessKey": "..."}'
+```
+
+### `POST /api/admin/book-storage/migrate`
+Démarre en arrière-plan la copie de tous les fichiers locaux vers la destination distante actuellement configurée (les fichiers déjà présents avec la même taille sont sautés). Répond immédiatement sans attendre la fin, suivre la progression via `GET /api/admin/book-storage/migrate/status`.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/book-storage/migrate \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/admin/book-storage/migrate-back`
+Sens inverse : copie tous les fichiers de la destination distante vers le dossier local. Fonctionne même après être repassé en mode local (les identifiants distants restent en base). Pas de copie directe WebDAV vers S3 ou inversement, passer par le local comme étape intermédiaire.
+```bash
+curl -X POST https://app.ndd.fr/api/admin/book-storage/migrate-back \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/book-storage/migrate/status`
+Progression de la migration en cours (ou terminée) : `{ running, direction, copied, failed, skipped, total, error }`.
+```bash
+curl https://app.ndd.fr/api/admin/book-storage/migrate/status \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/book-storage/stats`
+Nombre de fichiers et taille totale occupée par le stockage des ebooks, quel que soit le mode actif.
+```bash
+curl https://app.ndd.fr/api/admin/book-storage/stats \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/admin/files`
 Liste les fichiers de `uploads/books`, avec pour chacun les demandes (`BookRequest`) qui le référencent (`filePath` identique) : un même fichier peut être lié à plusieurs demandes (étagères additionnelles multi-utilisateurs).
 ```bash
