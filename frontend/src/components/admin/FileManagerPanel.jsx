@@ -172,6 +172,11 @@ export default function FileManagerPanel() {
   const migrateToRemote = () => runMigration('/api/admin/book-storage/migrate');
   const migrateToLocal = () => runMigration('/api/admin/book-storage/migrate-back');
 
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 6000);
+  };
+
   const loadFiles = useCallback(async () => {
     setLoading(true);
     try {
