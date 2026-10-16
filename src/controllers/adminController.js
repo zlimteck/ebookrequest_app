@@ -235,6 +235,18 @@ async function checkFourtouticiConnector() {
   }
 }
 
+async function checkLibgenConnector() {
+  try {
+    const { getLibgenConfig, pingLibgen } = await import('../services/libgenService.js');
+    const config = await getLibgenConfig();
+    if (!config?.enabled) return { enabled: false, connected: false, url: null, error: null };
+    const { baseUrl } = await pingLibgen();
+    return { enabled: true, connected: true, url: baseUrl, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
+
 // UZ : pas de login programmatique (hCaptcha), session dépendante d'un
 // cookie collé à la main par l'admin — contrairement aux autres connecteurs,
 // une déconnexion ici n'est jamais transitoire (elle ne se résout pas seule au
@@ -602,35 +614,52 @@ export const getAdminStats = async (req, res) => {
 };
 
 // Santé des services
-function withTimeout(promise, ms, fallback) {
+// `label` sert à deux choses : un message d'erreur plus parlant que le mot
+// "timeout" seul côté réponse ("Délai dépassé (8000ms)"), et un repère dans
+// les logs serveur si la vraie promesse finit par se résoudre/rejeter après
+// le délai, pour retrouver la raison réelle d'un échec qui a mis trop de
+// temps à répondre plutôt qu'une erreur franche et immédiate.
+function withTimeout(promise, ms, fallback, label) {
+  let settled = false;
+  const tracked = promise.then(
+    (value) => { settled = true; return value; },
+    (err) => { settled = true; throw err; }
+  );
+  tracked.catch((err) => {
+    if (label) console.warn(`[Santé des services] "${label}" a fini par échouer après coup : ${err.message}`);
+  });
   return Promise.race([
-    promise,
-    new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+    tracked,
+    new Promise(resolve => setTimeout(() => {
+      if (settled) return; // déjà réglée entre-temps, la race a juste pris l'autre branche de peu
+      resolve({ ...fallback, error: `Délai dépassé (${ms}ms)${label ? ` : ${label}` : ''}` });
+    }, ms)),
   ]);
 }
 
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations, downloadClient, emailProvider, rssFeed] = await Promise.all([
-      withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
-      withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
-      withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
-      withTimeout(checkCalibreWeb(), 6000, { enabled: false, connected: false, error: 'timeout' }),
-      withTimeout(checkValentineConnector(), 8000, { enabled: true, connected: false, quota: null, error: 'timeout' }),
-      withTimeout(checkAnnasArchiveConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkMcpServer(), 6000, { enabled: false, connected: false, error: 'timeout' }),
-      withTimeout(checkGoogleBooks(), 6000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkHardcover(), 6000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkProxy(), 8000, { enabled: false, connected: false, mode: null, error: 'timeout' }),
-      withTimeout(checkFourtouticiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkUltimZoneConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkProwlarrConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkBookStorage(), 8000, { mode: 'local', connected: null, url: null, error: 'timeout' }),
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations, downloadClient, emailProvider, rssFeed, libgen] = await Promise.all([
+      withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }, 'Fournisseur IA'),
+      withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }, 'FlareSolverr'),
+      withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }, 'Apprise'),
+      withTimeout(checkCalibreWeb(), 6000, { enabled: false, connected: false, error: 'timeout' }, 'Calibre-Web'),
+      withTimeout(checkValentineConnector(), 8000, { enabled: true, connected: false, quota: null, error: 'timeout' }, 'Valentine'),
+      withTimeout(checkAnnasArchiveConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }, "Anna's Archive"),
+      withTimeout(checkMcpServer(), 6000, { enabled: false, connected: false, error: 'timeout' }, 'Serveur MCP'),
+      withTimeout(checkGoogleBooks(), 6000, { enabled: true, connected: false, error: 'timeout' }, 'Google Books'),
+      withTimeout(checkHardcover(), 6000, { enabled: true, connected: false, error: 'timeout' }, 'Hardcover'),
+      withTimeout(checkProxy(), 8000, { enabled: false, connected: false, mode: null, error: 'timeout' }, 'Proxy sortant'),
+      withTimeout(checkFourtouticiConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }, 'Fourtoutici'),
+      withTimeout(checkUltimZoneConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }, 'Ultim-Zone'),
+      withTimeout(checkProwlarrConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }, 'Prowlarr'),
+      withTimeout(checkBookStorage(), 8000, { mode: 'local', connected: null, url: null, error: 'timeout' }, 'Stockage des ebooks'),
       withTimeout(checkRemoteBackupDestinations(), 8000, []),
-      withTimeout(checkDownloadClient(), 8000, { enabled: true, connected: false, error: 'timeout' }),
-      withTimeout(checkEmailProvider(), 8000, { enabled: true, connected: false, provider: null, error: 'timeout' }),
-      withTimeout(checkRssFeed(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }),
+      withTimeout(checkDownloadClient(), 8000, { enabled: true, connected: false, error: 'timeout' }, 'Client de téléchargement'),
+      withTimeout(checkEmailProvider(), 8000, { enabled: true, connected: false, provider: null, error: 'timeout' }, 'Fournisseur email'),
+      withTimeout(checkRssFeed(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }, 'Flux RSS'),
+      withTimeout(checkLibgenConnector(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }, 'LibGen'),
     ]);
 
     res.json({
@@ -702,6 +731,12 @@ export const getServicesHealth = async (req, res) => {
           connected: fourtoutici.connected,
           url: fourtoutici.url || null,
           error: fourtoutici.error || null,
+        },
+        libgen: {
+          enabled: libgen.enabled,
+          connected: libgen.connected,
+          url: libgen.url || null,
+          error: libgen.error || null,
         },
         ultimZone: {
           enabled: ultimZone.enabled,
