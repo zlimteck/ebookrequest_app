@@ -241,6 +241,54 @@ const SERVICE_DEFS = [
     details: (s) => s.url ? [`URL : ${s.url}`] : [],
     error: (s) => s.error,
   },
+  {
+    key: 'downloadClient',
+    label: () => 'Client de téléchargement',
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => {
+      const lines = [];
+      if (s.type) lines.push(`Type : ${s.type}`);
+      if (s.url) lines.push(`URL : ${s.url}`);
+      return lines;
+    },
+    error: (s) => s.error,
+  },
+  {
+    key: 'emailProvider',
+    label: () => 'Fournisseur email',
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>
+      </svg>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => s.provider ? [`Fournisseur : ${s.provider === 'resend' ? 'Resend' : 'SMTP'}`] : [],
+    error: (s) => s.error,
+  },
+  {
+    key: 'rss',
+    label: () => 'Flux RSS',
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+    ),
+    isEnabled: (s) => s.enabled,
+    isConnected: (s) => s.connected,
+    hideIfDisabled: true,
+    details: (s) => s.url ? [`URL : ${s.url}`] : [],
+    error: (s) => s.error,
+  },
 ];
 
 const formatShortDateTime = (iso) => {

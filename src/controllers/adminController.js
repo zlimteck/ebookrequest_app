@@ -13,12 +13,91 @@ import { decrypt } from '../services/cryptoService.js';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/googleBooksConfig.js';
 import { getHardcoverApiKey, getHardcoverQuotaStatus } from '../services/hardcoverConfig.js';
 import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
+import { getRSSFeedUrl } from '../services/rssConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
+
+// Client de téléchargement torrent (qBittorrent/rTorrent/Deluge/Transmission,
+// service: 'downloadClient') — "configuré" se mesure sur downloadClientType
+// (pas de champ `enabled` dédié pour ce connecteur), même raisonnement que
+// les autres : pas de vérification réseau si rien n'est choisi.
+async function checkDownloadClient() {
+  try {
+    const { getDownloadClientConfig, getTorrentStatus } = await import('../services/downloadClients/index.js');
+    const config = await getDownloadClientConfig();
+    if (!config?.downloadClientType) return { enabled: false, connected: false, error: null };
+    if (!config.url) {
+      return { enabled: true, connected: false, error: 'URL non configurée' };
+    }
+    // Même technique que POST /api/connectors/downloadclient/test : un hash
+    // arbitraire absent du client renvoie null (connexion/auth réussie),
+    // une vraie erreur d'authentification/réseau lève une exception.
+    await getTorrentStatus('0000000000000000000000000000000000000000');
+    return { enabled: true, connected: true, type: config.downloadClientType, url: config.url, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, error: err.message };
+  }
+}
+
+// Fournisseur email (SMTP ou Resend, service: 'emailProvider') — `enabled`
+// ici reflète le réglage admin (sinon l'app retombe sur les variables d'env,
+// toujours fonctionnel mais pas "configuré" au sens de ce connecteur).
+async function checkEmailProvider() {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'emailProvider' }).lean();
+    if (!doc?.enabled || !doc?.provider) return { enabled: false, connected: false, provider: null, error: null };
+    const secret = doc.apiKey ? (decrypt(doc.apiKey) ?? doc.apiKey) : '';
+
+    if (doc.provider === 'resend') {
+      if (!secret) return { enabled: true, connected: false, provider: 'resend', error: 'Clé API non configurée' };
+      // Appel en lecture seule (liste des domaines) plutôt qu'un envoi
+      // d'email de test, pour ne jamais spammer une vraie boîte à chaque
+      // vérification périodique de la santé des services.
+      const { Resend } = await import('resend');
+      const client = new Resend(secret);
+      const { error } = await client.domains.list();
+      if (error) return { enabled: true, connected: false, provider: 'resend', error: error.message || 'Clé API invalide' };
+      return { enabled: true, connected: true, provider: 'resend', error: null };
+    }
+
+    if (!doc.smtpHost) return { enabled: true, connected: false, provider: 'smtp', error: 'Hôte SMTP non configuré' };
+    const { default: nodemailer } = await import('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: doc.smtpHost,
+      port: doc.smtpPort || 465,
+      secure: !!doc.smtpSecure,
+      auth: { user: doc.username, pass: secret },
+      tls: { rejectUnauthorized: false },
+    });
+    await transporter.verify();
+    return { enabled: true, connected: true, provider: 'smtp', error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, provider: null, error: err.message };
+  }
+}
+
+// Flux RSS (predb.me ou équivalent, service: 'rss') — simple vérification de
+// joignabilité (pas de parsing XML complet, pour rester léger sur un check
+// périodique).
+async function checkRssFeed() {
+  try {
+    const url = await getRSSFeedUrl();
+    if (!url) return { enabled: false, connected: false, url: null, error: null };
+    const res = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbookRequest-HealthCheck)' },
+      timeout: 8000,
+      validateStatus: () => true,
+    });
+    if (res.status >= 400) return { enabled: true, connected: false, url, error: `HTTP ${res.status}` };
+    return { enabled: true, connected: true, url, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
 
 // Stockage distant des ebooks (issue #45) — WebDAV uniquement pour l'instant.
 async function checkBookStorage() {
@@ -533,7 +612,7 @@ function withTimeout(promise, ms, fallback) {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations, downloadClient, emailProvider, rssFeed] = await Promise.all([
       withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }),
       withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }),
       withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }),
@@ -549,6 +628,9 @@ export const getServicesHealth = async (req, res) => {
       withTimeout(checkProwlarrConnector(), 8000, { enabled: true, connected: false, error: 'timeout' }),
       withTimeout(checkBookStorage(), 8000, { mode: 'local', connected: null, url: null, error: 'timeout' }),
       withTimeout(checkRemoteBackupDestinations(), 8000, []),
+      withTimeout(checkDownloadClient(), 8000, { enabled: true, connected: false, error: 'timeout' }),
+      withTimeout(checkEmailProvider(), 8000, { enabled: true, connected: false, provider: null, error: 'timeout' }),
+      withTimeout(checkRssFeed(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }),
     ]);
 
     res.json({
@@ -645,6 +727,25 @@ export const getServicesHealth = async (req, res) => {
           error: bookStorage.error || null,
         },
         remoteBackupDestinations,
+        downloadClient: {
+          enabled: downloadClient.enabled,
+          connected: downloadClient.connected,
+          type: downloadClient.type || null,
+          url: downloadClient.url || null,
+          error: downloadClient.error || null,
+        },
+        emailProvider: {
+          enabled: emailProvider.enabled,
+          connected: emailProvider.connected,
+          provider: emailProvider.provider || null,
+          error: emailProvider.error || null,
+        },
+        rss: {
+          enabled: rssFeed.enabled,
+          connected: rssFeed.connected,
+          url: rssFeed.url || null,
+          error: rssFeed.error || null,
+        },
       },
     });
   } catch (error) {
