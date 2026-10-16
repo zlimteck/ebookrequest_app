@@ -1,8 +1,5 @@
 import mongoose from 'mongoose';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { testAIProviderConnection, getProviderInfo } from '../services/aiProviderService.js';
 import AIRequestLog from '../models/AIRequestLog.js';
 import ConnectorSettings from '../models/ConnectorSettings.js';
@@ -14,10 +11,6 @@ import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/go
 import { getHardcoverApiKey, getHardcoverQuotaStatus } from '../services/hardcoverConfig.js';
 import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
 import { getRSSFeedUrl } from '../services/rssConfig.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
@@ -410,26 +403,16 @@ async function checkCalibreWeb() {
   }
 }
 
-function getUploadsStats() {
+// Délègue à getStorageStats() (fileStorageService.js), seul endroit qui
+// connaît le mode de stockage actif (local/webdav/s3) — un parcours direct
+// de UPLOADS_DIR ne verrait jamais les fichiers distants une fois le mode
+// changé. Ne compte volontairement que les ebooks (comme getStorageStats()),
+// plus les sauvegardes/avatars/fichiers temporaires du reste de uploads/.
+async function getUploadsStats() {
   try {
-    if (!fs.existsSync(UPLOADS_DIR)) return { totalSize: 0, fileCount: 0 };
-    let totalSize = 0;
-    let fileCount = 0;
-    const walk = (dir) => {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(fullPath);
-        } else if (entry.isFile()) {
-          const stat = fs.statSync(fullPath);
-          totalSize += stat.size;
-          fileCount++;
-        }
-      }
-    };
-    walk(UPLOADS_DIR);
-    return { totalSize, fileCount };
+    const { getStorageStats } = await import('../services/fileStorageService.js');
+    const { fileCount, totalBytes } = await getStorageStats();
+    return { totalSize: totalBytes, fileCount };
   } catch {
     return { totalSize: 0, fileCount: 0 };
   }
@@ -476,7 +459,7 @@ export const getAdminStats = async (req, res) => {
       : 0;
 
     const providerInfo = await getProviderInfo();
-    const uploadsStats = getUploadsStats();
+    const uploadsStats = await getUploadsStats();
 
     // Statistiques des requêtes IA
     const totalAIRequests = await AIRequestLog.countDocuments({});
