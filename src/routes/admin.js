@@ -188,6 +188,35 @@ function resolveSafeFileName(name) {
   return { safe, filePath: `books/${safe}` };
 }
 
+// ── Suivi d'auteurs (issue #48) ─────────────────────────────────────────────
+// GET /api/admin/author-follow/config
+router.get('/author-follow/config', async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'authorFollow' }).lean();
+    res.json({
+      enabled: doc?.enabled ?? true,
+      maxAuthorsPerUser: doc?.maxAuthorsPerUser ?? 50,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/author-follow/config
+router.put('/author-follow/config', async (req, res) => {
+  try {
+    const { enabled, maxAuthorsPerUser } = req.body;
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'authorFollow' },
+      { enabled: !!enabled, maxAuthorsPerUser: Math.max(-1, Number(maxAuthorsPerUser) ?? 50) },
+      { upsert: true, runValidators: true }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
+  }
+});
+
 // ── Stockage distant des ebooks (issue #45) ─────────────────────────────────
 // GET /api/admin/book-storage/config
 router.get('/book-storage/config', async (req, res) => {

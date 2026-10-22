@@ -127,7 +127,7 @@ const bookRequestSchema = new mongoose.Schema({
   // Traçabilité de l'origine de la demande pour le succès "Recommandation IA & Best-seller" —
   // vide pour une recherche/saisie manuelle classique. Non rétroactif sur les demandes créées
   // avant l'ajout de ce champ (voir issue #41).
-  origin: { type: String, enum: ['', 'recommendation', 'bestseller'], default: '' },
+  origin: { type: String, enum: ['', 'recommendation', 'bestseller', 'author_follow'], default: '' },
   category: { type: String, enum: ['ebook', 'comic', 'manga', ''], default: 'ebook' },
   // Vrai uniquement pour une demande créée via la recherche directe Valentine
   // ET ayant utilisé le compte admin partagé (pas le compte perso de

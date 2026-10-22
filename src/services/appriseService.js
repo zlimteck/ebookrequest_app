@@ -206,6 +206,14 @@ class AppriseService {
     );
   }
 
+  async notifyUserNewAuthorRelease(user, { title, author, autoRequested }) {
+    if (user.notificationPreferences?.apprise?.notifyOnRelease === false) return;
+    await this.sendUserNotification(user,
+      '✨ Nouvelle sortie d\'un auteur suivi',
+      `📖 "${title}" de ${author}${autoRequested ? '\n✅ Demande effectuée automatiquement' : ''}`
+    );
+  }
+
   async notifyUserBookCanceled(user, bookRequest, reason) {
     if (user.notificationPreferences?.apprise?.notifyOnCancel === false) return;
     await this.sendUserNotification(user,
