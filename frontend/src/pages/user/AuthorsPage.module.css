@@ -74,6 +74,16 @@
   display: flex;
   align-items: center;
   flex: 1;
+  height: 42px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--color-bg2, #1e293b);
+  transition: border-color 0.15s;
+}
+
+.searchWrap:focus-within {
+  border-color: var(--color-accent, #6366f1);
 }
 
 .searchIcon {
@@ -159,20 +169,19 @@
    champ unique, pas de bouton séparé, recherche déjà au fil de la frappe). */
 .searchInput {
   width: 100%;
-  height: 42px;
+  min-width: 0;
+  flex: 1;
+  height: 100%;
   box-sizing: border-box;
   padding: 0 0.9rem 0 2.1rem;
-  border: 1px solid var(--color-border, #2d3748);
-  border-radius: var(--radius, 0.5rem);
-  background: var(--color-bg2, #1e293b);
+  border: none;
+  background: none;
   color: var(--color-text, #f8fafc);
   font-size: 0.9rem;
-  transition: border-color 0.15s;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: var(--color-accent, #6366f1);
 }
 
 .limitHint {
@@ -284,6 +293,56 @@
 
 .recommendationsSection .grid { margin-bottom: 0; }
 
+.recHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.regenCounter {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.refreshButton {
+  background: none;
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  transition: background 0.2s, color 0.2s;
+}
+
+.refreshButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.refreshButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refreshButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.spinning {
+  animation: authorsSpin 1s linear infinite;
+}
+
+@keyframes authorsSpin {
+  to { transform: rotate(360deg); }
+}
+
 .sectionTitleRow {
   display: flex;
   align-items: center;
@@ -367,12 +426,163 @@
   text-align: center;
 }
 
+/* ── Bascule grille/liste, même convention que Mes demandes ── */
+.viewToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding-right: 0.3rem;
+}
+
+.viewBtn {
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #2d3748);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.viewBtn:hover {
+  background: var(--color-bg3, #334155);
+  color: var(--color-text, #f8fafc);
+  border-color: var(--color-accent, #6366f1);
+}
+
+.viewBtnActive {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--color-accent, #6366f1);
+  color: var(--color-accent, #6366f1);
+}
+
+/* ── Vue liste ── */
+.tableWrapper {
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1.5rem;
+}
+
+.authorsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableHead {
+  background: var(--color-bg2, #1e293b);
+}
+
+.tableTh {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #94a3b8);
+  border-bottom: 1px solid var(--color-border, #2d3748);
+  white-space: nowrap;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--color-border, #2d3748);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.tableRow:hover {
+  background: var(--color-bg2, #1e293b);
+}
+
+.tableTd {
+  padding: 0.5rem 0.9rem;
+  vertical-align: middle;
+  color: var(--color-text, #f8fafc);
+}
+
+.tableAuthorCell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+
+.tablePhoto, .tablePhotoPlaceholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tablePhotoPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 /* ── Grille de cards, toutes de taille identique quel que soit le contenu ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+/* "Mes auteurs suivis" : cards horizontales plus denses (photo + infos côte
+   à côte) plutôt que verticales centrées — moins de contenu par auteur
+   (pas de bio/raison ici) donc une card verticale haute laissait trop de
+   vide autour d'une simple photo + nom. */
+.followedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.authorCardCompact {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  height: auto;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  gap: 0.75rem;
+}
+
+.authorCardInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.authorCardCompact .authorName {
+  display: block;
+  -webkit-line-clamp: unset;
+  min-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.authorFollowedDate {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin: 0;
 }
 
 .authorCard {
@@ -439,22 +649,79 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  flex: 1;
+  min-height: 2.7em;
+  flex: 0 0 auto;
   width: 100%;
 }
 
 .autoRequestToggle {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  color: var(--color-text-muted, #94a3b8);
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--color-text, #f8fafc);
   cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--color-bg3, #334155);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 22px;
+  transition: 0.25s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 3px;
+  top: 3px;
+  background: var(--color-text-muted, #94a3b8);
+  border-radius: 50%;
+  transition: 0.25s;
+}
+
+.switch input:checked + .slider {
+  background: var(--color-accent, #6366f1);
+  border-color: var(--color-accent, #6366f1);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+.switch input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .autoBadge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: fit-content;
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--color-accent, #6366f1);
@@ -463,38 +730,22 @@
   padding: 0.15rem 0.55rem;
 }
 
-/* Barre d'options compacte sous la bio : demande auto + catégorie à gauche,
-   désabonnement discret (lien, pas un gros bouton rouge) à droite. */
-.modalToolbar {
-  display: flex;
+.unfollowBtn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.6rem 0;
-  margin-bottom: 0.75rem;
-  border-top: 1px solid var(--color-border, #2d3748);
-  border-bottom: 1px solid var(--color-border, #2d3748);
-}
-
-.modalToolbarLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  flex-wrap: wrap;
-}
-
-.unfollowLink {
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   background: none;
-  border: none;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
   color: #ef4444;
-  font-size: 0.8rem;
-  text-decoration: underline;
   cursor: pointer;
-  padding: 0;
+  transition: background 0.2s, color 0.2s;
 }
-.unfollowLink:hover:not(:disabled) { color: #f87171; }
-.unfollowLink:disabled { opacity: 0.5; cursor: not-allowed; }
+.unfollowBtn:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); }
+.unfollowBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btnPrimary {
   display: inline-flex;
@@ -569,22 +820,159 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   padding: 1rem;
+  backdrop-filter: blur(3px);
 }
 
 .modal {
   background: var(--color-bg2, #1e293b);
-  border-radius: var(--radius, 0.75rem);
-  max-width: 560px;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 14px;
   width: 100%;
-  max-height: 80vh;
+  max-width: 720px;
+  max-height: 90vh;
   overflow-y: auto;
-  padding: 1.5rem;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.content {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.75rem;
+}
+
+.cover {
+  flex-shrink: 0;
+}
+
+.coverImg {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: block;
+}
+
+.coverPlaceholder {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  /* Réserve la place du bouton de fermeture (absolute, top/right 0.75rem,
+     32px) pour que .unfollowBtn ne passe jamais sous lui. */
+  padding-right: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.description {
+  margin-bottom: 1rem;
+}
+
+.description p {
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #94a3b8);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.linkBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: none;
+  color: var(--color-accent, #6366f1);
+  border: 1px solid var(--color-accent, #6366f1);
+  border-radius: 8px;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.2s, color 0.2s;
+}
+
+.linkBtn:hover {
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+}
+
+.modalBody {
+  padding: 1.25rem 1.75rem 1.75rem;
+  border-top: 1px solid var(--color-border, #2d3748);
+}
+
+@media (max-width: 600px) {
+  .content {
+    flex-direction: column;
+    padding: 1.25rem;
+  }
+
+  .coverImg, .coverPlaceholder {
+    width: 100px;
+    height: 100px;
+  }
+
+  .modalBody {
+    padding: 1rem 1.25rem 1.25rem;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .linkBtn {
+    padding: 0.55rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .linkBtn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 
 .pagination {
@@ -608,29 +996,28 @@
 }
 .pagination .btnSecondary:disabled { cursor: not-allowed; }
 
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.modalTitle { font-size: 1.1rem; font-weight: 700; color: var(--color-text, #f8fafc); margin: 0; }
-
 .closeBtn {
-  background: none;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  font-size: 1.5rem;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 1.3rem;
   line-height: 1;
-  color: var(--color-text-muted, #94a3b8);
   cursor: pointer;
+  color: var(--color-text, #f8fafc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  z-index: 1;
 }
 
-.modalBio {
-  font-size: 0.82rem;
-  color: var(--color-text-muted, #94a3b8);
-  line-height: 1.5;
-  margin: 0 0 1rem;
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .workList { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -662,14 +1049,15 @@
 
 .workRequestBtn {
   flex-shrink: 0;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.78rem;
-  font-weight: 500;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   background: none;
   border: 1px solid var(--color-accent, #6366f1);
   color: var(--color-accent, #6366f1);
-  border-radius: var(--radius, 0.5rem);
+  border-radius: 8px;
   cursor: pointer;
+  white-space: nowrap;
 }
 .workRequestBtn:hover:not(:disabled) { background: var(--color-accent, #6366f1); color: #fff; }
 .workRequestBtn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -682,9 +1070,20 @@
   .sortBtn { flex: 1; justify-content: center; }
 }
 
+@media (max-width: 600px) {
+  .workRequestBtn {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.78rem;
+  }
+}
+
 @media (max-width: 480px) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-  .authorCard { height: 210px; padding: 0.85rem 0.6rem; }
+  .authorCard:not(.authorCardCompact) { height: 210px; padding: 0.85rem 0.6rem; }
   .photo, .photoPlaceholder { width: 52px; height: 52px; }
   .photoPlaceholder { font-size: 1.2rem; }
+
+  .followedGrid { grid-template-columns: 1fr; }
+  .authorCardCompact { padding: 0.65rem 0.85rem; }
+  .authorCardCompact .photo, .authorCardCompact .photoPlaceholder { width: 48px; height: 48px; }
 }

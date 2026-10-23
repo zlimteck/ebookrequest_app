@@ -109,7 +109,7 @@ function authorVariants(name) {
 }
 // Cache en mémoire : clé = "params", valeur = { data, expiresAt }
 const searchCache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // Exposé pour un vidage manuel (route admin) — utile après un changement de config
 // (clé API, toggle de service) pour forcer un résultat frais sans attendre le TTL.
@@ -807,10 +807,23 @@ router.get('/search', requireAuth, async (req, res) => {
           !item.volumeInfo?.language || item.volumeInfo.language === 'fr'
         );
       }
-      // Fallback Hardcover puis Open Library si Google Books est désactivé/ne trouve rien en français
-      if (pool.length === 0) {
+      // Le filtre FR ci-dessus ne laisse parfois passer qu'une poignée de
+      // titres (un auteur majoritairement édité en anglais, par ex.), alors
+      // que Google Books référence bien plus de livres toutes langues
+      // confondues — complété par Hardcover/Open Library (pas de filtre
+      // langue) plutôt que de déclencher le repli seulement si le pool FR
+      // est totalement vide, sinon la bibliographie affichée reste tronquée.
+      const seenTitles = new Set(pool.map(item => (item.volumeInfo?.title || '').trim().toLowerCase()).filter(Boolean));
+      if (pool.length < 5) {
         try {
-          pool = await fetchFromHardcoverSearch(author.trim(), 40);
+          const hcItems = await fetchFromHardcoverSearch(author.trim(), 40);
+          for (const item of hcItems) {
+            const key = (item.volumeInfo?.title || '').trim().toLowerCase();
+            if (key && !seenTitles.has(key)) {
+              seenTitles.add(key);
+              pool.push(item);
+            }
+          }
         } catch (hcErr) {
           console.warn('[Books] Hardcover fallback auteur échoué:', hcErr.message);
         }

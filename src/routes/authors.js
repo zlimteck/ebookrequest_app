@@ -145,42 +145,81 @@ async function computeAuthorSuggestions(userId) {
   return [...heuristicResolved, ...aiResolved];
 }
 
+// Retire du cache les auteurs suivis entre-temps (depuis cette liste ou
+// ailleurs) : jamais réaffichés, même si le cache lui-même n'a pas été
+// régénéré depuis. Retourne null si plus rien de valable (tout suivi).
+async function filterOutFollowed(userId, doc) {
+  const followedKeys = new Set(
+    (await AuthorFollow.find({ user: userId }).populate('author', 'openLibraryKey'))
+      .map(f => f.author?.openLibraryKey)
+      .filter(Boolean)
+  );
+  const filtered = doc.suggestions.filter(s => !followedKeys.has(s.openLibraryKey));
+  if (filtered.length === 0) return null;
+  if (filtered.length !== doc.suggestions.length) {
+    doc.suggestions = filtered;
+    await doc.save();
+  }
+  return filtered;
+}
+
 // GET /api/authors/suggestions — retourne le cache si disponible, génère la
-// première fois seulement (pas de régénération manuelle).
+// première fois gratuitement (ne consomme pas le quota de régénération) —
+// même principe que GET /api/recommendations pour les livres.
 router.get('/suggestions', requireAuth, async (req, res) => {
   try {
     const cached = await AuthorSuggestion.findOne({ user: req.user.id });
     if (cached && cached.suggestions.length > 0) {
-      // Le cache peut contenir des auteurs suivis entre-temps (depuis cette
-      // liste ou ailleurs) : jamais réaffichés, même si le cache lui-même
-      // n'a pas été régénéré depuis.
-      const followedKeys = new Set(
-        (await AuthorFollow.find({ user: req.user.id }).populate('author', 'openLibraryKey'))
-          .map(f => f.author?.openLibraryKey)
-          .filter(Boolean)
-      );
-      const filtered = cached.suggestions.filter(s => !followedKeys.has(s.openLibraryKey));
-      if (filtered.length > 0) {
-        if (filtered.length !== cached.suggestions.length) {
-          cached.suggestions = filtered;
-          await cached.save();
-        }
-        return res.json({ suggestions: filtered });
+      const filtered = await filterOutFollowed(req.user.id, cached);
+      if (filtered) {
+        const info = cached.getRateLimitInfo();
+        return res.json({ suggestions: filtered, cached: true, ...info });
       }
       // Plus aucune suggestion valable dans le cache (tout suivi) : on
       // régénère plutôt que de renvoyer une liste vide définitivement.
     }
 
     const suggestions = await computeAuthorSuggestions(req.user.id);
-    await AuthorSuggestion.findOneAndUpdate(
+    const doc = await AuthorSuggestion.findOneAndUpdate(
       { user: req.user.id },
-      { suggestions, generatedAt: new Date() },
+      { suggestions, generatedAt: new Date(), regenerationCount: 0, windowStart: new Date() },
       { upsert: true, new: true }
     );
-    res.json({ suggestions });
+    const info = doc.getRateLimitInfo();
+    res.json({ suggestions, cached: false, ...info });
   } catch (err) {
     console.error('Erreur suggestions auteurs:', err.message);
     res.json({ suggestions: [] });
+  }
+});
+
+// POST /api/authors/suggestions/regenerate — régénère en consommant 1 quota
+// (même limite que les recommandations de livres : 3 par 7 jours).
+router.post('/suggestions/regenerate', requireAuth, async (req, res) => {
+  try {
+    let doc = await AuthorSuggestion.findOne({ user: req.user.id });
+    if (!doc) doc = new AuthorSuggestion({ user: req.user.id, suggestions: [] });
+
+    if (!doc.canRegenerate()) {
+      const info = doc.getRateLimitInfo();
+      return res.status(429).json({
+        error: `Limite de régénération atteinte (${info.regenerationsMax} par 7 jours).`,
+        suggestions: doc.suggestions,
+        ...info,
+      });
+    }
+
+    const suggestions = await computeAuthorSuggestions(req.user.id);
+    doc.suggestions = suggestions;
+    doc.generatedAt = new Date();
+    doc.regenerationCount += 1;
+    await doc.save();
+
+    const info = doc.getRateLimitInfo();
+    res.json({ suggestions, ...info });
+  } catch (err) {
+    console.error('Erreur régénération suggestions auteurs:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la régénération.' });
   }
 });
 

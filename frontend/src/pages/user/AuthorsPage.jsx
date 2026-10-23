@@ -16,20 +16,20 @@ function hashNameToColor(name) {
   return DEFAULT_PHOTO_COLORS[Math.abs(hash) % DEFAULT_PHOTO_COLORS.length];
 }
 
-const AuthorPlaceholder = ({ name }) => (
-  <div className={styles.photoPlaceholder} style={{ background: hashNameToColor(name || '?') }}>
+const AuthorPlaceholder = ({ name, className }) => (
+  <div className={className || styles.photoPlaceholder} style={{ background: hashNameToColor(name || '?') }}>
     {(name || '?').trim().charAt(0).toUpperCase()}
   </div>
 );
 
-function AuthorPhoto({ src, alt }) {
+function AuthorPhoto({ src, alt, className, placeholderClassName }) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) return <AuthorPlaceholder name={alt} />;
+  if (!src || failed) return <AuthorPlaceholder name={alt} className={placeholderClassName} />;
   return (
     <img
       src={src}
       alt={alt}
-      className={styles.photo}
+      className={className || styles.photo}
       onError={() => setFailed(true)}
       // Open Library renvoie un HTTP 200 avec un GIF transparent de quelques
       // pixels (pas une 404) quand l'auteur n'a pas de photo — onError ne se
@@ -60,10 +60,18 @@ export default function AuthorsPage() {
   const [recentReleases, setRecentReleases] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(() => localStorage.getItem('ebookrequest_authors_suggestions_expanded') !== 'false');
+  const [suggestionsRateInfo, setSuggestionsRateInfo] = useState(null);
+  const [regeneratingSuggestions, setRegeneratingSuggestions] = useState(false);
   const [sortBy, setSortBy] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [followedPage, setFollowedPage] = useState(1);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('ebookrequest_authors_view') || 'cards');
   const searchTimeoutRef = useRef(null);
+
+  const setView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('ebookrequest_authors_view', mode);
+  };
 
   const FOLLOWED_PER_PAGE = 10;
 
@@ -118,9 +126,48 @@ export default function AuthorsPage() {
       .then(res => setRecentReleases(res.data.releases || []))
       .catch(() => {});
     axiosAdmin.get('/api/authors/suggestions')
-      .then(res => setSuggestions(res.data.suggestions || []))
+      .then(res => {
+        setSuggestions(res.data.suggestions || []);
+        applySuggestionsRateInfo(res.data);
+      })
       .catch(() => {});
   }, []);
+
+  const applySuggestionsRateInfo = (data) => {
+    setSuggestionsRateInfo({
+      regenerationsUsed: data.regenerationsUsed ?? 0,
+      regenerationsMax: data.regenerationsMax ?? 3,
+      regenerationsRemaining: data.regenerationsRemaining ?? 3,
+      windowResetAt: data.windowResetAt ? new Date(data.windowResetAt) : null,
+    });
+  };
+
+  const formatResetDate = (date) => {
+    if (!date) return '';
+    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+  };
+
+  const handleRegenerateSuggestions = async () => {
+    if (regeneratingSuggestions) return;
+    setRegeneratingSuggestions(true);
+    try {
+      const res = await axiosAdmin.post('/api/authors/suggestions/regenerate');
+      setSuggestions(res.data.suggestions || []);
+      applySuggestionsRateInfo(res.data);
+      showAlertMsg('success', 'Nouvelles suggestions générées.');
+    } catch (err) {
+      const data = err.response?.data;
+      if (err.response?.status === 429 && data) {
+        setSuggestions(data.suggestions || []);
+        applySuggestionsRateInfo(data);
+        showAlertMsg('error', data.error || 'Limite de régénération atteinte.');
+      } else {
+        showAlertMsg('error', 'Erreur lors de la régénération des suggestions.');
+      }
+    } finally {
+      setRegeneratingSuggestions(false);
+    }
+  };
 
   const suggestFollow = async (openLibraryKey) => {
     await follow(openLibraryKey);
@@ -229,13 +276,13 @@ export default function AuthorsPage() {
   // auteurs suivis (pas depuis un résultat de recherche) : porte les
   // contrôles d'abonnement (auto-demande, désabonnement).
   const openDetail = async (openLibraryKey, name, followedInfo = null) => {
-    setDetailAuthor({ name, bio: '', openLibraryKey, followedInfo });
+    setDetailAuthor({ name, bio: '', photoUrl: followedInfo?.photoUrl || '', openLibraryKey, followedInfo });
     setBooks([]);
     setBooksTotal(0);
     setRequestedIds(new Set());
     try {
       const res = await axiosAdmin.get(`/api/authors/${openLibraryKey}`);
-      setDetailAuthor(prev => ({ ...prev, name: res.data.author.name, bio: res.data.author.bio }));
+      setDetailAuthor(prev => ({ ...prev, name: res.data.author.name, bio: res.data.author.bio, photoUrl: res.data.author.photoUrl || prev.photoUrl }));
       await loadBooksPage(res.data.author.name, 1);
     } catch {
       showAlertMsg('error', "Impossible de charger les informations de cet auteur.");
@@ -357,6 +404,31 @@ export default function AuthorsPage() {
                 value={search}
                 onChange={handleSearchChange}
               />
+              {followed.length > 0 && (
+                <div className={styles.viewToggle}>
+                  <button
+                    type="button"
+                    className={`${styles.viewBtn} ${viewMode === 'cards' ? styles.viewBtnActive : ''}`}
+                    onClick={() => setView('cards')}
+                    title="Vue grille"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
+                    onClick={() => setView('table')}
+                    title="Vue liste"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
 
             {followed.length > 1 && (
@@ -425,22 +497,59 @@ export default function AuthorsPage() {
             <p className={styles.emptyText}>Vous ne suivez aucun auteur pour le moment.</p>
           ) : (
             <>
-              <div className={styles.grid}>
-                {pagedFollowed.map(a => (
-                    <div
-                      key={a.openLibraryKey}
-                      className={styles.authorCard}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openDetail(a.openLibraryKey, a.name, a)}
-                      onKeyDown={e => { if (e.key === 'Enter') openDetail(a.openLibraryKey, a.name, a); }}
-                    >
-                      <AuthorPhoto src={a.photoUrl} alt={a.name} />
-                      <p className={styles.authorName} title={a.name}>{a.name}</p>
-                      {a.autoRequest && <span className={styles.autoBadge}>Demande auto</span>}
-                    </div>
-                  ))}
+              {viewMode === 'table' ? (
+                <div className={styles.tableWrapper}>
+                  <table className={styles.authorsTable}>
+                    <thead className={styles.tableHead}>
+                      <tr>
+                        <th className={styles.tableTh}>Auteur</th>
+                        <th className={styles.tableTh}>Suivi le</th>
+                        <th className={styles.tableTh}>Demande auto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedFollowed.map(a => (
+                        <tr
+                          key={a.openLibraryKey}
+                          className={styles.tableRow}
+                          onClick={() => openDetail(a.openLibraryKey, a.name, a)}
+                        >
+                          <td className={styles.tableTd}>
+                            <div className={styles.tableAuthorCell}>
+                              <AuthorPhoto src={a.photoUrl} alt={a.name} className={styles.tablePhoto} placeholderClassName={styles.tablePhotoPlaceholder} />
+                              <span>{a.name}</span>
+                            </div>
+                          </td>
+                          <td className={styles.tableTd}>{new Date(a.followedAt).toLocaleDateString('fr-FR')}</td>
+                          <td className={styles.tableTd}>
+                            {a.autoRequest ? <span className={styles.autoBadge}>Demande auto</span> : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+              ) : (
+                <div className={styles.followedGrid}>
+                  {pagedFollowed.map(a => (
+                      <div
+                        key={a.openLibraryKey}
+                        className={`${styles.authorCard} ${styles.authorCardCompact}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openDetail(a.openLibraryKey, a.name, a)}
+                        onKeyDown={e => { if (e.key === 'Enter') openDetail(a.openLibraryKey, a.name, a); }}
+                      >
+                        <AuthorPhoto src={a.photoUrl} alt={a.name} />
+                        <div className={styles.authorCardInfo}>
+                          <p className={styles.authorName} title={a.name}>{a.name}</p>
+                          <p className={styles.authorFollowedDate}>Suivi le {new Date(a.followedAt).toLocaleDateString('fr-FR')}</p>
+                          {a.autoRequest && <span className={styles.autoBadge}>Demande auto</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+              )}
 
               {followedTotalPages > 1 && (
                 <div className={styles.followedPagination}>
@@ -473,24 +582,55 @@ export default function AuthorsPage() {
                   <svg className={styles.recIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                   </svg>
-                  Peut-être que vous aimeriez suivre
+                  Recommandations IA
                 </h2>
-                <button
-                  type="button"
-                  className={styles.toggleButton}
-                  onClick={() => setSuggestionsExpanded(e => {
-                    localStorage.setItem('ebookrequest_authors_suggestions_expanded', String(!e));
-                    return !e;
-                  })}
-                  aria-label={suggestionsExpanded ? 'Réduire' : 'Développer'}
-                >
-                  <svg
-                    className={`${styles.chevron} ${suggestionsExpanded ? styles.chevronExpanded : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                <div className={styles.recHeaderActions}>
+                  {suggestionsRateInfo && (
+                    <span
+                      className={styles.regenCounter}
+                      title={suggestionsRateInfo.regenerationsRemaining === 0
+                        ? `Limite atteinte — réinitialisation le ${formatResetDate(suggestionsRateInfo.windowResetAt)}`
+                        : `${suggestionsRateInfo.regenerationsRemaining} régénération${suggestionsRateInfo.regenerationsRemaining > 1 ? 's' : ''} restante${suggestionsRateInfo.regenerationsRemaining > 1 ? 's' : ''} sur ${suggestionsRateInfo.regenerationsMax}`}
+                    >
+                      {suggestionsRateInfo.regenerationsRemaining}/{suggestionsRateInfo.regenerationsMax}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    className={styles.refreshButton}
+                    onClick={handleRegenerateSuggestions}
+                    disabled={regeneratingSuggestions || suggestionsRateInfo?.regenerationsRemaining === 0}
+                    title={
+                      suggestionsRateInfo?.regenerationsRemaining === 0
+                        ? `Limite atteinte — réinitialisation le ${formatResetDate(suggestionsRateInfo?.windowResetAt)}`
+                        : 'Nouvelles suggestions'
+                    }
                   >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={regeneratingSuggestions ? styles.spinning : ''}>
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.toggleButton}
+                    onClick={() => setSuggestionsExpanded(e => {
+                      localStorage.setItem('ebookrequest_authors_suggestions_expanded', String(!e));
+                      return !e;
+                    })}
+                    aria-label={suggestionsExpanded ? 'Réduire' : 'Développer'}
+                  >
+                    <svg
+                      className={`${styles.chevron} ${suggestionsExpanded ? styles.chevronExpanded : ''}`}
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    >
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                </div>
               </div>
               {suggestionsExpanded && (
                 <div className={styles.grid}>
@@ -519,39 +659,79 @@ export default function AuthorsPage() {
       {detailAuthor && (
         <div className={styles.overlay} onClick={() => setDetailAuthor(null)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>{detailAuthor.name}</h3>
-              <button type="button" className={styles.closeBtn} onClick={() => setDetailAuthor(null)}>×</button>
-            </div>
+            <button type="button" className={styles.closeBtn} onClick={() => setDetailAuthor(null)} aria-label="Fermer">×</button>
 
-            {detailAuthor.bio && <p className={styles.modalBio}>{detailAuthor.bio}</p>}
+            <div className={styles.content}>
+              <div className={styles.cover}>
+                <AuthorPhoto
+                  src={detailAuthor.photoUrl}
+                  alt={detailAuthor.name}
+                  className={styles.coverImg}
+                  placeholderClassName={styles.coverPlaceholder}
+                />
+              </div>
 
-            {/* Barre d'options compacte : demande auto à gauche, désabonnement
-                discret à droite — tout sur une seule ligne. */}
-            <div className={styles.modalToolbar}>
-              <div className={styles.modalToolbarLeft}>
+              <div className={styles.info}>
+                <div className={styles.titleRow}>
+                  <h2 className={styles.title}>{detailAuthor.name}</h2>
+                  {detailAuthor.followedInfo && (
+                    <button
+                      type="button"
+                      className={styles.unfollowBtn}
+                      disabled={busyKey === detailAuthor.openLibraryKey}
+                      onClick={unfollowFromModal}
+                      title="Ne plus suivre"
+                      aria-label="Ne plus suivre"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="17" y1="11" x2="23" y2="11"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {detailAuthor.bio && (
+                  <div className={styles.description}>
+                    <p>{detailAuthor.bio}</p>
+                  </div>
+                )}
+
+                <div className={styles.actions}>
+                  <a
+                    href={`https://openlibrary.org/authors/${detailAuthor.openLibraryKey}`}
+                    target="_blank" rel="noopener noreferrer" className={styles.linkBtn}
+                  >
+                    Voir sur Open Library
+                  </a>
+                  <a
+                    href={`https://www.google.com/search?tbm=bks&q=${encodeURIComponent(`inauthor:"${detailAuthor.name}"`)}`}
+                    target="_blank" rel="noopener noreferrer" className={styles.linkBtn}
+                  >
+                    Voir sur Google Books
+                  </a>
+                  <a
+                    href={`https://hardcover.app/search?q=${encodeURIComponent(detailAuthor.name)}&type=people`}
+                    target="_blank" rel="noopener noreferrer" className={styles.linkBtn}
+                  >
+                    Voir sur Hardcover
+                  </a>
+                </div>
+
                 {detailAuthor.followedInfo && (
                   <label className={styles.autoRequestToggle}>
-                    <input
-                      type="checkbox"
-                      checked={detailAuthor.followedInfo.autoRequest}
-                      disabled={busyKey === detailAuthor.openLibraryKey}
-                      onChange={e => toggleAutoRequestFromModal(e.target.checked)}
-                    />
+                    <span className={styles.switch}>
+                      <input
+                        type="checkbox"
+                        checked={detailAuthor.followedInfo.autoRequest}
+                        disabled={busyKey === detailAuthor.openLibraryKey}
+                        onChange={e => toggleAutoRequestFromModal(e.target.checked)}
+                      />
+                      <span className={styles.slider} />
+                    </span>
                     Demande auto
                   </label>
                 )}
               </div>
-              {detailAuthor.followedInfo && (
-                <button
-                  type="button"
-                  className={styles.unfollowLink}
-                  disabled={busyKey === detailAuthor.openLibraryKey}
-                  onClick={unfollowFromModal}
-                >
-                  Ne plus suivre
-                </button>
-              )}
             </div>
 
             <div className={styles.modalBody}>
