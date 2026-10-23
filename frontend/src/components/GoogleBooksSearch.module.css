@@ -22,9 +22,9 @@
   margin: 0 0 0.75rem 0;
 }
 
-/* ── Barre de recherche unifiée ── */
-/* ── Ligne recherche : barre (champ + scanner) + bouton "Rechercher" séparé,
-   même agencement que DirectSourceSearch (.searchRow / .searchBtn) ── */
+/* ── Barre de recherche unifiée — même convention que Ma bibliothèque
+   (icône+input compact, 42px, fond bg2) plutôt qu'une barre surdimensionnée
+   dédiée à cette seule page ── */
 .searchRow {
   display: flex;
   gap: 0.5rem;
@@ -36,26 +36,31 @@
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg3);
-  height: 48px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--color-bg2, #1e293b);
+  height: 42px;
+  transition: border-color 0.15s;
 }
 
 .searchBar:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: var(--color-accent, #6366f1);
 }
 
-/* ── Sélecteur de mode — boutons (harmonisé avec la recherche directe) ── */
+/* ── Sélecteur de mode — pill group, même esprit que la barre de tri ── */
 .modeToggle {
   display: flex;
-  width: 100%;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
   flex-wrap: wrap;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  gap: 0.15rem;
+  background: var(--color-bg2, #1e293b);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  padding: 0.2rem;
+  min-height: 42px;
+  box-sizing: border-box;
   margin-bottom: 0.75rem;
 }
 
@@ -64,20 +69,24 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  flex: 1 1 auto;
-  min-width: 0;
   border: none;
-  background: var(--color-bg3);
-  color: var(--color-text-muted);
-  padding: 0.45rem 0.9rem;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
+.modeBtn:hover { color: var(--color-text, #f8fafc); }
+
 .modeBtnActive {
-  background: var(--color-accent);
-  color: #fff;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  font-weight: 600;
 }
 
 @media (max-width: 640px) {
@@ -100,9 +109,9 @@
   min-width: 0;
   border: none;
   background: transparent;
-  color: var(--color-text);
-  padding: 0 1rem;
-  font-size: 0.95rem;
+  color: var(--color-text, #f8fafc);
+  padding: 0 0.75rem;
+  font-size: 0.85rem;
   font-family: inherit;
   position: relative;
   z-index: 1;
@@ -114,7 +123,7 @@
 .fakePlaceholder {
   position: absolute;
   inset: 0;
-  left: 1rem;
+  left: 0.75rem;
   right: 0.5rem;
   display: flex;
   align-items: center;
@@ -130,7 +139,7 @@
   white-space: nowrap;
   color: var(--color-text-muted);
   opacity: 0.6;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-family: inherit;
   flex-shrink: 0;
 }
@@ -150,10 +159,10 @@
 .scanBtn {
   flex-shrink: 0;
   border: none;
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border, #2d3748);
   background: transparent;
-  color: var(--color-text-muted);
-  padding: 0 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 0 0.6rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -162,20 +171,20 @@
 }
 
 .scanBtn:hover {
-  background: var(--color-bg2);
+  background: var(--color-bg3);
   color: var(--color-text);
 }
 
 .searchBtn {
   flex-shrink: 0;
-  height: 48px;
+  height: 42px;
   box-sizing: border-box;
   border: none;
-  border-radius: var(--radius);
-  background: var(--color-accent);
+  border-radius: var(--radius, 0.5rem);
+  background: var(--color-accent, #6366f1);
   color: #fff;
-  padding: 0 1.1rem;
-  font-size: 0.9rem;
+  padding: 0 0.9rem;
+  font-size: 0.8rem;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -353,11 +362,20 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+@media (max-width: 640px) {
+  .modeToggle {
+    width: 100%;
+  }
+  .modeBtn {
+    flex: 1;
+  }
+}
+
 @media (max-width: 480px) {
-  .modeSelectWrap { padding: 0 0.1rem 0 0.4rem; gap: 0.2rem; }
-  .modeSelect { font-size: 0.75rem; }
-  .searchInputInline { font-size: 0.875rem; padding: 0 0.6rem; }
-  .searchBtn { padding: 0 0.75rem; }
+  .modeBtn { padding: 0.3rem 0.4rem; font-size: 0.7rem; }
+  .searchInputInline { font-size: 0.8rem; padding: 0 0.5rem; }
+  .searchBtn { padding: 0 0.65rem; font-size: 0.75rem; }
+  .scanBtn { padding: 0 0.5rem; }
 }
 
 @media (max-width: 768px) {
