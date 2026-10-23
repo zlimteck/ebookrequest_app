@@ -101,6 +101,7 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
   const location = useLocation();
   const drawerRef = useRef(null);
   const [activityEnabled, setActivityEnabled] = useState(true);
+  const [authorFollowEnabled, setAuthorFollowEnabled] = useState(true);
 
   // Le flux d'activité peut être désactivé/réactivé par un admin (Réglages) :
   // on revérifie à chaque ouverture du drawer plutôt qu'une seule fois au
@@ -109,6 +110,9 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
     if (!isOpen) return;
     axiosAdmin.get('/api/requests/activity?limit=1')
       .then(res => setActivityEnabled(res.data.enabled !== false))
+      .catch(() => {});
+    axiosAdmin.get('/api/authors/config')
+      .then(res => setAuthorFollowEnabled(res.data.enabled !== false))
       .catch(() => {});
   }, [isOpen]);
 
@@ -130,7 +134,9 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
     return location.pathname.startsWith(item.to);
   };
 
-  const baseItems = activityEnabled ? NAV_ITEMS : NAV_ITEMS.filter(item => item.to !== '/activity');
+  const baseItems = NAV_ITEMS
+    .filter(item => activityEnabled || item.to !== '/activity')
+    .filter(item => authorFollowEnabled || item.to !== '/authors');
   const navItems = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems;
 
   const color = getAvatarColor({ role, hasValentine: localStorage.getItem('hasValentine') === 'true' });

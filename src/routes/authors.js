@@ -16,6 +16,18 @@ import AuthorSuggestion from '../models/AuthorSuggestion.js';
 const router = express.Router();
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// GET /api/authors/config — accessible à tout utilisateur connecté (pas
+// seulement admin), pour masquer l'onglet et les boutons de suivi côté
+// frontend quand la fonctionnalité est désactivée.
+router.get('/config', requireAuth, async (req, res) => {
+  try {
+    const config = await getAuthorFollowConfig();
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ enabled: false, maxAuthorsPerUser: 0 });
+  }
+});
+
 // GET /api/authors/search?q=...
 router.get('/search', requireAuth, async (req, res) => {
   try {
@@ -139,7 +151,24 @@ router.get('/suggestions', requireAuth, async (req, res) => {
   try {
     const cached = await AuthorSuggestion.findOne({ user: req.user.id });
     if (cached && cached.suggestions.length > 0) {
-      return res.json({ suggestions: cached.suggestions });
+      // Le cache peut contenir des auteurs suivis entre-temps (depuis cette
+      // liste ou ailleurs) : jamais réaffichés, même si le cache lui-même
+      // n'a pas été régénéré depuis.
+      const followedKeys = new Set(
+        (await AuthorFollow.find({ user: req.user.id }).populate('author', 'openLibraryKey'))
+          .map(f => f.author?.openLibraryKey)
+          .filter(Boolean)
+      );
+      const filtered = cached.suggestions.filter(s => !followedKeys.has(s.openLibraryKey));
+      if (filtered.length > 0) {
+        if (filtered.length !== cached.suggestions.length) {
+          cached.suggestions = filtered;
+          await cached.save();
+        }
+        return res.json({ suggestions: filtered });
+      }
+      // Plus aucune suggestion valable dans le cache (tout suivi) : on
+      // régénère plutôt que de renvoyer une liste vide définitivement.
     }
 
     const suggestions = await computeAuthorSuggestions(req.user.id);

@@ -74,7 +74,6 @@
   display: flex;
   align-items: center;
   flex: 1;
-  max-width: 420px;
 }
 
 .searchIcon {
@@ -160,7 +159,7 @@
    champ unique, pas de bouton séparé, recherche déjà au fil de la frappe). */
 .searchInput {
   width: 100%;
-  height: 40px;
+  height: 42px;
   box-sizing: border-box;
   padding: 0 0.9rem 0 2.1rem;
   border: 1px solid var(--color-border, #2d3748);
@@ -199,6 +198,91 @@
 }
 
 .sectionHeader .sectionTitle { margin: 0 0 1rem; }
+
+/* Pagination "Mes auteurs suivis" — même convention que Mes demandes */
+.followedPagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border, #2d3748);
+}
+
+.pageButton {
+  background: var(--color-bg2, #1e293b);
+  color: var(--color-text, #f8fafc);
+  border: 1px solid var(--color-border, #2d3748);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius, 0.5rem);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.pageButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pageInfo {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+.btnLabel { display: inline; }
+.btnIcon  { display: none; }
+
+@media (max-width: 480px) {
+  .followedPagination { gap: 0.5rem; }
+  .pageButton { padding: 0.4rem 0.65rem; font-size: 0.85rem; }
+  .pageInfo { font-size: 0.8rem; }
+  .btnLabel { display: none; }
+  .btnIcon  { display: inline; font-size: 1rem; }
+}
+
+/* ── Suggestions d'auteurs — même carte que Recommandations IA ── */
+.recommendationsSection {
+  background: var(--color-bg2, #1e293b);
+  border-radius: var(--radius, 0.5rem);
+  border: 1px solid var(--color-border, #2d3748);
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.recHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.recTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-accent);
+}
+
+.recIcon {
+  width: 20px;
+  height: 20px;
+  stroke: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.recommendationsSection .grid { margin-bottom: 0; }
 
 .sectionTitleRow {
   display: flex;
@@ -247,7 +331,7 @@
   border: 1px solid var(--color-border, #2d3748);
   border-radius: var(--radius, 0.5rem);
   padding: 0.2rem;
-  height: 40px;
+  height: 42px;
   box-sizing: border-box;
   flex-shrink: 0;
 }

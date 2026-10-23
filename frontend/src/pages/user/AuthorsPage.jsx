@@ -60,9 +60,12 @@ export default function AuthorsPage() {
   const [recentReleases, setRecentReleases] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(() => localStorage.getItem('ebookrequest_authors_suggestions_expanded') !== 'false');
-  const [sortBy, setSortBy] = useState('date');
-  const [sortDir, setSortDir] = useState('desc');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [followedPage, setFollowedPage] = useState(1);
   const searchTimeoutRef = useRef(null);
+
+  const FOLLOWED_PER_PAGE = 10;
 
   const SORTS = [
     { key: 'name', label: 'Nom' },
@@ -72,6 +75,7 @@ export default function AuthorsPage() {
   const toggleSort = (key) => {
     if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortBy(key); setSortDir(key === 'date' ? 'desc' : 'asc'); }
+    setFollowedPage(1);
   };
 
   // ── Modale de détail ──────────────────────────────────────────────────────
@@ -103,6 +107,11 @@ export default function AuthorsPage() {
   }, []);
 
   useEffect(() => { loadFollowed(); }, [loadFollowed]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(followed.length / FOLLOWED_PER_PAGE));
+    setFollowedPage(p => Math.min(p, maxPage));
+  }, [followed.length]);
 
   useEffect(() => {
     axiosAdmin.get('/api/authors/recent-releases')
@@ -277,6 +286,8 @@ export default function AuthorsPage() {
     if (va > vb) return sortDir === 'asc' ? 1 : -1;
     return 0;
   });
+  const followedTotalPages = Math.max(1, Math.ceil(sortedFollowed.length / FOLLOWED_PER_PAGE));
+  const pagedFollowed = sortedFollowed.slice((followedPage - 1) * FOLLOWED_PER_PAGE, followedPage * FOLLOWED_PER_PAGE);
 
   return (
     <div className={styles.page}>
@@ -372,49 +383,6 @@ export default function AuthorsPage() {
             )}
           </div>
 
-          {suggestions.length > 0 && (
-            <>
-              <div className={styles.sectionTitleRow}>
-                <p className={styles.sectionTitle}>Peut-être que vous aimeriez suivre</p>
-                <button
-                  type="button"
-                  className={styles.toggleButton}
-                  onClick={() => setSuggestionsExpanded(e => {
-                    localStorage.setItem('ebookrequest_authors_suggestions_expanded', String(!e));
-                    return !e;
-                  })}
-                  aria-label={suggestionsExpanded ? 'Réduire' : 'Développer'}
-                >
-                  <svg
-                    className={`${styles.chevron} ${suggestionsExpanded ? styles.chevronExpanded : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-              </div>
-              {suggestionsExpanded && (
-                <div className={styles.grid}>
-                  {suggestions.map(a => (
-                    <div key={a.openLibraryKey} className={styles.authorCard}>
-                      <AuthorPhoto src={a.photoUrl} alt={a.name} />
-                      <p className={styles.authorName} title={a.name}>{a.name}</p>
-                      <p className={styles.authorMeta}>{a.reason || ' '}</p>
-                      <button
-                        type="button"
-                        className={styles.btnTest}
-                        disabled={atLimit || busyKey === a.openLibraryKey}
-                        onClick={() => suggestFollow(a.openLibraryKey)}
-                      >
-                        {busyKey === a.openLibraryKey ? '…' : 'Suivre'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
           {atLimit && (
             <p className={styles.limitHint}>
               Limite de {config.maxAuthorsPerUser} auteur(s) suivi(s) atteinte, retirez-en un pour en ajouter un autre.
@@ -451,29 +419,100 @@ export default function AuthorsPage() {
             </>
           )}
 
-          <p className={styles.sectionTitle}>Mes auteurs suivis</p>
           {loading ? (
             <p className={styles.emptyText}>Chargement…</p>
           ) : followed.length === 0 ? (
             <p className={styles.emptyText}>Vous ne suivez aucun auteur pour le moment.</p>
           ) : (
-            <div className={styles.grid}>
-              {sortedFollowed.map(a => (
-                  <div
-                    key={a.openLibraryKey}
-                    className={styles.authorCard}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openDetail(a.openLibraryKey, a.name, a)}
-                    onKeyDown={e => { if (e.key === 'Enter') openDetail(a.openLibraryKey, a.name, a); }}
+            <>
+              <div className={styles.grid}>
+                {pagedFollowed.map(a => (
+                    <div
+                      key={a.openLibraryKey}
+                      className={styles.authorCard}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openDetail(a.openLibraryKey, a.name, a)}
+                      onKeyDown={e => { if (e.key === 'Enter') openDetail(a.openLibraryKey, a.name, a); }}
+                    >
+                      <AuthorPhoto src={a.photoUrl} alt={a.name} />
+                      <p className={styles.authorName} title={a.name}>{a.name}</p>
+                      {a.autoRequest && <span className={styles.autoBadge}>Demande auto</span>}
+                    </div>
+                  ))}
+                </div>
+
+              {followedTotalPages > 1 && (
+                <div className={styles.followedPagination}>
+                  <button
+                    className={styles.pageButton}
+                    onClick={() => setFollowedPage(p => Math.max(p - 1, 1))}
+                    disabled={followedPage === 1}
                   >
-                    <AuthorPhoto src={a.photoUrl} alt={a.name} />
-                    <p className={styles.authorName} title={a.name}>{a.name}</p>
-                    {a.autoRequest && <span className={styles.autoBadge}>Demande auto</span>}
-                  </div>
-                ))}
+                    <span className={styles.btnLabel}>← Précédent</span><span className={styles.btnIcon}>←</span>
+                  </button>
+                  <span className={styles.pageInfo}>
+                    Page {followedPage} / {followedTotalPages}
+                  </span>
+                  <button
+                    className={styles.pageButton}
+                    onClick={() => setFollowedPage(p => Math.min(p + 1, followedTotalPages))}
+                    disabled={followedPage === followedTotalPages}
+                  >
+                    <span className={styles.btnLabel}>Suivant →</span><span className={styles.btnIcon}>→</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {suggestions.length > 0 && (
+            <div className={styles.recommendationsSection}>
+              <div className={styles.recHeader}>
+                <h2 className={styles.recTitle}>
+                  <svg className={styles.recIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Peut-être que vous aimeriez suivre
+                </h2>
+                <button
+                  type="button"
+                  className={styles.toggleButton}
+                  onClick={() => setSuggestionsExpanded(e => {
+                    localStorage.setItem('ebookrequest_authors_suggestions_expanded', String(!e));
+                    return !e;
+                  })}
+                  aria-label={suggestionsExpanded ? 'Réduire' : 'Développer'}
+                >
+                  <svg
+                    className={`${styles.chevron} ${suggestionsExpanded ? styles.chevronExpanded : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
               </div>
-            )}
+              {suggestionsExpanded && (
+                <div className={styles.grid}>
+                  {suggestions.map(a => (
+                    <div key={a.openLibraryKey} className={styles.authorCard}>
+                      <AuthorPhoto src={a.photoUrl} alt={a.name} />
+                      <p className={styles.authorName} title={a.name}>{a.name}</p>
+                      <p className={styles.authorMeta}>{a.reason || ' '}</p>
+                      <button
+                        type="button"
+                        className={styles.btnTest}
+                        disabled={atLimit || busyKey === a.openLibraryKey}
+                        onClick={() => suggestFollow(a.openLibraryKey)}
+                      >
+                        {busyKey === a.openLibraryKey ? '…' : 'Suivre'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
