@@ -51,6 +51,7 @@ import sessionsRoutes from './routes/sessions.js';
 import docsRoutes from './routes/docs.js';
 import flagsRoutes from './routes/flags.js';
 import chunkedUploadRoutes from './routes/chunkedUpload.js';
+import authorsRoutes from './routes/authors.js';
 import activityTracker from './middleware/activityTracker.js';
 import { createRequire } from 'module';
 import { startValentineCron } from './services/valentineCron.js';
@@ -60,6 +61,7 @@ import { startProviderHealthCron } from './services/providerHealthCron.js';
 import { startBackupCron } from './services/backupCron.js';
 import { checkPendingProwlarrDownloads } from './services/prowlarrDownloadService.js';
 import { startReleaseCheckCron } from './services/releaseCheckCron.js';
+import { startAuthorReleaseCron } from './services/authorReleaseCron.js';
 import { startRecommendationsCron } from './services/recommendationsCron.js';
 import { startBestsellerCron } from './services/bestsellerCron.js';
 import { initSocket } from './services/socketService.js';
@@ -194,6 +196,7 @@ app.use('/api/invitation-codes', invitationCodesRoutes);
 app.use('/api/connectors', connectorsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/authors', authorsRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/auth/passkey', passkeyRoutes);
 app.use('/api/sessions', sessionsRoutes);
@@ -409,6 +412,7 @@ connectMongoWithRetry()
     // Cron de notification "date de sortie atteinte" : prévient l'utilisateur
     // quand publishedDate est dépassée sur une demande encore en attente
     startReleaseCheckCron();
+    startAuthorReleaseCron();
 
     // Cron de rafraîchissement hebdomadaire des recommandations IA (widget dashboard)
     startRecommendationsCron();

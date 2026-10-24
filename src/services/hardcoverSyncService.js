@@ -32,7 +32,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function graphql(apiKey, query, variables) {
+export async function graphql(apiKey, query, variables) {
   const wait = lastCallAt + MIN_DELAY_BETWEEN_CALLS_MS - Date.now();
   if (wait > 0) await sleep(wait);
   lastCallAt = Date.now();
@@ -76,13 +76,19 @@ async function findHardcoverBookId(apiKey, { title, author }) {
   const scored = hits
     .map(h => h?.document)
     .filter(Boolean)
-    .map(doc => ({
-      doc,
-      score: titleMatchScore([title], doc.title || '') * 2 + authorMatchScore(author, (doc.author_names || []).join(' ')),
-    }))
+    .map(doc => {
+      const authorScore = authorMatchScore(author, (doc.author_names || []).join(' '));
+      return { doc, authorScore, score: titleMatchScore([title], doc.title || '') * 2 + authorScore };
+    })
     .sort((a, b) => b.score - a.score);
 
-  const slug = scored[0]?.doc?.slug;
+  // Un auteur fourni qui ne correspond à AUCUN mot du candidat (score 0) veut
+  // dire "livre sans rapport" — mieux vaut ne rien synchroniser que de pousser
+  // un livre d'un auteur totalement différent sous prétexte que son titre
+  // ressemblait un peu (constaté en conditions réelles : titre proche, auteur
+  // complètement autre, choisi quand même faute de seuil minimum).
+  const best = scored.find(s => author ? s.authorScore > 0 : true);
+  const slug = best?.doc?.slug;
   if (!slug) return null;
 
   const data = await graphql(apiKey, `

@@ -100,6 +100,11 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   bookStorageS3AccessKeyId: { type: String, default: '' },
   bookStorageS3SecretAccessKey: { type: String, default: '' }, // chiffré via cryptoService
   bookStorageS3Prefix: { type: String, default: '' },
+  // Suivi d'auteurs (service: 'authorFollow', issue #48) — `enabled` générique
+  // ci-dessus active/désactive toute la fonctionnalité, `maxAuthorsPerUser`
+  // plafonne le nombre d'auteurs suivis par utilisateur (-1 = illimité, même
+  // convention que requestLimit sur User).
+  maxAuthorsPerUser: { type: Number, default: 50, min: -1 },
   // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.

@@ -298,6 +298,44 @@ function extractRecommendationsManually(response) {
   return recommendations.slice(0, 5);
 }
 
+// Suggère des AUTEURS (pas des livres précis) à suivre, sur la même base de
+// signal que les recommandations de livres (demandes + bibliothèque notée) —
+// utilisé par GET /api/authors/suggestions en complément de la suggestion
+// purement heuristique (auteurs déjà présents dans les demandes). `knownNames`
+// exclut les auteurs déjà suivis pour ne jamais les resuggérer.
+export async function generateAuthorSuggestions(bookRequests, libraryBooks, knownNames = [], limit = 5) {
+  if ((!bookRequests || bookRequests.length === 0) && (!libraryBooks || libraryBooks.length === 0)) {
+    return [];
+  }
+  try {
+    const booksList = (bookRequests || []).map(b => `"${b.title}" par ${b.author}`).join('\n');
+    const libraryList = (libraryBooks || []).map(b => `"${b.title}" par ${b.author}${b.rating ? ` (noté ${b.rating}/5)` : ''}`).join('\n');
+    const exclude = knownNames.length ? `\n\nN'inclus JAMAIS ces auteurs, l'utilisateur les suit déjà : ${knownNames.join(', ')}.` : '';
+
+    const prompt = `Tu es un expert en littérature. Voici les livres qu'un utilisateur a demandés et/ou lus :
+
+${[booksList && `Demandes :\n${booksList}`, libraryList && `Bibliothèque lue :\n${libraryList}`].filter(Boolean).join('\n\n')}
+
+Suggère exactement ${limit} AUTEURS (pas des livres précis) dont le style pourrait plaire à cet utilisateur, différents des auteurs qu'il a déjà demandés ou lus.${exclude}
+
+Réponds uniquement avec un tableau JSON de ce format, sans texte autour :
+[{"name": "Nom de l'auteur", "reason": "raison en une phrase courte"}]`;
+
+    const result = await generateCompletion(prompt, { temperature: 0.7, timeout: 30000 });
+    const jsonMatch = result.text.trim().match(/\[\s*\{[\s\S]*\}\s*\]/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text.trim());
+    if (!Array.isArray(parsed)) return [];
+
+    const knownLower = new Set(knownNames.map(n => n.trim().toLowerCase()));
+    return parsed
+      .filter(a => a.name && !knownLower.has(a.name.trim().toLowerCase()))
+      .map(a => ({ name: a.name.trim(), reason: a.reason?.trim() || '' }));
+  } catch (err) {
+    console.warn('[Authors] Échec suggestions IA:', err.message);
+    return [];
+  }
+}
+
 // Génère un ID unique pour une recommandation
 function generateRecommendationId(title, author) {
   const str = `${title}-${author}`.toLowerCase().replace(/[^a-z0-9]/g, '');

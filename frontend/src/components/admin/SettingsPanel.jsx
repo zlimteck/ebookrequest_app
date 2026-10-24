@@ -1490,6 +1490,109 @@ function ActivityFeedCard() {
   );
 }
 
+function AuthorFollowCard() {
+  const [config, setConfig] = useState({ enabled: true, maxAuthorsPerUser: 50 });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    axiosAdmin.get('/api/admin/author-follow/config')
+      .then(res => setConfig({
+        enabled: res.data.enabled ?? true,
+        maxAuthorsPerUser: res.data.maxAuthorsPerUser ?? 50,
+      }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showAlertMsg = (type, message) => {
+    setAlert({ type, message });
+    setTimeout(() => setAlert(null), 5000);
+  };
+
+  const handleToggle = async (e) => {
+    const value = e.target.checked;
+    const prev = config.enabled;
+    setConfig(c => ({ ...c, enabled: value }));
+    try {
+      await axiosAdmin.put('/api/admin/author-follow/config', { ...config, enabled: value });
+    } catch (err) {
+      setConfig(c => ({ ...c, enabled: prev }));
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await axiosAdmin.put('/api/admin/author-follow/config', config);
+      showAlertMsg('success', 'Réglage enregistré.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.card}>
+      <div className={styles.cardLoading}><div className={styles.spinner} /></div>
+    </div>
+  );
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBrand}>
+          <div className={styles.cardLogoWrap}>
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/>
+            </svg>
+          </div>
+          <div>
+            <p className={styles.cardName}>Suivi d'auteurs</p>
+            <p className={styles.cardDesc}>Permet aux utilisateurs de suivre des auteurs et d'être notifiés (ou de demander automatiquement) leurs nouvelles sorties.</p>
+          </div>
+        </div>
+        <label className={styles.switch}>
+          <input type="checkbox" checked={config.enabled} onChange={handleToggle} />
+          <span className={styles.slider} />
+        </label>
+      </div>
+
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Auteurs suivis par utilisateur (max)</label>
+          <input
+            className={styles.fieldInput}
+            type="number"
+            min="-1"
+            placeholder="50"
+            value={config.maxAuthorsPerUser}
+            onChange={e => setConfig(c => ({ ...c, maxAuthorsPerUser: e.target.value }))}
+          />
+          <p className={styles.fieldHint}>-1 pour illimité.</p>
+        </div>
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function ApnsCard() {
   const [config, setConfig] = useState({
     enabled: false, mode: 'direct', apiKey: '', _hasApiKey: false,
@@ -1740,6 +1843,7 @@ export default function SettingsPanel() {
       <RSSFeedCard />
       <ManualModeCard />
       <ActivityFeedCard />
+      <AuthorFollowCard />
       <ApnsCard />
       <ProxyCard />
     </div>

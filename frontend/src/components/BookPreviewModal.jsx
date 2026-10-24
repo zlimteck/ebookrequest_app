@@ -1,6 +1,19 @@
 import React, { useEffect } from 'react';
 import styles from './BookPreviewModal.module.css';
 import { infoLinkSourceLabel, buildGoogleBooksLink, buildHardcoverLink, isCoveredByDedicatedButton } from '../utils/infoLinkSource';
+import useQuickFollowAuthor from '../hooks/useQuickFollowAuthor';
+
+const IconFollowAuthor = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/>
+  </svg>
+);
+
+const IconFollowing = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>
+  </svg>
+);
 
 const BookPreviewModal = ({ book, onClose }) => {
   useEffect(() => {
@@ -9,7 +22,12 @@ const BookPreviewModal = ({ book, onClose }) => {
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
+  const { enabled: authorFollowEnabled, status: authorFollowStatus, error: authorFollowError, follow: followAuthor } = useQuickFollowAuthor();
+
   if (!book) return null;
+
+  const authorName = book.author;
+  const followStatus = authorFollowStatus[authorName];
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -25,7 +43,25 @@ const BookPreviewModal = ({ book, onClose }) => {
 
           <div className={styles.info}>
             <h2 className={styles.title}>{book.title}</h2>
-            <p className={styles.author}>par {book.author}</p>
+            <div className={styles.authorRow}>
+              <p className={styles.author}>par {book.author}</p>
+              {authorFollowEnabled && authorName && (
+                <button
+                  type="button"
+                  className={`${styles.followAuthorBtn} ${followStatus === 'followed' ? styles.followAuthorBtnActive : ''}`}
+                  disabled={followStatus === 'busy' || followStatus === 'followed'}
+                  onClick={() => followAuthor(authorName)}
+                  title={
+                    followStatus === 'followed' ? `Vous suivez ${authorName}`
+                      : followStatus === 'error' ? authorFollowError[authorName]
+                      : `Suivre ${authorName}`
+                  }
+                >
+                  {followStatus === 'followed' ? <IconFollowing /> : <IconFollowAuthor />}
+                  {followStatus === 'followed' ? 'Suivi' : 'Suivre l\'auteur'}
+                </button>
+              )}
+            </div>
 
             <div className={styles.meta}>
               {book.pageCount > 0 && (

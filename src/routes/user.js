@@ -882,10 +882,14 @@ router.post('/hardcover/sync-now', requireAuth, async (req, res) => {
     // Peut prendre plusieurs minutes sur une grosse bibliothèque (rate-limit Hardcover
     // respecté par hardcoverSyncService) — on répond tout de suite, ça tourne en fond.
     const { syncUserLibrary } = await import('../services/hardcoverSyncCron.js');
+    const { syncUserAuthorFollows } = await import('../services/hardcoverAuthorSyncService.js');
     syncUserLibrary(user, { force: true }).catch(err => {
       console.warn(`[HardcoverSync] Échec synchro manuelle pour ${user.username}:`, err.message);
     });
-    res.json({ success: true, message: 'Synchronisation lancée en arrière-plan — ça peut prendre quelques minutes.' });
+    syncUserAuthorFollows(user, { force: true }).catch(err => {
+      console.warn(`[HardcoverSync] Échec synchro manuelle des auteurs suivis pour ${user.username}:`, err.message);
+    });
+    res.json({ success: true, message: 'Synchronisation lancée en arrière-plan (bibliothèque et auteurs suivis), ça peut prendre quelques minutes.' });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }

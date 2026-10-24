@@ -16,6 +16,7 @@ const UserSettings  = React.lazy(() => import('./components/UserSettings'));
 const ProfilePage   = React.lazy(() => import('./pages/user/ProfilePage'));
 const ActivityPage  = React.lazy(() => import('./pages/user/ActivityPage'));
 const ReadingPage   = React.lazy(() => import('./pages/user/ReadingPage'));
+const AuthorsPage   = React.lazy(() => import('./pages/user/AuthorsPage'));
 const ApiDocsPage   = React.lazy(() => import('./pages/ApiDocsPage'));
 const NotFound      = React.lazy(() => import('./pages/NotFound'));
 const VerifyEmail   = React.lazy(() => import('./pages/auth/VerifyEmail'));
@@ -327,6 +328,10 @@ function App() {
           <Route
             path="/reading"
             element={isAuthenticated ? <ReadingPage /> : <Navigate to="/login" state={{ from: '/reading' }} replace />}
+          />
+          <Route
+            path="/authors"
+            element={isAuthenticated ? <AuthorsPage /> : <Navigate to="/login" state={{ from: '/authors' }} replace />}
           />
           <Route
             path="/discover"
