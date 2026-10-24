@@ -283,4 +283,18 @@ router.delete('/:key/follow', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/authors/hardcover/import — importe les auteurs déjà suivis sur
+// le compte Hardcover personnel de l'utilisateur, même principe que
+// POST /api/users/hardcover/import pour la bibliothèque.
+router.post('/hardcover/import', requireAuth, async (req, res) => {
+  try {
+    const { importFollowedAuthorsFromHardcover } = await import('../services/hardcoverAuthorSyncService.js');
+    const result = await importFollowedAuthorsFromHardcover(req.user.id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ success: true, message: `${result.imported} auteur(s) importé(s), ${result.skipped} déjà suivi(s) ou ignoré(s).`, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de l\'import.' });
+  }
+});
+
 export default router;

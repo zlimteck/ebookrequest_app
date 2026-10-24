@@ -127,6 +127,13 @@ curl -X POST https://app.ndd.fr/api/users/me/achievements/found-404 \
   -H "Authorization: Bearer <token>"
 ```
 
+### `POST /api/users/me/achievements/chatbot-message-sent`
+Incrémente le compteur de messages envoyés au chatbot IA (`chatbotMessagesSent`), pour les messages répondus entièrement en local côté iOS (modèles Apple on-device / Private Cloud Compute), qui ne passent jamais par `POST /api/chatbot/message` et ne déclenchent donc pas l'incrément normal côté serveur.
+```bash
+curl -X POST https://app.ndd.fr/api/users/me/achievements/chatbot-message-sent \
+  -H "Authorization: Bearer <token>"
+```
+
 ### `GET /api/users/me/export`
 Export de toutes les données personnelles de l'utilisateur connecté au format JSON (portabilité RGPD) : compte (sans secrets ni mots de passe), demandes de livres, bibliothèque de lecture, sessions actives (IP et user-agent déchiffrés).
 ```bash
@@ -442,6 +449,100 @@ curl -X DELETE https://app.ndd.fr/api/reading/ID \
 
 ---
 
+## Auteurs suivis
+
+Suivi d'auteurs avec détection automatique des nouvelles sorties (issue #48). Identité de l'auteur via Open Library (clé stable `OLxxxxA`), repli Hardcover pour le nom/la bio quand Open Library ne fournit pas de nom en écriture latine (mangas notamment). Vérification des nouveautés une fois par jour, une seule fois par auteur réel quel que soit le nombre d'abonnés. Demande automatique optionnelle par auteur suivi, qui passe par le même pipeline de téléchargement qu'une demande manuelle et compte dans le quota de demandes de l'utilisateur.
+
+### `GET /api/authors/config`
+Accessible à tout utilisateur connecté (pas seulement admin) — permet au frontend de masquer l'onglet et les boutons de suivi quand la fonctionnalité est désactivée.
+```bash
+curl https://app.ndd.fr/api/authors/config \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/authors/search?q=...`
+Recherche d'auteurs via Open Library.
+```bash
+curl "https://app.ndd.fr/api/authors/search?q=Virginie+Grimaldi" \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/authors/:key`
+Identité de l'auteur (nom, bio, photo) uniquement — la liste des livres passe par `GET /api/books/search?author=` (voir [Recherche Google Books](#recherche-google-books)), déjà paginée et mise en cache côté serveur.
+```bash
+curl https://app.ndd.fr/api/authors/OL23919A \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/authors/check-duplicates`
+Vérifie en une seule requête groupée (max 10 titres) si des livres d'un auteur sont déjà présents dans les demandes de l'utilisateur.
+```bash
+curl -X POST https://app.ndd.fr/api/authors/check-duplicates \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"author": "Virginie Grimaldi", "titles": ["Le parfum du bonheur est plus fort sous la pluie"]}'
+```
+
+### `GET /api/authors/recent-releases`
+Dernières nouveautés détectées par le cron quotidien pour les auteurs suivis par l'utilisateur (10 plus récentes).
+```bash
+curl https://app.ndd.fr/api/authors/recent-releases \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/authors/suggestions`
+Suggestions d'auteurs à suivre : heuristique sur les auteurs déjà présents dans les demandes de l'utilisateur, complétée par l'IA si un fournisseur est configuré (même moteur que les recommandations de livres). Mise en cache, régénération manuelle limitée à 3 fois par semaine.
+```bash
+curl https://app.ndd.fr/api/authors/suggestions \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/authors/suggestions/regenerate`
+Régénère les suggestions en consommant 1 régénération sur le quota (3 par 7 jours). `429` avec le détail du quota si la limite est atteinte.
+```bash
+curl -X POST https://app.ndd.fr/api/authors/suggestions/regenerate \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/authors/me/followed`
+Liste des auteurs suivis par l'utilisateur, avec la config globale (`enabled`, `maxAuthorsPerUser`).
+```bash
+curl https://app.ndd.fr/api/authors/me/followed \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/authors/:key/follow`
+```bash
+curl -X POST https://app.ndd.fr/api/authors/OL23919A/follow \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"autoRequest": false}'
+```
+
+### `PATCH /api/authors/:key/follow`
+Met à jour `autoRequest` pour un auteur déjà suivi.
+```bash
+curl -X PATCH https://app.ndd.fr/api/authors/OL23919A/follow \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"autoRequest": true}'
+```
+
+### `DELETE /api/authors/:key/follow`
+```bash
+curl -X DELETE https://app.ndd.fr/api/authors/OL23919A/follow \
+  -H "Authorization: Bearer <token>"
+```
+
+### `POST /api/authors/hardcover/import`
+Importe les auteurs déjà suivis sur le compte Hardcover personnel de l'utilisateur (nécessite la clé API Hardcover personnelle configurée, voir `PUT /api/users/hardcover`) : n'ajoute que les auteurs absents côté EbookRequest, ne modifie jamais un suivi déjà présent. Synchro inverse (EbookRequest → Hardcover) automatique à chaque suivi/désabonnement, plus un filet de rattrapage quotidien — mutation Hardcover non documentée officiellement, confirmée uniquement via du code tiers.
+```bash
+curl -X POST https://app.ndd.fr/api/authors/hardcover/import \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
 ## Disponibilité
 
 ### `POST /api/availability/check`
@@ -645,7 +746,7 @@ curl -X POST https://app.ndd.fr/api/users/hardcover/test \
 ```
 
 ### `POST /api/users/hardcover/sync-now`
-Lance en arrière-plan une resynchronisation de tous les livres ajoutés/modifiés depuis la dernière tentative (retente aussi ceux en erreur).
+Lance en arrière-plan une resynchronisation de tous les livres **et auteurs suivis** ajoutés/modifiés depuis la dernière tentative (retente aussi ceux en erreur).
 ```bash
 curl -X POST https://app.ndd.fr/api/users/hardcover/sync-now \
   -H "Authorization: Bearer <token>"
@@ -710,6 +811,21 @@ curl https://app.ndd.fr/api/admin/stats \
 ```bash
 curl https://app.ndd.fr/api/admin/health \
   -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/author-follow/config`
+Activation globale du suivi d'auteurs et limite du nombre d'auteurs suivis par utilisateur.
+```bash
+curl https://app.ndd.fr/api/admin/author-follow/config \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### `PUT /api/admin/author-follow/config`
+```bash
+curl -X PUT https://app.ndd.fr/api/admin/author-follow/config \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "maxAuthorsPerUser": 50}'
 ```
 
 ### `GET /api/admin/download-logs`

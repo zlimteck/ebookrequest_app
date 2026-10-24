@@ -53,6 +53,14 @@ export async function followAuthor(userId, openLibraryKey, autoRequest = false) 
     { autoRequest: !!autoRequest },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
+  // Poussé vers le compte Hardcover personnel de l'utilisateur si activé,
+  // fire-and-forget — import dynamique pour éviter un cycle statique
+  // (hardcoverAuthorSyncService importe authorFollowService pour l'import inverse).
+  import('./hardcoverAuthorSyncService.js')
+    .then(({ syncAuthorFollowToHardcover }) => syncAuthorFollowToHardcover(userId, follow, author))
+    .catch(() => {});
+
   return { follow, author };
 }
 
@@ -60,6 +68,10 @@ export async function unfollowAuthor(userId, openLibraryKey) {
   const author = await Author.findOne({ openLibraryKey });
   if (!author) return;
   await AuthorFollow.deleteOne({ user: userId, author: author._id });
+
+  import('./hardcoverAuthorSyncService.js')
+    .then(({ unsyncAuthorFollowFromHardcover }) => unsyncAuthorFollowFromHardcover(userId, author))
+    .catch(() => {});
 }
 
 export async function updateFollow(userId, openLibraryKey, autoRequest) {

@@ -148,6 +148,13 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
   - Affichage du poids du fichier original et du fichier converti
   - Les fichiers convertis sont automatiquement supprimés après 24h
 
+**Suivi d'auteurs**
+- Suivre un auteur (identité via Open Library, repli Hardcover pour le nom/la bio si besoin) pour être notifié de ses nouvelles sorties, avec demande automatique optionnelle par auteur suivi (compte dans le quota de demandes de l'utilisateur, passe par le même pipeline de téléchargement qu'une demande manuelle)
+- Vérification quotidienne des nouveautés, une seule fois par auteur réel quel que soit le nombre d'utilisateurs qui le suivent ; aucune notification rétroactive sur les livres déjà sortis au moment du suivi
+- Fil des dernières sorties détectées, suggestions d'auteurs à suivre (auteurs déjà présents dans les demandes + IA si un fournisseur est configuré, même moteur que les recommandations de livres), page dédiée avec recherche, tri et pagination
+- **Synchronisation Hardcover** (même clé API personnelle que la bibliothèque de lecture) : suivi/désabonnement poussé automatiquement vers Hardcover, import initial des auteurs déjà suivis sur Hardcover (n'ajoute que ce qui manque), cron de rattrapage quotidien en filet de sécurité
+- Limite du nombre d'auteurs suivis par utilisateur configurable par un admin, fonctionnalité activable/désactivable globalement
+
 **Découverte & IA**
 - Page Découverte (tendances, bestsellers, recommandations IA) : les bestsellers sont générés automatiquement une fois par mois en tâche de fond (en plus de la génération manuelle par un admin), avec désactivation automatique de la liste du mois précédent générée par le cron (les bestsellers ajoutés manuellement par un admin ne sont jamais touchés) ; chaque livre proposé par l'IA est vérifié auprès de Google Books/Hardcover/Open Library avant d'être affiché (les titres qu'aucune source ne confirme sont écartés, pas de "faux livre" inventé affiché à l'utilisateur)
 - Recommandations IA basées sur l'historique des demandes et la bibliothèque de lecture (livres lus, notes), avec cache et rafraîchissement hebdomadaire automatique en tâche de fond (widget sur la page de demande, régénération manuelle limitée à 3 fois par semaine) ; comme pour les bestsellers, un titre non confirmé par Google Books/Hardcover/Open Library n'est jamais affiché

@@ -112,11 +112,12 @@ const UserSettings = () => {
   const [calibreSyncing, setCalibreSyncing] = useState(false);
   const [calibreSyncResult, setCalibreSyncResult] = useState(null);
 
-  const [hardcover, setHardcover] = useState({ enabled: false, apiKey: '', hasApiKey: false, keyUpdatedAt: null });
+  const [hardcover, setHardcover] = useState({ enabled: false, apiKey: '', hasApiKey: false, keyUpdatedAt: null, lastSync: null });
   const [hardcoverSaving, setHardcoverSaving] = useState(false);
   const [hardcoverTesting, setHardcoverTesting] = useState(false);
   const [hardcoverSyncing, setHardcoverSyncing] = useState(false);
   const [hardcoverImporting, setHardcoverImporting] = useState(false);
+  const [hardcoverAuthorsImporting, setHardcoverAuthorsImporting] = useState(false);
   const [hardcoverTestResult, setHardcoverTestResult] = useState(null);
   const [valentine, setValentine] = useState({ username: '', password: '', hasPassword: false });
   const [valentineSaving, setValentineSaving] = useState(false);
@@ -220,7 +221,7 @@ const UserSettings = () => {
     const fetchHardcoverConfig = async () => {
       try {
         const res = await axiosAdmin.get('/api/users/hardcover');
-        setHardcover({ enabled: res.data.enabled ?? false, apiKey: '', hasApiKey: res.data._hasApiKey ?? false, keyUpdatedAt: res.data._keyUpdatedAt || null });
+        setHardcover({ enabled: res.data.enabled ?? false, apiKey: '', hasApiKey: res.data._hasApiKey ?? false, keyUpdatedAt: res.data._keyUpdatedAt || null, lastSync: res.data.lastSync || null });
       } catch { /* silencieux */ }
     };
     const fetchMcpInfo = async () => {
@@ -576,7 +577,7 @@ const UserSettings = () => {
         apiKey: hardcover.apiKey,
         _hasApiKey: hardcover.hasApiKey,
       });
-      setHardcover({ enabled: res.data.enabled, apiKey: '', hasApiKey: res.data._hasApiKey, keyUpdatedAt: res.data._keyUpdatedAt || null });
+      setHardcover({ enabled: res.data.enabled, apiKey: '', hasApiKey: res.data._hasApiKey, keyUpdatedAt: res.data._keyUpdatedAt || null, lastSync: res.data.lastSync || null });
       toast.success('Configuration Hardcover enregistrée');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde');
@@ -622,6 +623,20 @@ const UserSettings = () => {
       setHardcoverTestResult({ type: 'error', message: err.response?.data?.error || 'Erreur lors du lancement de la synchro' });
     } finally {
       setHardcoverSyncing(false);
+    }
+  };
+
+  const handleHardcoverAuthorsImport = async () => {
+    if (!window.confirm('Importer les auteurs déjà suivis sur votre compte Hardcover ? Seuls les auteurs absents de votre liste EbookRequest seront ajoutés.')) return;
+    setHardcoverAuthorsImporting(true);
+    setHardcoverTestResult(null);
+    try {
+      const res = await axiosAdmin.post('/api/authors/hardcover/import');
+      setHardcoverTestResult({ type: 'success', message: res.data.message || 'Import terminé' });
+    } catch (err) {
+      setHardcoverTestResult({ type: 'error', message: err.response?.data?.error || 'Erreur lors de l\'import' });
+    } finally {
+      setHardcoverAuthorsImporting(false);
     }
   };
 
@@ -1683,14 +1698,22 @@ const UserSettings = () => {
           {hardcover.enabled && hardcover.hasApiKey && (
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
               <p style={{ fontSize: '0.83rem', color: 'var(--color-text-muted)', marginBottom: '0.6rem' }}>
-                Forcer une synchronisation immédiate, ou importer les livres déjà présents dans votre bibliothèque Hardcover.
+                Forcer une synchronisation immédiate (bibliothèque et auteurs suivis), ou importer ce qui existe déjà sur Hardcover.
+                {hardcover.lastSync && (
+                  <span style={{ marginLeft: '0.3rem', opacity: 0.75 }}>
+                    Dernière sync : {new Date(hardcover.lastSync).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })} à {new Date(hardcover.lastSync).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
               </p>
               <div className={styles.secondaryActions}>
                 <button type="button" className={styles.btnOutline} onClick={handleHardcoverSyncNow} disabled={hardcoverSyncing}>
                   {hardcoverSyncing ? 'Lancement…' : 'Synchroniser maintenant'}
                 </button>
                 <button type="button" className={styles.btnOutline} onClick={handleHardcoverImport} disabled={hardcoverImporting}>
-                  {hardcoverImporting ? 'Import…' : 'Importer depuis Hardcover'}
+                  {hardcoverImporting ? 'Import…' : 'Importer la bibliothèque'}
+                </button>
+                <button type="button" className={styles.btnOutline} onClick={handleHardcoverAuthorsImport} disabled={hardcoverAuthorsImporting}>
+                  {hardcoverAuthorsImporting ? 'Import…' : 'Importer les auteurs suivis'}
                 </button>
               </div>
             </div>

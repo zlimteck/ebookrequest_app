@@ -346,6 +346,7 @@
 
 .fieldInput {
   width: 100%;
+  height: 42px;
   padding: 0.6rem 0.9rem;
   font-size: 0.9rem;
   background: var(--color-bg3);

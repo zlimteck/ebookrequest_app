@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import ReadingList from '../models/ReadingList.js';
 import { syncReadingEntryToHardcover } from './hardcoverSyncService.js';
+import { syncUserAuthorFollows } from './hardcoverAuthorSyncService.js';
 
 // Filet de sécurité quotidien : la synchro se déclenche déjà immédiatement à l'ajout
 // d'un livre (manuel ou via demande complétée) et à chaque changement de statut/note
@@ -44,6 +45,9 @@ async function runHardcoverSyncCron() {
     for (const user of users) {
       await syncUserLibrary(user).catch(err => {
         console.warn(`[HardcoverSyncCron] Échec pour ${user.username || user._id}:`, err.message);
+      });
+      await syncUserAuthorFollows(user).catch(err => {
+        console.warn(`[HardcoverSyncCron] Échec suivi d'auteurs pour ${user.username || user._id}:`, err.message);
       });
     }
   } catch (err) {
