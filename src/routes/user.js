@@ -69,6 +69,21 @@ router.post('/me/achievements/activity-visited', requireAuth, async (req, res) =
   }
 });
 
+// Compteur "discussion avec l'IA" pour un message répondu entièrement en
+// local côté iOS (modèles Apple on-device / Private Cloud Compute, sans
+// passer par POST /api/chatbot/message) — même $inc que chatbot.js, pour
+// que ces messages comptent aussi dans le succès lié à chatbotMessagesSent.
+router.post('/me/achievements/chatbot-message-sent', requireAuth, async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.id }, { $inc: { chatbotMessagesSent: 1 } });
+    const { getUserAchievements } = await import('../services/achievementsService.js');
+    getUserAchievements(req.user.id).catch(() => {});
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement du succès' });
+  }
+});
+
 // GET /api/users/me/export — export de toutes les données personnelles de
 // l'utilisateur connecté (portabilité RGPD), en un fichier JSON téléchargeable.
 // Exclut délibérément les secrets (mots de passe, clés API, tokens) même si

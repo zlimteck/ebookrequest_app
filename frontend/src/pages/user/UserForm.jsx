@@ -845,7 +845,6 @@ function UserForm() {
     <div className={styles.pageWrapper}>
     <h1 className={styles.pageTitle}>Demander un livre</h1>
     <div className={`${styles.formContainer} ${styles.requestForm}`}>
-      <div className={styles.formCard}>
 
       {/* ── Quota compact ── */}
       {(quota || (valentineQuota && !valentineQuota.error)) && (
@@ -903,20 +902,20 @@ function UserForm() {
             aria-label="Détaillée" title="Détaillée">
             <BookIcon /> <span className={styles.toggleLabel}>Détaillée</span>
           </button>
-          {manualModeAllowed && (
-            <button type="button"
-              className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
-              onClick={() => chooseSearchMode('manual')} aria-pressed={searchMode === 'manual'}
-              aria-label="Manuel" title="Manuel">
-              <EditIcon /> <span className={styles.toggleLabel}>Manuel</span>
-            </button>
-          )}
           {directSearchAllowed && (
             <button type="button"
               className={`${styles.toggleButton} ${searchMode === 'direct' ? styles.toggleActive : ''}`}
               onClick={() => chooseSearchMode('direct')} disabled={!!selectedBook} aria-pressed={searchMode === 'direct'}
               aria-label="Directe" title="Directe">
               <ZapIcon /> <span className={styles.toggleLabel}>Directe</span>
+            </button>
+          )}
+          {manualModeAllowed && (
+            <button type="button"
+              className={`${styles.toggleButton} ${searchMode === 'manual' ? styles.toggleActive : ''}`}
+              onClick={() => chooseSearchMode('manual')} aria-pressed={searchMode === 'manual'}
+              aria-label="Manuel" title="Manuel">
+              <EditIcon /> <span className={styles.toggleLabel}>Manuel</span>
             </button>
           )}
         </div>
@@ -992,7 +991,7 @@ function UserForm() {
       )}
 
       {searchMode === 'manual' && (
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form onSubmit={handleSubmit} className={`${styles.form} ${styles.manualFields}`}>
           {selectedBook && <SelectedBookInfo book={selectedBook} onRemove={handleRemoveBook} />}
 
           {checkingAvailability && (
@@ -1159,7 +1158,6 @@ function UserForm() {
         </form>
       )}
 
-      </div>
       <BookRecommendations onSelectBook={handleBookSelect} />
     </div>
     </div>

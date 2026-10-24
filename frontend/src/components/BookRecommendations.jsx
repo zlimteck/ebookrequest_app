@@ -9,7 +9,7 @@ const BookRecommendations = ({ onSelectBook }) => {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => localStorage.getItem('ebookrequest_recommendations_expanded') === 'true');
   const [rateInfo, setRateInfo] = useState(null);
   const [aiEnabled, setAiEnabled] = useState(true);
   // { regenerationsUsed, regenerationsMax, regenerationsRemaining, windowResetAt, generatedAt, cached }
@@ -219,7 +219,10 @@ const BookRecommendations = ({ onSelectBook }) => {
 
           <button
             className={styles.toggleButton}
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => setExpanded(e => {
+              localStorage.setItem('ebookrequest_recommendations_expanded', String(!e));
+              return !e;
+            })}
             aria-label={expanded ? "Réduire" : "Développer"}
           >
             <svg

@@ -289,7 +289,7 @@ const GoogleBooksSearch = ({ onSelectBook, onBatchSelectBooks, batchSubmitting =
       <form onSubmit={handleSubmit} className={styles.searchForm}>
 
         <p className={styles.warningNote}>
-          Recherche via Google Books / Open Library / Hardcover — le résultat choisi
+          Recherche via Google Books / Open Library / Hardcover : le résultat choisi
           pré-remplit le formulaire de demande, sans télécharger immédiatement.
         </p>
 
