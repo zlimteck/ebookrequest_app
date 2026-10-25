@@ -11,6 +11,7 @@ import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from '../services/go
 import { getHardcoverApiKey, getHardcoverQuotaStatus } from '../services/hardcoverConfig.js';
 import { getProxyConfig, getProxyAgent } from '../services/proxyConfig.js';
 import { getRSSFeedUrl } from '../services/rssConfig.js';
+import { fetchUpcomingReleases, getUpcomingReleasesConfig } from '../services/upcomingReleasesService.js';
 
 const CF_SCRAPER_URL = process.env.FLARESOLVERR_URL || 'http://flaresolverr:8191';
 
@@ -89,6 +90,21 @@ async function checkRssFeed() {
     return { enabled: true, connected: true, url, error: null };
   } catch (err) {
     return { enabled: true, connected: false, url: null, error: err.message };
+  }
+}
+
+// Flux BnF Nouveautés Éditeurs (issue #52) — parsing réel plutôt qu'un simple
+// HTTP 200, un flux qui répond mais renvoie 0 annonce (changement de format)
+// doit aussi apparaître en panne ici.
+async function checkBnfFeed() {
+  const config = await getUpcomingReleasesConfig();
+  if (!config.enabled) return { enabled: false, connected: false, count: null, error: null };
+  try {
+    const releases = await fetchUpcomingReleases();
+    if (releases.length === 0) return { enabled: true, connected: false, count: 0, error: 'Aucune annonce renvoyée' };
+    return { enabled: true, connected: true, count: releases.length, error: null };
+  } catch (err) {
+    return { enabled: true, connected: false, count: null, error: err.message };
   }
 }
 
@@ -623,7 +639,7 @@ function withTimeout(promise, ms, fallback, label) {
 export const getServicesHealth = async (req, res) => {
   try {
     const providerInfo = await getProviderInfo();
-    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations, downloadClient, emailProvider, rssFeed, libgen] = await Promise.all([
+    const [aiStatus, flareSolverr, apprise, calibreWeb, valentine, annasArchive, mcp, googleBooks, hardcover, proxy, fourtoutici, ultimZone, prowlarr, bookStorage, remoteBackupDestinations, downloadClient, emailProvider, rssFeed, libgen, bnfFeed] = await Promise.all([
       withTimeout(testAIProviderConnection(), 8000, { connected: false, error: 'timeout' }, 'Fournisseur IA'),
       withTimeout(checkFlareSolverr(), 6000, { connected: false, error: 'timeout' }, 'FlareSolverr'),
       withTimeout(checkAppriseServer(), 6000, { reachable: false, error: 'timeout' }, 'Apprise'),
@@ -643,6 +659,7 @@ export const getServicesHealth = async (req, res) => {
       withTimeout(checkEmailProvider(), 8000, { enabled: true, connected: false, provider: null, error: 'timeout' }, 'Fournisseur email'),
       withTimeout(checkRssFeed(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }, 'Flux RSS'),
       withTimeout(checkLibgenConnector(), 8000, { enabled: true, connected: false, url: null, error: 'timeout' }, 'LibGen'),
+      withTimeout(checkBnfFeed(), 8000, { enabled: true, connected: false, count: null, error: 'timeout' }, 'BnF Nouveautés Éditeurs'),
     ]);
 
     res.json({
@@ -763,6 +780,12 @@ export const getServicesHealth = async (req, res) => {
           connected: rssFeed.connected,
           url: rssFeed.url || null,
           error: rssFeed.error || null,
+        },
+        bnfFeed: {
+          enabled: bnfFeed.enabled,
+          connected: bnfFeed.connected,
+          count: bnfFeed.count ?? null,
+          error: bnfFeed.error || null,
         },
       },
     });

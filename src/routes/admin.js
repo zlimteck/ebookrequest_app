@@ -211,6 +211,46 @@ router.put('/author-follow/config', async (req, res) => {
       { enabled: !!enabled, maxAuthorsPerUser: Math.max(-1, Number(maxAuthorsPerUser) ?? 50) },
       { upsert: true, runValidators: true }
     );
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'settings_change',
+      details: `Suivi d'auteurs : ${enabled ? 'activé' : 'désactivé'}`,
+    }).catch(() => {});
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });
+  }
+});
+
+// ── Prochaines sorties (issue #52) ──────────────────────────────────────────
+// GET /api/admin/upcoming-releases/config
+router.get('/upcoming-releases/config', async (req, res) => {
+  try {
+    const doc = await ConnectorSettings.findOne({ service: 'upcomingReleases' }).lean();
+    res.json({ enabled: doc?.enabled ?? true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/admin/upcoming-releases/config
+router.put('/upcoming-releases/config', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await ConnectorSettings.findOneAndUpdate(
+      { service: 'upcomingReleases' },
+      { enabled: !!enabled },
+      { upsert: true, runValidators: true }
+    );
+    const adminUser = req.user;
+    await AdminLog.create({
+      admin: adminUser.id,
+      adminUsername: adminUser.username || 'admin',
+      action: 'settings_change',
+      details: `Prochaines sorties : ${enabled ? 'activé' : 'désactivé'}`,
+    }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la sauvegarde du réglage.' });

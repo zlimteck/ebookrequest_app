@@ -52,6 +52,7 @@ import docsRoutes from './routes/docs.js';
 import flagsRoutes from './routes/flags.js';
 import chunkedUploadRoutes from './routes/chunkedUpload.js';
 import authorsRoutes from './routes/authors.js';
+import upcomingReleasesRoutes from './routes/upcomingReleases.js';
 import activityTracker from './middleware/activityTracker.js';
 import { createRequire } from 'module';
 import { startValentineCron } from './services/valentineCron.js';
@@ -62,6 +63,7 @@ import { startBackupCron } from './services/backupCron.js';
 import { checkPendingProwlarrDownloads } from './services/prowlarrDownloadService.js';
 import { startReleaseCheckCron } from './services/releaseCheckCron.js';
 import { startAuthorReleaseCron } from './services/authorReleaseCron.js';
+import { startUpcomingReleasesCron } from './services/upcomingReleasesCron.js';
 import { startRecommendationsCron } from './services/recommendationsCron.js';
 import { startBestsellerCron } from './services/bestsellerCron.js';
 import { initSocket } from './services/socketService.js';
@@ -197,6 +199,7 @@ app.use('/api/connectors', connectorsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/authors', authorsRoutes);
+app.use('/api/upcoming-releases', upcomingReleasesRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/auth/passkey', passkeyRoutes);
 app.use('/api/sessions', sessionsRoutes);
@@ -413,6 +416,7 @@ connectMongoWithRetry()
     // quand publishedDate est dépassée sur une demande encore en attente
     startReleaseCheckCron();
     startAuthorReleaseCron();
+    startUpcomingReleasesCron();
 
     // Cron de rafraîchissement hebdomadaire des recommandations IA (widget dashboard)
     startRecommendationsCron();

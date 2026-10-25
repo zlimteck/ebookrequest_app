@@ -1645,7 +1645,7 @@ const UserSettings = () => {
               <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              Les clés Hardcover expirent après 1 an et sont réinitialisées chaque 1er janvier, pensez à la renouveler sur hardcover.app (dernier enregistrement : {new Date(hardcover.keyUpdatedAt).toLocaleDateString('fr-FR')}).
+              La durée de validité des clés Hardcover dépend de l'expiration choisie lors de leur génération sur hardcover.app, pensez à vérifier et renouveler la vôtre avant qu'elle n'expire (dernier enregistrement : {new Date(hardcover.keyUpdatedAt).toLocaleDateString('fr-FR')}).
             </p>
           )}
           <div className={styles.toggleRow} style={{ marginBottom: '0.75rem' }}>

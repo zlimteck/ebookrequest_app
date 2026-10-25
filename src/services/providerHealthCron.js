@@ -5,6 +5,7 @@ import { sendProviderIssueToAdminsEmail } from './emailService.js';
 import { sendPushToUser } from './webPushService.js';
 import { getGoogleBooksApiKey, isGoogleBooksSearchEnabled } from './googleBooksConfig.js';
 import { getHardcoverApiKey } from './hardcoverConfig.js';
+import { fetchUpcomingReleases, getUpcomingReleasesConfig } from './upcomingReleasesService.js';
 import axios from 'axios';
 
 // Filet de sécurité : détecte deux situations sur les providers de recherche (Google
@@ -14,7 +15,6 @@ import axios from 'axios';
 const INTERVAL_HOURS = 6;
 const STARTUP_DELAY_MS = 15 * 60 * 1000; // décalé pour ne pas concurrencer les autres crons au démarrage
 const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const KEY_EXPIRY_WARNING_DAYS = 335; // ~1 mois avant l'expiration à 1 an
 
 async function notifyAdminsProviderIssue(serviceName, message) {
   try {
@@ -112,14 +112,11 @@ async function checkHardcoverIssue(force = false) {
     return;
   }
 
-  // Clé fonctionnelle mais proche de son expiration (1 an, cf. docs.hardcover.app)
-  if (doc.updatedAt) {
-    const ageDays = (Date.now() - new Date(doc.updatedAt).getTime()) / (24 * 60 * 60 * 1000);
-    if (ageDays >= KEY_EXPIRY_WARNING_DAYS) {
-      await maybeAlert('hardcover', 'Hardcover',
-        `La clé API approche de son expiration (1 an, renouvelée chaque 1er janvier) — pensez à la renouveler sur hardcover.app.`, force);
-    }
-  }
+  // Pas d'alerte proactive basée sur l'âge de la clé : depuis le passage aux
+  // clés hc_pat_, l'expiration est choisie librement par l'utilisateur à la
+  // génération (plus un délai fixe d'1 an réinitialisé chaque 1er janvier),
+  // donc impossible à estimer depuis l'âge seul — l'alerte réactive
+  // ci-dessus (appels en échec) couvre déjà le cas d'une clé expirée.
 }
 
 // UZ n'a pas d'API clé mais un cookie de session manuel (voir
@@ -158,10 +155,33 @@ async function checkProwlarrIssue(force = false) {
   }
 }
 
+// Le flux BnF (Nouveautés Éditeurs) n'a pas de clé API — rien ne prévient
+// l'admin si la BnF change l'URL ou le format XML du jour au lendemain, la
+// page afficherait juste "Aucune sortie à venir" silencieusement sans que
+// personne ne le remarque. Un flux qui répond normalement contient toujours
+// une centaine d'annonces ou plus ; zéro résultat est anormal, que ce soit
+// une panne réseau ou un format qui ne correspond plus au parsing attendu.
+async function checkBnfFeedIssue(force = false) {
+  const config = await getUpcomingReleasesConfig();
+  if (!config.enabled) return;
+
+  try {
+    const releases = await fetchUpcomingReleases();
+    if (releases.length === 0) {
+      await maybeAlert('upcomingReleasesBnf', 'Prochaines sorties (BnF)',
+        `Le flux BnF Nouveautés Éditeurs ne renvoie plus aucune annonce — panne réseau ou changement de format côté BnF, à vérifier manuellement (nouveautes-editeurs.bnf.fr).`, force);
+    }
+  } catch (err) {
+    await maybeAlert('upcomingReleasesBnf', 'Prochaines sorties (BnF)',
+      `Le flux BnF Nouveautés Éditeurs est injoignable (${err.code || err.message}).`, force);
+  }
+}
+
 export async function runProviderHealthCron(force = false) {
   try {
     await checkGoogleBooksIssue(force);
     await checkHardcoverIssue(force);
+    await checkBnfFeedIssue(force);
     await checkUltimZoneIssue(force);
     await checkProwlarrIssue(force);
   } catch (e) {
