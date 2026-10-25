@@ -155,6 +155,12 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 - **Synchronisation Hardcover** (même clé API personnelle que la bibliothèque de lecture) : suivi/désabonnement poussé automatiquement vers Hardcover, import initial des auteurs déjà suivis sur Hardcover (n'ajoute que ce qui manque), cron de rattrapage quotidien en filet de sécurité
 - Limite du nombre d'auteurs suivis par utilisateur configurable par un admin, fonctionnalité activable/désactivable globalement
 
+**Prochaines sorties**
+- Annonces de parutions à venir, toutes langues et tous auteurs confondus (pas seulement ceux suivis) : flux RSS public Nouveautés Éditeurs de la Bibliothèque nationale de France (déclarations de dépôt légal éditeur), complété par le catalogue Hardcover (API GraphQL, clé admin existante) pour les sorties anglophones à venir
+- Les deux sources sont mutualisées dans la même liste, avec filtre par source (pastilles "Toutes/BnF/Hardcover") et tri par date de parution ou titre, vues cartes/liste comme le reste de l'app
+- Rafraîchi une fois par jour en tâche de fond, avec dédoublonnage (un même livre peut être déclaré deux fois côté BnF, formats papier/numérique notamment) ; couverture réelle résolue automatiquement (cascade Google Books/Hardcover/Open Library) pour les annonces BnF, Hardcover la fournissant déjà nativement
+- Clic sur une couverture : aperçu du livre (même fenêtre que "Mes demandes") ; bouton "Demander" créant directement une demande, désactivé si le livre est déjà présent dans les demandes de l'utilisateur
+
 **Découverte & IA**
 - Page Découverte (tendances, bestsellers, recommandations IA) : les bestsellers sont générés automatiquement une fois par mois en tâche de fond (en plus de la génération manuelle par un admin), avec désactivation automatique de la liste du mois précédent générée par le cron (les bestsellers ajoutés manuellement par un admin ne sont jamais touchés) ; chaque livre proposé par l'IA est vérifié auprès de Google Books/Hardcover/Open Library avant d'être affiché (les titres qu'aucune source ne confirme sont écartés, pas de "faux livre" inventé affiché à l'utilisateur)
 - Recommandations IA basées sur l'historique des demandes et la bibliothèque de lecture (livres lus, notes), avec cache et rafraîchissement hebdomadaire automatique en tâche de fond (widget sur la page de demande, régénération manuelle limitée à 3 fois par semaine) ; comme pour les bestsellers, un titre non confirmé par Google Books/Hardcover/Open Library n'est jamais affiché

@@ -64,6 +64,16 @@ const NAV_ITEMS = [
     exact: false,
   },
   {
+    to: '/upcoming-releases',
+    label: 'Prochaines sorties',
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+    exact: false,
+  },
+  {
     to: '/activity',
     label: 'Activité',
     icon: (
@@ -102,6 +112,7 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
   const drawerRef = useRef(null);
   const [activityEnabled, setActivityEnabled] = useState(true);
   const [authorFollowEnabled, setAuthorFollowEnabled] = useState(true);
+  const [upcomingReleasesEnabled, setUpcomingReleasesEnabled] = useState(true);
 
   // Le flux d'activité peut être désactivé/réactivé par un admin (Réglages) :
   // on revérifie à chaque ouverture du drawer plutôt qu'une seule fois au
@@ -113,6 +124,9 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
       .catch(() => {});
     axiosAdmin.get('/api/authors/config')
       .then(res => setAuthorFollowEnabled(res.data.enabled !== false))
+      .catch(() => {});
+    axiosAdmin.get('/api/upcoming-releases/config')
+      .then(res => setUpcomingReleasesEnabled(res.data.enabled !== false))
       .catch(() => {});
   }, [isOpen]);
 
@@ -136,7 +150,8 @@ const NavDrawer = ({ isOpen, onClose, isAdmin, avatar, username, role, onLogout,
 
   const baseItems = NAV_ITEMS
     .filter(item => activityEnabled || item.to !== '/activity')
-    .filter(item => authorFollowEnabled || item.to !== '/authors');
+    .filter(item => authorFollowEnabled || item.to !== '/authors')
+    .filter(item => upcomingReleasesEnabled || item.to !== '/upcoming-releases');
   const navItems = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems;
 
   const color = getAvatarColor({ role, hasValentine: localStorage.getItem('hasValentine') === 'true' });

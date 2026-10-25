@@ -543,6 +543,27 @@ curl -X POST https://app.ndd.fr/api/authors/hardcover/import \
 
 ---
 
+## Prochaines sorties
+
+Annonces de parutions à venir, toutes langues et tous auteurs confondus (issue #52) — pas lié au suivi d'auteurs. Deux sources mutualisées dans le même modèle, distinguées par le champ `source` :
+- **`bnf`** : flux RSS public Nouveautés Éditeurs de la Bibliothèque nationale de France (déclarations de dépôt légal éditeur), sans couverture réelle (icône générique côté source) ni genre.
+- **`hardcover`** : API GraphQL Hardcover (clé admin Hardcover existante, voir `PUT /api/connectors/hardcover`), catalogue à dominante anglophone qui ne recoupe quasiment jamais les parutions françaises de la BnF — fournit directement une vraie couverture et, quand disponible, un genre.
+
+Rafraîchi une fois par jour par `upcomingReleasesCron.js` (démarrage décalé de 7 min pour ne pas concurrencer les autres crons), avec dédoublonnage par titre+auteur+date de parution (un même livre peut être déclaré deux fois sous des identifiants distincts côté BnF — formats papier/numérique notamment). Résolution de couverture (cascade Google Books → Hardcover → Open Library) uniquement pour les annonces BnF réellement nouvelles, jamais réessayée à chaque cycle.
+
+### `GET /api/upcoming-releases`
+Liste paginée, accessible à tout utilisateur connecté.
+
+Paramètres : `search` (titre/auteur), `source` (`bnf` ou `hardcover`, absent = toutes sources), `sort` (`date` par défaut ou `title`), `page`, `limit` (max 50).
+
+Réponse : `{ items, total, page, pages, sourceCounts: { all, bnf, hardcover } }` — `sourceCounts` est toujours calculé sur la recherche texte seule (pas le filtre source), pour que les compteurs de pastilles restent stables en changeant de source active.
+```bash
+curl "https://app.ndd.fr/api/upcoming-releases?search=&source=bnf&sort=date&page=1&limit=20" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
 ## Disponibilité
 
 ### `POST /api/availability/check`
