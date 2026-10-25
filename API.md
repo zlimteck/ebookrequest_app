@@ -551,15 +551,34 @@ Annonces de parutions à venir, toutes langues et tous auteurs confondus (issue 
 
 Rafraîchi une fois par jour par `upcomingReleasesCron.js` (démarrage décalé de 7 min pour ne pas concurrencer les autres crons), avec dédoublonnage par titre+auteur+date de parution (un même livre peut être déclaré deux fois sous des identifiants distincts côté BnF — formats papier/numérique notamment). Résolution de couverture (cascade Google Books → Hardcover → Open Library) uniquement pour les annonces BnF réellement nouvelles, jamais réessayée à chaque cycle.
 
+Fonctionnalité activable/désactivable globalement par un admin (`PUT /api/admin/upcoming-releases/config`) — masque le lien de nav côté frontend et arrête le rafraîchissement en tâche de fond, sans bloquer la lecture du cache déjà constitué. Filtre de langue optionnel sur la source Hardcover (`all`/`fr`/`en`, même endpoint) : la langue est une propriété d'édition chez Hardcover, pas du livre — le filtre et la date affichée portent sur l'édition correspondante à la langue choisie, jamais sur le livre lui-même (qui peut avoir une date différente selon l'édition). Sans effet sur la BnF. Changer de langue supprime au cycle suivant les annonces Hardcover qui ne correspondent plus (jamais si le fetch renvoie 0 résultat, pour ne pas tout effacer sur une panne ou un quota Hardcover atteint).
+
+### `GET /api/upcoming-releases/config`
+Accessible à tout utilisateur connecté, pour masquer le lien de nav côté frontend quand la fonctionnalité est désactivée.
+```bash
+curl https://app.ndd.fr/api/upcoming-releases/config \
+  -H "Authorization: Bearer <token>"
+# { "enabled": true }
+```
+
 ### `GET /api/upcoming-releases`
 Liste paginée, accessible à tout utilisateur connecté.
 
-Paramètres : `search` (titre/auteur), `source` (`bnf` ou `hardcover`, absent = toutes sources), `sort` (`date` par défaut ou `title`), `page`, `limit` (max 50).
+Paramètres : `search` (titre/auteur), `source` (`bnf` ou `hardcover`, absent = toutes sources), `sort` (`date` par défaut ou `title`), `dir` (`asc` par défaut ou `desc`), `page`, `limit` (max 50).
 
-Réponse : `{ items, total, page, pages, sourceCounts: { all, bnf, hardcover } }` — `sourceCounts` est toujours calculé sur la recherche texte seule (pas le filtre source), pour que les compteurs de pastilles restent stables en changeant de source active.
+Réponse : `{ items, total, page, pages, sourceCounts: { all, bnf, hardcover } }` — `sourceCounts` est toujours calculé sur la recherche texte seule (pas le filtre source), pour que les compteurs de pastilles restent stables en changeant de source active. Chaque item porte `source`, `title`, `author`, `publisher`, `genre` (souvent vide), `releaseDate`, `coverUrl` (peut être vide), `link`.
 ```bash
-curl "https://app.ndd.fr/api/upcoming-releases?search=&source=bnf&sort=date&page=1&limit=20" \
+curl "https://app.ndd.fr/api/upcoming-releases?search=&source=bnf&sort=date&dir=asc&page=1&limit=20" \
   -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/admin/upcoming-releases/config` / `PUT /api/admin/upcoming-releases/config`
+Réservé admin. `PUT` accepte `{ enabled, hardcoverLanguage }` (`hardcoverLanguage` : `all`/`fr`/`en`).
+```bash
+curl -X PUT https://app.ndd.fr/api/admin/upcoming-releases/config \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "hardcoverLanguage": "fr"}'
 ```
 
 ---
