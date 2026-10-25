@@ -1594,13 +1594,17 @@ function AuthorFollowCard() {
 }
 
 function UpcomingReleasesCard() {
-  const [enabled, setEnabled] = useState(true);
+  const [config, setConfig] = useState({ enabled: true, hardcoverLanguage: 'all' });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     axiosAdmin.get('/api/admin/upcoming-releases/config')
-      .then(res => setEnabled(res.data.enabled ?? true))
+      .then(res => setConfig({
+        enabled: res.data.enabled ?? true,
+        hardcoverLanguage: res.data.hardcoverLanguage ?? 'all',
+      }))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -1612,13 +1616,26 @@ function UpcomingReleasesCard() {
 
   const handleToggle = async (e) => {
     const value = e.target.checked;
-    const prev = enabled;
-    setEnabled(value);
+    const prev = config.enabled;
+    setConfig(c => ({ ...c, enabled: value }));
     try {
-      await axiosAdmin.put('/api/admin/upcoming-releases/config', { enabled: value });
+      await axiosAdmin.put('/api/admin/upcoming-releases/config', { ...config, enabled: value });
     } catch (err) {
-      setEnabled(prev);
+      setConfig(c => ({ ...c, enabled: prev }));
       showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await axiosAdmin.put('/api/admin/upcoming-releases/config', config);
+      showAlertMsg('success', 'Réglage enregistré.');
+    } catch (err) {
+      showAlertMsg('error', err.response?.data?.error || 'Erreur lors de la sauvegarde.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1643,17 +1660,39 @@ function UpcomingReleasesCard() {
           </div>
         </div>
         <label className={styles.switch}>
-          <input type="checkbox" checked={enabled} onChange={handleToggle} />
+          <input type="checkbox" checked={config.enabled} onChange={handleToggle} />
           <span className={styles.slider} />
         </label>
       </div>
 
-      {alert && (
-        <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
-          {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
-          {alert.message}
+      <form className={styles.form} onSubmit={handleSave}>
+        <div className={styles.fieldRow}>
+          <label className={styles.fieldLabel}>Langue des sorties Hardcover</label>
+          <select
+            className={styles.fieldInput}
+            value={config.hardcoverLanguage}
+            onChange={e => setConfig(c => ({ ...c, hardcoverLanguage: e.target.value }))}
+          >
+            <option value="all">Toutes langues</option>
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+          </select>
+          <p className={styles.fieldHint}>N'affecte que la source Hardcover (la BnF ne propose pas de filtre par langue). Un changement s'applique au prochain cycle quotidien.</p>
         </div>
-      )}
+
+        {alert && (
+          <div className={`${styles.alert} ${alert.type === 'success' ? styles.alertSuccess : styles.alertError}`}>
+            {alert.type === 'success' ? <CheckIcon /> : <AlertIcon />}
+            {alert.message}
+          </div>
+        )}
+
+        <div className={styles.cardActions}>
+          <button type="submit" className={styles.btnPrimary} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

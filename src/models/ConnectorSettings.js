@@ -105,6 +105,11 @@ const ConnectorSettingsSchema = new mongoose.Schema({
   // plafonne le nombre d'auteurs suivis par utilisateur (-1 = illimité, même
   // convention que requestLimit sur User).
   maxAuthorsPerUser: { type: Number, default: 50, min: -1 },
+  // Prochaines sorties (service: 'upcomingReleases', issue #52) — filtre
+  // optionnel sur la langue des éditions Hardcover à paraître ('all' = pas
+  // de filtre, sinon un code ISO 639-1). N'affecte jamais la source BnF, qui
+  // n'a pas de notion de langue filtrable côté API.
+  upcomingReleasesHardcoverLanguage: { type: String, enum: ['all', 'fr', 'en'], default: 'all' },
   // Sauvegarde automatique périodique (service: 'backup', issue #43) — réutilise
   // `enabled`/`cronInterval` génériques ci-dessus, seul le nombre de sauvegardes
   // conservées est spécifique à cette fonctionnalité.

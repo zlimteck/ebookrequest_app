@@ -26,7 +26,7 @@ async function runUpcomingReleasesCron() {
     // `source`, et dédoublonnées ensemble par titre+auteur+date plus bas.
     const [bnfReleases, hardcoverReleases] = await Promise.all([
       fetchUpcomingReleases(),
-      fetchHardcoverUpcomingReleases(),
+      fetchHardcoverUpcomingReleases(config.hardcoverLanguage),
     ]);
     const releases = [...bnfReleases, ...hardcoverReleases];
 
@@ -64,6 +64,22 @@ async function runUpcomingReleasesCron() {
     today.setUTCHours(0, 0, 0, 0);
     const { deletedCount } = await UpcomingRelease.deleteMany({ releaseDate: { $lt: today } });
 
+    // Si un admin change le filtre de langue Hardcover, les annonces de
+    // l'ancienne langue restent en base indéfiniment sinon (elles ne sont ni
+    // expirées ni redescendues par le fetch courant) — on supprime celles
+    // qui ne sont plus dans le lot renvoyé, seulement si le fetch Hardcover
+    // a réellement renvoyé quelque chose (jamais sur une réponse vide, pour
+    // ne pas tout effacer sur une panne ou un quota atteint).
+    let staleHardcoverCount = 0;
+    if (hardcoverReleases.length > 0) {
+      const currentIds = hardcoverReleases.map(r => r.externalId);
+      const { deletedCount: staleCount } = await UpcomingRelease.deleteMany({
+        source: 'hardcover',
+        externalId: { $nin: currentIds },
+      });
+      staleHardcoverCount = staleCount;
+    }
+
     // Un même livre peut être déclaré sous plusieurs id_declaration BnF
     // distincts (formats papier/numérique déclarés séparément), ou
     // exceptionnellement recoupé entre BnF et Hardcover — on ne garde que le
@@ -77,7 +93,7 @@ async function runUpcomingReleasesCron() {
       await UpcomingRelease.deleteMany({ _id: { $in: duplicateIds } });
     }
 
-    console.log(`[UpcomingReleasesCron] ${upserted} annonce(s) à jour (${bnfReleases.length} BnF, ${hardcoverReleases.length} Hardcover, ${newCount} nouvelle(s), ${enriched} couverture(s) résolue(s)), ${deletedCount} expirée(s) supprimée(s), ${duplicateIds.length} doublon(s) nettoyé(s)`);
+    console.log(`[UpcomingReleasesCron] ${upserted} annonce(s) à jour (${bnfReleases.length} BnF, ${hardcoverReleases.length} Hardcover, ${newCount} nouvelle(s), ${enriched} couverture(s) résolue(s)), ${deletedCount} expirée(s) supprimée(s), ${staleHardcoverCount} Hardcover obsolète(s) (changement de langue) supprimée(s), ${duplicateIds.length} doublon(s) nettoyé(s)`);
 
     if (newCount > 0) {
       AdminLog.create({

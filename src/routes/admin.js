@@ -229,7 +229,10 @@ router.put('/author-follow/config', async (req, res) => {
 router.get('/upcoming-releases/config', async (req, res) => {
   try {
     const doc = await ConnectorSettings.findOne({ service: 'upcomingReleases' }).lean();
-    res.json({ enabled: doc?.enabled ?? true });
+    res.json({
+      enabled: doc?.enabled ?? true,
+      hardcoverLanguage: doc?.upcomingReleasesHardcoverLanguage ?? 'all',
+    });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
   }
@@ -238,18 +241,22 @@ router.get('/upcoming-releases/config', async (req, res) => {
 // PUT /api/admin/upcoming-releases/config
 router.put('/upcoming-releases/config', async (req, res) => {
   try {
-    const { enabled } = req.body;
+    const { enabled, hardcoverLanguage } = req.body;
+    if (!['all', 'fr', 'en'].includes(hardcoverLanguage)) {
+      return res.status(400).json({ error: 'Langue invalide.' });
+    }
     await ConnectorSettings.findOneAndUpdate(
       { service: 'upcomingReleases' },
-      { enabled: !!enabled },
+      { enabled: !!enabled, upcomingReleasesHardcoverLanguage: hardcoverLanguage },
       { upsert: true, runValidators: true }
     );
     const adminUser = req.user;
+    const langLabel = { all: 'toutes langues', fr: 'français', en: 'anglais' }[hardcoverLanguage];
     await AdminLog.create({
       admin: adminUser.id,
       adminUsername: adminUser.username || 'admin',
       action: 'settings_change',
-      details: `Prochaines sorties : ${enabled ? 'activé' : 'désactivé'}`,
+      details: `Prochaines sorties : ${enabled ? 'activé' : 'désactivé'}, Hardcover filtré sur ${langLabel}`,
     }).catch(() => {});
     res.json({ success: true });
   } catch (err) {

@@ -8,7 +8,10 @@ import ConnectorSettings from '../models/ConnectorSettings.js';
 // l'admin n'a jamais touché au réglage.
 export async function getUpcomingReleasesConfig() {
   const doc = await ConnectorSettings.findOne({ service: 'upcomingReleases' }).lean();
-  return { enabled: doc?.enabled ?? true };
+  return {
+    enabled: doc?.enabled ?? true,
+    hardcoverLanguage: doc?.upcomingReleasesHardcoverLanguage ?? 'all',
+  };
 }
 
 // Flux RSS public de Nouveautés Éditeurs (BnF) — déclarations de dépôt légal
