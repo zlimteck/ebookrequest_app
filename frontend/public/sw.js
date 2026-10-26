@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ebookrequest-v1';
+const CACHE_NAME = 'ebookrequest-v2';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [
@@ -34,8 +34,15 @@ self.addEventListener('fetch', (event) => {
   // Ignorer les requêtes non HTTP(S)
   if (!url.protocol.startsWith('http')) return;
 
-  // API : network-first, pas de cache
+  // API : network-first, pas de cache — uniquement pour les lectures (GET).
+  // Les requêtes de mutation (POST/PUT/PATCH/DELETE) ne sont jamais
+  // interceptées : faire repasser un gros corps multipart/form-data (upload
+  // de chunk, ex. 20 Mo) à travers un 2e fetch() dans le service worker est
+  // fragile côté WebKit/Safari et peut échouer silencieusement après un
+  // délai fixe, le `.catch()` masquant alors l'échec réel en "Hors ligne"
+  // (503) — sans rapport avec un vrai problème réseau/serveur.
   if (url.pathname.startsWith('/api/')) {
+    if (request.method !== 'GET') return;
     event.respondWith(
       fetch(request).catch(() =>
         new Response(JSON.stringify({ error: 'Hors ligne', offline: true }), {
