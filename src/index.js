@@ -85,6 +85,14 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5001;
 
+// Pas de limite de durée côté Node pour une requête (défaut 300000ms depuis
+// Node 18, couvre tout l'upload d'un gros fichier) — un envoi manuel
+// d'ebook volumineux sur une connexion lente sinon coupé en plein milieu
+// (`Request aborted` côté multer, aucun rapport avec la taille autorisée
+// par multer lui-même, qui est bien plus permissive).
+httpServer.requestTimeout = 0;
+httpServer.headersTimeout = 0;
+
 // Configuration CORS dynamique basée sur les variables d'environnement
 const corsOptions = {
   origin: function (origin, callback) {
