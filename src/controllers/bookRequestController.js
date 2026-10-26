@@ -1216,10 +1216,14 @@ export const addDownloadLink = async (req, res) => {
 
     // Si un fichier a été téléversé
     if (file) {
-      // multer écrit toujours d'abord dans uploads/books/ en local ;
-      // promoteUploadedFile l'envoie vers le stockage réellement configuré
-      // si un mode distant est actif, sans rien faire sinon.
-      await promoteUploadedFile(file.path, `books/${file.filename}`);
+      // multer écrit toujours d'abord dans uploads/books/ en local ; la
+      // promotion vers le stockage réellement configuré (promoteUploadedFile)
+      // se fait en arrière-plan après la réponse (voir
+      // runPostDownloadLinkSideEffects ci-dessous) — l'attendre ici bloquerait
+      // la réponse jusqu'à la fin d'un éventuel upload S3/WebDAV, ce qui a
+      // fait échouer l'app iOS sur un gros fichier ("impossible de lire la
+      // réponse du serveur") alors même que le fichier finissait par arriver
+      // correctement sur le stockage distant.
       updateData.filePath = `books/${file.filename}`;
       updateData.downloadLink = ''; // Effacer l'ancien lien s'il existe
       console.log(`Fichier téléversé: ${file.filename}`);
@@ -1259,6 +1263,31 @@ export const addDownloadLink = async (req, res) => {
       return res.status(404).json({ error: 'Demande non trouvée' });
     }
 
+    // Réponse immédiate : la promotion vers le stockage distant (si un
+    // fichier a été téléversé) et toutes les notifications associées se
+    // font en arrière-plan ci-dessous, jamais attendues avant de répondre.
+    res.json(request);
+
+    runPostDownloadLinkSideEffects(request, file).catch(e =>
+      console.error('Erreur post-traitement ajout fichier/lien:', e.message)
+    );
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout du lien de téléchargement:', error);
+    res.status(500).json({
+      error: 'Erreur lors de l\'ajout du lien de téléchargement',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+async function runPostDownloadLinkSideEffects(request, file) {
+    if (file) {
+      // multer écrit toujours d'abord dans uploads/books/ en local ;
+      // promoteUploadedFile l'envoie vers le stockage réellement configuré
+      // si un mode distant est actif, sans rien faire sinon.
+      await promoteUploadedFile(file.path, `books/${file.filename}`);
+    }
+
     // Récupérer l'utilisateur pour l'email
     const user = await User.findById(request.user);
     if (user) {
@@ -1266,10 +1295,10 @@ export const addDownloadLink = async (req, res) => {
         // Construire l'URL de téléchargement
         let downloadUrl = '';
 
-        if (updateData.filePath) {
+        if (request.filePath) {
           downloadUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/api/requests/download/${request._id}`;
-        } else if (updateData.downloadLink) {
-          downloadUrl = updateData.downloadLink;
+        } else if (request.downloadLink) {
+          downloadUrl = request.downloadLink;
         }
 
         // Envoyer l'email de notification
@@ -1337,16 +1366,7 @@ export const addDownloadLink = async (req, res) => {
     if (request.filePath) {
       runPostCompletionHooks(request, request.user).catch(e => console.error('[Calibre]', e.message));
     }
-
-    res.json(request);
-  } catch (error) {
-    console.error('Erreur lors de l\'ajout du lien de téléchargement:', error);
-    res.status(500).json({ 
-      error: 'Erreur lors de l\'ajout du lien de téléchargement',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
+}
 
 // Suppression d'une demande
 export const deleteRequest = async (req, res) => {
