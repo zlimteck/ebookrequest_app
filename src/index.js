@@ -93,6 +93,18 @@ const PORT = process.env.PORT || 5001;
 httpServer.requestTimeout = 0;
 httpServer.headersTimeout = 0;
 
+// Safari 18+ a un bug confirmé (ticket Apple FB19582986, toujours pas
+// corrigé) : il réutilise une connexion HTTP/1.1 keep-alive même si le
+// serveur est en train de la fermer pour cause d'inactivité, et ne retente
+// jamais automatiquement contrairement à Chrome/Firefox — la requête
+// suivante échoue alors avec "The network connection was lost" / status 0,
+// typiquement observé sur un upload par chunks où chaque requête laisse un
+// peu de temps mort entre deux. Node ferme les connexions inactives au bout
+// de 5s par défaut (keepAliveTimeout) ; Apple recommande eux-mêmes de monter
+// ce délai à 30s+ côté serveur pour réduire (pas éliminer, le bug reste réel
+// côté Safari) la fenêtre où cette course peut se produire.
+httpServer.keepAliveTimeout = 65000;
+
 // Configuration CORS dynamique basée sur les variables d'environnement
 const corsOptions = {
   origin: function (origin, callback) {

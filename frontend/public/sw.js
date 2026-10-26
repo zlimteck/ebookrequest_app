@@ -62,7 +62,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Autres assets : cache-first
+  // Autres assets : cache-first — uniquement pour GET, l'API Cache rejette
+  // tout autre verbe (ex. requêtes de polling Socket.IO en POST, qui
+  // passent par ce bloc générique faute d'être sous /api/).
+  if (request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
@@ -71,7 +75,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {});
         return response;
       });
     })
