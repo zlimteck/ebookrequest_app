@@ -2242,11 +2242,15 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                   <span className={styles.dropZoneAccept}>PDF · EPUB · MOBI · AZW · DJVU · CBZ</span>
                 </label>
 
-                {/* Barre de progression */}
+                {/* Barre de progression — uploadProgress vaut -1 pendant la
+                    promotion vers le stockage distant (S3/WebDAV), une étape
+                    sans pourcentage connu côté client */}
                 {uploadingFile && (
                   <div className={styles.uploadProgressBar}>
-                    <div className={styles.uploadProgressFill} style={{ width: `${uploadProgress}%` }}/>
-                    <span className={styles.uploadProgressLabel}>{uploadProgress}%</span>
+                    <div className={styles.uploadProgressFill} style={{ width: uploadProgress < 0 ? '100%' : `${uploadProgress}%` }}/>
+                    <span className={styles.uploadProgressLabel}>
+                      {uploadProgress < 0 ? 'Envoi vers le stockage distant…' : `${uploadProgress}%`}
+                    </span>
                   </div>
                 )}
 
@@ -2346,7 +2350,7 @@ const [editingComment, setEditingComment] = useState(null);  // utilisé uniquem
                   disabled={(!downloadLink && !file) || uploadingFile}
                 >
                   {uploadingFile ? (
-                    <><span className={styles.spinner}/> {uploadProgress}%</>
+                    <><span className={styles.spinner}/> {uploadProgress < 0 ? '…' : `${uploadProgress}%`}</>
                   ) : (
                     isReplace ? 'Remplacer' : 'Enregistrer'
                   )}

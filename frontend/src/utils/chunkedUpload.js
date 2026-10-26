@@ -10,9 +10,17 @@ export function shouldChunk(file) {
   return file.size > CHUNK_THRESHOLD;
 }
 
+const PROMOTION_POLL_INTERVAL_MS = 2000;
+
 // Retourne { filename, filePath } (filePath du type "books/xxx.epub", déjà dans
 // uploads/books) — prêt à être utilisé comme un fichier existant par les endpoints qui
 // l'acceptent (ex. PATCH /api/requests/:id/download-link avec existingFilePath).
+//
+// `onProgress` reçoit 0-100 pendant l'envoi des chunks, puis `-1` pendant la
+// promotion vers le stockage distant (S3/WebDAV) si applicable — cette étape
+// n'a pas de pourcentage connu côté client, elle est juste attendue par
+// polling plutôt que par une seule requête HTTP qui risquerait de dépasser
+// le timeout d'un proxy devant l'instance pour un gros fichier.
 export async function uploadFileChunked(file, { onProgress } = {}) {
   const { data: initData } = await axiosAdmin.post('/api/admin/chunked-upload/init', { filename: file.name });
   const { uploadId } = initData;
@@ -40,6 +48,20 @@ export async function uploadFileChunked(file, { onProgress } = {}) {
       totalChunks,
       filename: file.name,
     });
+
+    if (!data.promoted) {
+      if (onProgress) onProgress(-1);
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise(resolve => setTimeout(resolve, PROMOTION_POLL_INTERVAL_MS));
+        const { data: status } = await axiosAdmin.get(`/api/admin/chunked-upload/finalize/status/${uploadId}`);
+        if (status.done) {
+          if (status.error) throw new Error(status.error);
+          break;
+        }
+      }
+    }
+
     return data;
   } catch (err) {
     axiosAdmin.post('/api/admin/chunked-upload/abort', { uploadId }).catch(() => {});

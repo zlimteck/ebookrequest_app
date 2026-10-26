@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sanitizeUploadFilename, ALLOWED_UPLOAD_EXTS, UPLOAD_DIR } from '../middleware/upload.js';
-import { promoteUploadedFile } from './fileStorageService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,9 +46,14 @@ export function saveChunk(uploadId, index, buffer) {
 
 // Concatène les chunks dans l'ordre et écrit le fichier final localement dans
 // uploads/books (toujours, même en stockage distant — zone de staging), avec
-// le même format de nom que multer (voir sanitizeUploadFilename). Promu vers
-// le stockage réellement configuré ensuite (no-op en mode local).
-export async function finalizeUpload(uploadId, totalChunks, originalName) {
+// le même format de nom que multer (voir sanitizeUploadFilename).
+// Ne promeut PLUS vers le stockage distant ici (contrairement à avant) : pour
+// un gros fichier (100+ Mo), l'envoi vers S3/WebDAV peut largement dépasser
+// le timeout d'un proxy devant l'instance si on le fait de façon synchrone
+// dans cette même requête HTTP — la promotion est maintenant déclenchée en
+// arrière-plan par l'appelant (voir src/routes/chunkedUpload.js), suivie par
+// polling, même principe que la migration en masse local/distant.
+export async function reassembleChunks(uploadId, totalChunks, originalName) {
   const dir = uploadDir(uploadId);
   if (!fs.existsSync(dir)) throw new Error('Upload inconnu ou expiré.');
 
@@ -75,8 +79,7 @@ export async function finalizeUpload(uploadId, totalChunks, originalName) {
   });
 
   fs.rmSync(dir, { recursive: true, force: true });
-  await promoteUploadedFile(destPath, `books/${filename}`);
-  return { filename, filePath: `books/${filename}` };
+  return { filename, destPath, filePath: `books/${filename}` };
 }
 
 export function abortUpload(uploadId) {
