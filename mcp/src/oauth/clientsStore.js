@@ -1,3 +1,4 @@
+import { InvalidClientMetadataError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import OAuthClient from '../models/OAuthClient.js';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -46,10 +47,10 @@ export const clientsStore = {
   async registerClient(clientInfo) {
     const redirectUris = clientInfo.redirect_uris || [];
     if (redirectUris.length === 0) {
-      throw new Error('Au moins un redirect_uri est requis.');
+      throw new InvalidClientMetadataError('Au moins un redirect_uri est requis.');
     }
     if (!redirectUris.every(isAllowedRedirectUri)) {
-      throw new Error('Tous les redirect_uris doivent être en HTTPS (http://localhost accepté pour les tests).');
+      throw new InvalidClientMetadataError('Tous les redirect_uris doivent être en HTTPS (http://localhost accepté pour les tests).');
     }
 
     const doc = await OAuthClient.create({

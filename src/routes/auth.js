@@ -129,7 +129,7 @@ router.get('/check-token', requireAuth, async (req, res) => {
 
 // ── Pont d'identité pour le flux OAuth MCP (feat/mcp-oauth) ────────────────
 // Le serveur MCP (mcp.ebookrequest.fr, service séparé, sans accès aux
-// identifiants) redirige vers /login?continue=<url /authorize/continue>
+// identifiants) redirige vers /login?continue=<url /oauth-continue>
 // pour authentifier l'utilisateur avec le compte EbookRequest existant.
 // Une fois connecté ici (session déjà valide ou via handleLoginSuccess),
 // le frontend échange cette session contre un "ticket" signé de courte durée
@@ -137,7 +137,7 @@ router.get('/check-token', requireAuth, async (req, res) => {
 // l'utilisateur sans jamais transmettre de mot de passe ni de token
 // permanent (opdsToken) au serveur MCP.
 const MCP_LOGIN_TICKET_SECRET = process.env.MCP_LOGIN_TICKET_SECRET;
-const MCP_CONTINUE_PATH = '/authorize/continue';
+const MCP_CONTINUE_PATH = '/oauth-continue';
 
 router.post('/mcp-login-ticket', requireAuth, (req, res) => {
   if (!MCP_LOGIN_TICKET_SECRET || !process.env.MCP_URL) {
@@ -166,7 +166,7 @@ router.post('/mcp-login-ticket', requireAuth, (req, res) => {
     const ticket = jwt.sign(
       { sub: req.user.id, jti: crypto.randomUUID() },
       MCP_LOGIN_TICKET_SECRET,
-      { expiresIn: '60s' }
+      { algorithm: 'HS256', expiresIn: '60s' }
     );
     res.json({ ticket });
   } catch (error) {

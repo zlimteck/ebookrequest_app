@@ -41,7 +41,7 @@ export class EbookRequestOAuthProvider {
   // Ne fait jamais le login/consentement elle-même : redirige vers la page
   // de login existante d'EbookRequest (réutilise bcrypt/2FA/verrouillage
   // sans dupliquer ce code), avec un paramètre `continue` ramenant vers
-  // /authorize/continue une fois l'identité prouvée par ticket signé.
+  // /oauth-continue une fois l'identité prouvée par ticket signé.
   async authorize(client, params, res) {
     if (!this.#resourceMatches(params.resource)) {
       throw new InvalidTargetError('resource ne correspond pas à ce serveur MCP.');
@@ -50,6 +50,13 @@ export class EbookRequestOAuthProvider {
       throw new ServerError('Flux OAuth MCP non configuré sur ce serveur.');
     }
 
+    // Secret de liaison navigateur : posé en cookie HttpOnly sur CE
+    // navigateur avant la redirection vers le login, revérifié à
+    // /oauth-continue — seul le navigateur qui a réellement initié cette
+    // demande d'autorisation peut la faire aboutir, même si le lien
+    // /login?continue=... venait à être transmis à quelqu'un d'autre.
+    const browserBinding = generateOpaqueToken();
+
     const pending = await PendingAuthorization.create({
       clientId: client.client_id,
       redirectUri: params.redirectUri,
@@ -57,10 +64,19 @@ export class EbookRequestOAuthProvider {
       resource: params.resource?.href || '',
       state: params.state || '',
       scopes: params.scopes || [],
+      bindingHash: hashToken(browserBinding),
       expiresAt: new Date(Date.now() + PENDING_AUTH_TTL_MS),
     });
 
-    const continueUrl = new URL('/authorize/continue', this.resourceUrl.replace(/\/mcp$/, ''));
+    res.cookie(`mcp_binding_${pending._id}`, browserBinding, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax', // doit survivre la navigation top-level cross-site au retour du login
+      maxAge: PENDING_AUTH_TTL_MS,
+      path: '/oauth-continue',
+    });
+
+    const continueUrl = new URL('/oauth-continue', this.resourceUrl.replace(/\/mcp$/, ''));
     continueUrl.searchParams.set('pending', pending._id);
 
     const loginUrl = new URL('/login', FRONTEND_URL);
@@ -85,8 +101,16 @@ export class EbookRequestOAuthProvider {
 
   async exchangeAuthorizationCode(client, authorizationCode, _codeVerifier, redirectUri, resource) {
     const codeHash = hashToken(authorizationCode);
-    const record = await AuthorizationCode.findOne({ codeHash, clientId: client.client_id });
-    if (!record || record.used || record.expiresAt < new Date()) {
+    // Atomique : une seule requête concurrente peut gagner ce
+    // findOneAndUpdate (filtre `used: false` dans la même opération que le
+    // $set) — deux requêtes simultanées avec le même code ne peuvent plus
+    // toutes les deux passer avant qu'aucune n'ait eu le temps de marquer
+    // `used`, contrairement à un findOne() suivi d'un save() séparé.
+    const record = await AuthorizationCode.findOneAndUpdate(
+      { codeHash, clientId: client.client_id, used: false, expiresAt: { $gt: new Date() } },
+      { $set: { used: true } }
+    );
+    if (!record) {
       throw new InvalidGrantError('Code d\'autorisation invalide, expiré ou déjà utilisé.');
     }
     if (redirectUri && redirectUri !== record.redirectUri) {
@@ -96,12 +120,6 @@ export class EbookRequestOAuthProvider {
       throw new InvalidTargetError('resource ne correspond pas à ce serveur MCP.');
     }
 
-    // Usage unique : marqué consommé avant même de générer les tokens, pour
-    // qu'une 2e requête concurrente avec le même code échoue plutôt que de
-    // produire deux paires de tokens pour un seul code.
-    record.used = true;
-    await record.save();
-
     return this.#issueTokens(client.client_id, record.userId, record.scopes, crypto.randomUUID());
   }
 
@@ -110,33 +128,40 @@ export class EbookRequestOAuthProvider {
       throw new InvalidTargetError('resource ne correspond pas à ce serveur MCP.');
     }
     const tokenHash = hashToken(refreshToken);
-    const record = await RefreshToken.findOne({ tokenHash, clientId: client.client_id });
-    if (!record || record.expiresAt < new Date()) {
-      throw new InvalidGrantError('Refresh token invalide ou expiré.');
-    }
 
-    if (record.revokedAt) {
-      // Réutilisation d'un refresh token déjà tourné : signe probable de
-      // vol — on révoque toute la chaîne (même familyId) plutôt que de se
-      // contenter de refuser cette seule requête.
-      await RefreshToken.updateMany(
-        { familyId: record.familyId, revokedAt: null },
-        { $set: { revokedAt: new Date() } }
-      );
-      throw new InvalidGrantError('Refresh token déjà utilisé — toute la session a été révoquée par sécurité.');
+    // Rotation atomique : seule une requête concurrente peut gagner ce
+    // findOneAndUpdate (filtre `revokedAt: null` dans la même opération que
+    // le $set), contrairement à un findOne() + save() séparé qui laissait
+    // deux requêtes simultanées émettre chacune une paire de tokens valide
+    // à partir du même refresh token censé être à usage unique.
+    const record = await RefreshToken.findOneAndUpdate(
+      { tokenHash, clientId: client.client_id, revokedAt: null, expiresAt: { $gt: new Date() } },
+      { $set: { revokedAt: new Date() } }
+    );
+    if (!record) {
+      // Invalide/expiré, ou déjà révoqué — dans ce dernier cas, c'est une
+      // vraie réutilisation (signe probable de vol) : toute la chaîne
+      // (même familyId) est révoquée, pas seulement ce token précis.
+      const existing = await RefreshToken.findOne({ tokenHash, clientId: client.client_id }).lean();
+      if (existing?.revokedAt) {
+        await RefreshToken.updateMany(
+          { familyId: existing.familyId, revokedAt: null },
+          { $set: { revokedAt: new Date() } }
+        );
+      }
+      throw new InvalidGrantError('Refresh token invalide, expiré ou déjà utilisé — toute la session a été révoquée par sécurité le cas échéant.');
     }
-
-    // Rotation : l'ancien est marqué révoqué (jamais supprimé, voir le
-    // modèle), un nouveau est créé dans la même famille.
-    record.revokedAt = new Date();
-    await record.save();
 
     return this.#issueTokens(client.client_id, record.userId, scopes || record.scopes, record.familyId);
   }
 
   async verifyAccessToken(token) {
     if (!JWT_SECRET) throw new Error('MCP_OAUTH_JWT_SECRET non configuré.');
-    const payload = jwt.verify(token, JWT_SECRET); // lève si invalide/expiré
+    // algorithms épinglé explicitement : sans ça, jsonwebtoken accepte tout
+    // algorithme présent dans le header du token, pas seulement celui
+    // utilisé à la signature — défense en profondeur contre les attaques de
+    // confusion d'algorithme.
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }); // lève si invalide/expiré
     if (payload.aud !== this.resourceUrl) {
       throw new Error('Audience invalide pour cet access token.');
     }
@@ -165,7 +190,7 @@ export class EbookRequestOAuthProvider {
   }
 
   // ── Consentement (en dehors de l'interface OAuthServerProvider, appelé
-  // directement par les routes /authorize/continue et /authorize/consent) ──
+  // directement par les routes /oauth-continue et /oauth-consent) ──
 
   async createAuthorizationCode(pendingId) {
     const pending = await PendingAuthorization.findById(pendingId);
@@ -218,7 +243,7 @@ export class EbookRequestOAuthProvider {
     const accessToken = jwt.sign(
       { sub: userId, client_id: clientId, scopes, jti },
       JWT_SECRET,
-      { expiresIn: ACCESS_TOKEN_TTL_S, audience: this.resourceUrl }
+      { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_S, audience: this.resourceUrl }
     );
 
     const refreshToken = generateOpaqueToken();

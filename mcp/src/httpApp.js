@@ -1,40 +1,80 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
+import { rateLimit } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js';
-import { connectDb } from './db.js';
-import { EbookRequestOAuthProvider } from './oauth/provider.js';
-import { flexibleBearerAuth } from './oauth/flexibleBearerAuth.js';
-import { consumeLoginTicket } from './oauth/loginTicket.js';
-import { renderConsentPage, setAntiClickjackingHeaders } from './oauth/consentPage.js';
-import { timingSafeEqualStrings, generateOpaqueToken } from './oauth/tokens.js';
-import PendingAuthorization from './models/PendingAuthorization.js';
-import { resolveOpdsToken, invalidateOpdsTokenCache } from './oauth/backendClient.js';
 import { createApi, buildServer } from './mcpServer.js';
 
+// Même fenêtre/limite que les endpoints OAuth standards du SDK
+// (authorize/token) — ces deux routes maison n'en bénéficient pas
+// automatiquement.
+const customOAuthRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
- * Construit l'app Express HTTP (OAuth + endpoint /mcp), sans l'écouter sur
- * un port — séparé de index.js pour être testable directement avec
- * supertest, et pour que connectDb() reste sous le contrôle de l'appelant
- * (les tests gèrent leur propre connexion Mongo de test).
+ * Construit l'app Express HTTP, sans l'écouter sur un port — séparé de
+ * index.js pour être testable directement avec supertest.
+ *
+ * `oauthEnabled` : l'OAuth (feat/mcp-oauth) est entièrement optionnel — une
+ * instance qui n'a pas configuré les 5 variables dédiées (MCP_URL,
+ * MONGODB_URI, MCP_OAUTH_JWT_SECRET, MCP_LOGIN_TICKET_SECRET,
+ * MCP_INTERNAL_SERVICE_SECRET) continue de fonctionner exactement comme
+ * avant cette fonctionnalité (token statique EBOOKREQUEST_TOKEN /
+ * opdsToken brut en Authorization, sans jamais toucher à Mongo ni monter
+ * les routes OAuth) — jamais de refus de démarrer pour ça.
  */
-export async function createHttpApp({ mcpUrl, staticFallbackToken, skipDbConnect = false } = {}) {
+export async function createHttpApp({ mcpUrl, staticFallbackToken, oauthEnabled = true, skipDbConnect = false } = {}) {
+  const app = express();
+
+  // Derrière un reverse proxy (NPM/Cloudflare Tunnel) : sans ça, le
+  // rate-limiting verrait l'IP du proxy pour tout le monde. `1` = on fait
+  // confiance au premier hop devant le conteneur (celui qui pose
+  // X-Forwarded-For) — à ajuster si plus d'un reverse proxy est chaîné.
+  app.set('trust proxy', 1);
+  app.use(express.json());
+
+  if (!oauthEnabled) {
+    app.all('/mcp', async (req, res) => {
+      try {
+        const authHeader = req.headers.authorization || '';
+        const match = authHeader.match(/^Bearer\s+(.+)$/i);
+        const userToken = (match && match[1]) || staticFallbackToken;
+        if (!userToken) {
+          return res.status(401).json({ error: 'Token requis. Ajoutez votre token OPDS comme clé API.' });
+        }
+        const api = createApi(userToken);
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        const server = buildServer(api);
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (err) {
+        if (!res.headersSent) res.status(500).json({ error: err.message });
+      }
+    });
+    app.get('/health', (_req, res) => res.json({ status: 'ok', oauth: false }));
+    return { app, provider: null, resourceUrl: null };
+  }
+
+  const { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } = await import('@modelcontextprotocol/sdk/server/auth/router.js');
+  const { connectDb } = await import('./db.js');
+  const { EbookRequestOAuthProvider } = await import('./oauth/provider.js');
+  const { flexibleBearerAuth } = await import('./oauth/flexibleBearerAuth.js');
+  const { consumeLoginTicket } = await import('./oauth/loginTicket.js');
+  const { renderConsentPage, setAntiClickjackingHeaders } = await import('./oauth/consentPage.js');
+  const { timingSafeEqualStrings, generateOpaqueToken, hashToken } = await import('./oauth/tokens.js');
+  const { default: PendingAuthorization } = await import('./models/PendingAuthorization.js');
+  const { resolveOpdsToken, invalidateOpdsTokenCache } = await import('./oauth/backendClient.js');
+
   const MCP_URL = mcpUrl ?? process.env.MCP_URL;
   if (!skipDbConnect) await connectDb();
 
   const RESOURCE_URL = new URL('/mcp', MCP_URL).href;
   const provider = new EbookRequestOAuthProvider(RESOURCE_URL);
 
-  const app = express();
-
-  // Derrière un reverse proxy (NPM/Cloudflare Tunnel) : sans ça, le
-  // rate-limiting intégré au SDK (register/authorize/token) verrait l'IP du
-  // proxy pour tout le monde, un seul utilisateur pourrait épuiser le quota
-  // de tous les autres. `1` = on fait confiance au premier hop devant le
-  // conteneur (celui qui pose X-Forwarded-For) — à ajuster si jamais plus
-  // d'un reverse proxy est chaîné devant cette instance.
-  app.set('trust proxy', 1);
-
-  app.use(express.json());
+  app.use(cookieParser());
 
   app.use(mcpAuthRouter({
     provider,
@@ -45,10 +85,10 @@ export async function createHttpApp({ mcpUrl, staticFallbackToken, skipDbConnect
 
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(new URL(RESOURCE_URL));
 
-  // GET /authorize/continue — retour depuis la page de login EbookRequest
+  // GET /oauth-continue — retour depuis la page de login EbookRequest
   // (app principale), avec un ticket signé de courte durée prouvant
   // l'identité de l'utilisateur. Affiche l'écran de consentement.
-  app.get('/authorize/continue', async (req, res) => {
+  app.get('/oauth-continue', customOAuthRateLimit, async (req, res) => {
     setAntiClickjackingHeaders(res);
     try {
       const { pending: pendingId, ticket } = req.query;
@@ -56,12 +96,25 @@ export async function createHttpApp({ mcpUrl, staticFallbackToken, skipDbConnect
         return res.status(400).send('Requête invalide.');
       }
 
-      const userId = await consumeLoginTicket(ticket);
-
       const pending = await PendingAuthorization.findById(pendingId);
       if (!pending || pending.expiresAt < new Date()) {
         return res.status(400).send('Cette demande d\'autorisation a expiré, veuillez relancer la connexion depuis Claude.');
       }
+
+      // Vérifie que c'est bien le navigateur qui a initié /authorize qui
+      // revient ici (cookie posé à ce moment-là) — sans ça, un attaquant
+      // pourrait démarrer sa propre demande d'autorisation puis faire
+      // suivre ce lien à une victime déjà connectée, dont le compte se
+      // retrouverait lié au client de l'attaquant (CSRF de login/mix-up).
+      const bindingCookieName = `mcp_binding_${pendingId}`;
+      const bindingCookie = req.cookies?.[bindingCookieName];
+      res.clearCookie(bindingCookieName, { path: '/oauth-continue' });
+      if (!bindingCookie || !timingSafeEqualStrings(hashToken(bindingCookie), pending.bindingHash || '')) {
+        await PendingAuthorization.deleteOne({ _id: pendingId });
+        return res.status(403).send('Ce lien doit être ouvert dans le navigateur ayant initié la connexion. Veuillez relancer la connexion depuis Claude.');
+      }
+
+      const userId = await consumeLoginTicket(ticket);
 
       const client = await provider.clientsStore.getClient(pending.clientId);
       if (!client) {
@@ -84,8 +137,8 @@ export async function createHttpApp({ mcpUrl, staticFallbackToken, skipDbConnect
     }
   });
 
-  // POST /authorize/consent — "Autoriser" / "Refuser" sur l'écran précédent.
-  app.post('/authorize/consent', express.urlencoded({ extended: false }), async (req, res) => {
+  // POST /oauth-consent — "Autoriser" / "Refuser" sur l'écran précédent.
+  app.post('/oauth-consent', customOAuthRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
     setAntiClickjackingHeaders(res);
     try {
       const { pending: pendingId, csrf, decision } = req.body;
@@ -139,7 +192,7 @@ export async function createHttpApp({ mcpUrl, staticFallbackToken, skipDbConnect
     }
   });
 
-  app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', oauth: true }));
 
   return { app, provider, resourceUrl: RESOURCE_URL };
 }

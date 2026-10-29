@@ -7,14 +7,14 @@ import { toast } from 'react-toastify';
 import { startAuthentication } from '@simplewebauthn/browser';
 
 // Flux OAuth MCP (feat/mcp-oauth) : le serveur MCP redirige ici avec
-// ?continue=<url /authorize/continue> pour authentifier l'utilisateur avec
+// ?continue=<url /oauth-continue> pour authentifier l'utilisateur avec
 // son compte EbookRequest existant. Instance self-hosted : le domaine du
 // serveur MCP n'est jamais le même d'une installation à l'autre, jamais
 // codé en dur ici — récupéré dynamiquement via GET /api/auth/setup-status
 // (mcpOrigin, dérivé de MCP_URL côté serveur). Validation stricte (origin +
 // pathname exacts via new URL(), jamais startsWith/includes) pour ne jamais
 // devenir une redirection ouverte.
-const MCP_CONTINUE_PATH = '/authorize/continue';
+const MCP_CONTINUE_PATH = '/oauth-continue';
 
 function getValidContinueUrl(raw, mcpOrigin) {
   if (!raw || !mcpOrigin) return null;

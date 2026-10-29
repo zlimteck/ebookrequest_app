@@ -17,22 +17,23 @@ if (MODE !== 'http' && !TOKEN) {
 }
 
 if (MODE === 'http') {
-  // L'OAuth (feat/mcp-oauth) n'est utile qu'en mode http (Claude web/iOS) —
-  // TOKEN reste optionnel dans ce mode (repli legacy uniquement si
-  // configuré), mais ces 5-là sont indispensables pour que le flux OAuth
-  // fonctionne.
-  const missing = ['MCP_URL', 'MONGODB_URI', 'MCP_OAUTH_JWT_SECRET', 'MCP_LOGIN_TICKET_SECRET', 'MCP_INTERNAL_SERVICE_SECRET']
-    .filter((name) => !process.env[name]);
-  if (missing.length > 0) {
-    console.error(`Variables d'environnement requises manquantes pour le flux OAuth MCP : ${missing.join(', ')}`);
-    process.exit(1);
+  // L'OAuth (feat/mcp-oauth) est entièrement optionnel : une instance déjà
+  // en prod avec juste EBOOKREQUEST_TOKEN (OpenWebUI/ChatMCP/Claude Desktop)
+  // ne doit jamais cesser de démarrer simplement parce que ces 5 variables
+  // n'ont pas été ajoutées — bloquer ici casserait le MCP de tout le monde
+  // dès la mise à jour de l'image, pas seulement de ceux qui veulent OAuth.
+  const oauthVars = ['MCP_URL', 'MONGODB_URI', 'MCP_OAUTH_JWT_SECRET', 'MCP_LOGIN_TICKET_SECRET', 'MCP_INTERNAL_SERVICE_SECRET'];
+  const missing = oauthVars.filter((name) => !process.env[name]);
+  const oauthEnabled = missing.length === 0;
+  if (!oauthEnabled && missing.length < oauthVars.length) {
+    console.warn(`OAuth MCP désactivé : variables manquantes (${missing.join(', ')}). Le serveur démarre quand même en mode token statique uniquement.`);
   }
 
   const { createHttpApp } = await import('./httpApp.js');
-  const { app, resourceUrl } = await createHttpApp({ staticFallbackToken: TOKEN });
+  const { app, resourceUrl } = await createHttpApp({ staticFallbackToken: TOKEN, oauthEnabled });
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`EbookRequest MCP server (HTTP) running on :${PORT}, OAuth resource: ${resourceUrl}`);
+    console.log(`EbookRequest MCP server (HTTP) running on :${PORT}${oauthEnabled ? `, OAuth resource: ${resourceUrl}` : ' (OAuth désactivé, token statique uniquement)'}`);
   });
 } else {
   const api = createApi(TOKEN);

@@ -18,7 +18,8 @@ export async function consumeLoginTicket(ticket) {
 
   let payload;
   try {
-    payload = jwt.verify(ticket, SECRET);
+    // algorithms épinglé explicitement, même raison que provider.js#verifyAccessToken.
+    payload = jwt.verify(ticket, SECRET, { algorithms: ['HS256'] });
   } catch {
     throw new Error('Ticket invalide ou expiré.');
   }

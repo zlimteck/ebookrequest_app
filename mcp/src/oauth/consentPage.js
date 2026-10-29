@@ -46,7 +46,7 @@ export function renderConsentPage({ pendingId, csrfToken, clientName, redirectUr
   <div class="card">
     <h1>${safeClientName} souhaite accéder à votre compte EbookRequest</h1>
     <p>Vous serez redirigé vers <span class="domain">${safeDomain}</span> après votre décision. Vous pourrez révoquer cet accès à tout moment depuis vos paramètres.</p>
-    <form method="POST" action="/authorize/consent">
+    <form method="POST" action="/oauth-consent">
       <input type="hidden" name="pending" value="${safePendingId}">
       <input type="hidden" name="csrf" value="${safeCsrf}">
       <div class="actions">
