@@ -105,7 +105,7 @@ export function buildServer(api) {
       const lines = books.map(b => {
         const progress = b.readingProgress > 0 ? ` | ${b.readingProgress}%` : '';
         const rating   = b.rating ? ` | ${'⭐'.repeat(b.rating)}` : '';
-        return `• **${b.title}** — ${b.author || '—'} (${b.format || '—'})${progress}${rating}`;
+        return `• **${b.title}** — ${b.author || '—'} (${b.format || '—'})${progress}${rating}\n  id: \`${b._id}\``;
       });
       return { content: [{ type: 'text', text: lines.join('\n') }] };
     }
@@ -394,6 +394,284 @@ export function buildServer(api) {
     async ({ request_id, status, comment }) => {
       await api.patch(`/requests/${request_id}/status`, { status, adminComment: comment });
       return { content: [{ type: 'text', text: `✅ Demande ${request_id} passée en **${status}**.` }] };
+    }
+  );
+
+  server.tool(
+    'search_authors',
+    'Rechercher un auteur sur Open Library pour pouvoir le suivre ensuite',
+    { query: z.string().describe('Nom de l\'auteur') },
+    async ({ query }) => {
+      const res = await api.get('/authors/search', { params: { q: query } });
+      const authors = res.data?.authors || [];
+      if (!authors.length) return { content: [{ type: 'text', text: 'Aucun auteur trouvé.' }] };
+      const lines = authors.slice(0, 10).map(a =>
+        `• **${a.name}**${a.topWork ? ` — connu pour : ${a.topWork}` : ''}\n  key: \`${a.key}\``
+      );
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'follow_author',
+    'Suivre un auteur (trouvé via search_authors) pour être notifié de ses nouvelles sorties',
+    {
+      key:          z.string().describe('Clé Open Library de l\'auteur (champ key des résultats de search_authors)'),
+      auto_request: z.boolean().optional().default(false).describe('Créer automatiquement une demande dès qu\'une nouvelle sortie de cet auteur est détectée'),
+    },
+    async ({ key, auto_request }) => {
+      const res = await api.post(`/authors/${key}/follow`, { autoRequest: auto_request });
+      const a = res.data?.author;
+      return { content: [{ type: 'text', text: `✅ Vous suivez maintenant **${a?.name || key}**${auto_request ? ' (demande automatique activée)' : ''}.` }] };
+    }
+  );
+
+  server.tool(
+    'unfollow_author',
+    'Arrêter de suivre un auteur',
+    { key: z.string().describe('Clé Open Library de l\'auteur (voir get_my_followed_authors)') },
+    async ({ key }) => {
+      await api.delete(`/authors/${key}/follow`);
+      return { content: [{ type: 'text', text: `✅ Vous ne suivez plus cet auteur.` }] };
+    }
+  );
+
+  server.tool(
+    'get_my_followed_authors',
+    'Lister les auteurs que je suis actuellement',
+    {},
+    async () => {
+      const res = await api.get('/authors/me/followed');
+      const authors = res.data?.authors || [];
+      if (!authors.length) return { content: [{ type: 'text', text: 'Vous ne suivez aucun auteur.' }] };
+      const lines = authors.map(a =>
+        `• **${a.name}**${a.autoRequest ? ' 🔁 (demande auto)' : ''}\n  key: \`${a.openLibraryKey}\``
+      );
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+  );
+
+  server.tool(
+    'prowlarr_search',
+    'Rechercher un livre via les indexeurs torrent configurés dans Prowlarr. Peut être désactivé par un administrateur. Recherche uniquement, pas de téléchargement (réservé aux admins).',
+    { query: z.string().min(2).describe('Titre, auteur ou mots-clés (2 caractères minimum)') },
+    async ({ query }) => {
+      const res = await api.get('/requests/prowlarr-search', { params: { q: query } });
+      const d = res.data;
+      if (d.unavailable) return { content: [{ type: 'text', text: `⚠️ Recherche Prowlarr indisponible : ${d.error || 'source injoignable ou non configurée.'}` }] };
+      const results = d.results || [];
+      if (!results.length) return { content: [{ type: 'text', text: 'Aucun résultat Prowlarr.' }] };
+      const lines = results.slice(0, 10).map(r => {
+        const sizeMb = r.size ? ` | ${(r.size / 1024 / 1024).toFixed(0)} Mo` : '';
+        return `• **${r.title}**\n  Indexeur : ${r.indexer || '—'} | Seeders : ${r.seeders ?? '—'}${sizeMb}\n  guid: \`${r.guid}\` | indexerId: \`${r.indexerId}\``;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_upcoming_releases',
+    'Lister les prochaines sorties de livres (source BnF et/ou Hardcover)',
+    {
+      search: z.string().optional().describe('Filtre par titre ou auteur'),
+      source: z.enum(['all', 'bnf', 'hardcover']).optional().default('all'),
+      limit:  z.number().int().min(1).max(50).optional().default(20),
+    },
+    async ({ search, source, limit }) => {
+      const params = { limit, sort: 'date', dir: 'asc' };
+      if (search) params.search = search;
+      if (source !== 'all') params.source = source;
+      const res = await api.get('/upcoming-releases', { params });
+      const items = res.data?.items || [];
+      if (!items.length) return { content: [{ type: 'text', text: 'Aucune sortie à venir trouvée.' }] };
+      const lines = items.map(it => {
+        const date = it.releaseDate ? new Date(it.releaseDate).toLocaleDateString('fr-FR') : 'date inconnue';
+        return `• **${it.title}** — ${it.author || 'Auteur inconnu'}\n  Sortie le ${date} | Source : ${it.source}${it.publisher ? ` | ${it.publisher}` : ''}`;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'update_reading_progress',
+    'Mettre à jour un livre de ma bibliothèque : statut, note, progression ou notes personnelles (voir get_my_library pour l\'id)',
+    {
+      book_id:          z.string().describe('ID du livre dans ma bibliothèque (champ id de get_my_library)'),
+      status:           z.enum(['to_read', 'reading', 'read']).optional(),
+      rating:           z.number().int().min(0).max(5).optional().describe('Note sur 5'),
+      reading_progress: z.number().int().min(0).max(100).optional().describe('Progression en %'),
+      notes:            z.string().optional(),
+    },
+    async ({ book_id, status, rating, reading_progress, notes }) => {
+      const body = {};
+      if (status !== undefined) body.status = status;
+      if (rating !== undefined) body.rating = rating;
+      if (reading_progress !== undefined) body.readingProgress = reading_progress;
+      if (notes !== undefined) body.notes = notes;
+      const res = await api.put(`/reading/${book_id}`, body);
+      return { content: [{ type: 'text', text: `✅ **${res.data.title}** mis à jour.` }] };
+    }
+  );
+
+  server.tool(
+    'add_to_library',
+    'Ajouter manuellement un livre à ma bibliothèque de lecture',
+    {
+      title:           z.string(),
+      author:          z.string(),
+      thumbnail:       z.string().optional(),
+      google_books_id: z.string().optional(),
+    },
+    async ({ title, author, thumbnail, google_books_id }) => {
+      const res = await api.post('/reading', { title, author, thumbnail, googleBooksId: google_books_id });
+      return { content: [{ type: 'text', text: `✅ **${res.data.title}** ajouté à votre bibliothèque.\n  id: \`${res.data._id}\`` }] };
+    }
+  );
+
+  server.tool(
+    'remove_from_library',
+    'Retirer un livre de ma bibliothèque (voir get_my_library pour l\'id)',
+    { book_id: z.string().describe('ID du livre (champ id de get_my_library)') },
+    async ({ book_id }) => {
+      await api.delete(`/reading/${book_id}`);
+      return { content: [{ type: 'text', text: '✅ Livre retiré de votre bibliothèque.' }] };
+    }
+  );
+
+  server.tool(
+    'get_notifications',
+    'Voir mes notifications non lues, ou l\'historique des 7 derniers jours',
+    { scope: z.enum(['unseen', 'history']).optional().default('unseen') },
+    async ({ scope }) => {
+      const res = await api.get(scope === 'history' ? '/notifications/history' : '/notifications/unseen');
+      const notifications = res.data?.notifications || [];
+      if (!notifications.length) return { content: [{ type: 'text', text: scope === 'history' ? 'Aucune notification sur les 7 derniers jours.' : 'Aucune notification non lue.' }] };
+      const typeLabel = { completed: 'Complétée', canceled: 'Annulée', adminComment: 'Commentaire admin' };
+      const lines = notifications.map(n => {
+        const seen = n.seen ? ' (déjà vue)' : '';
+        if (n.standalone) {
+          return `• **${n.notification.type}**${seen}\n  ${n.notification.message || ''}\n  id: \`${n.notification._id}\` (standalone)`;
+        }
+        const r = n.request;
+        return `• **${typeLabel[n.type] || n.type}** — ${r.title} (${r.author || '—'})${seen}\n  id: \`${r._id}\``;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'mark_notification_seen',
+    'Marquer une notification comme lue (voir get_notifications pour l\'id et le type)',
+    {
+      id:         z.string().describe('ID de la demande ou de la notification standalone'),
+      standalone: z.boolean().optional().default(false).describe('true si c\'est une notification standalone (champ "(standalone)" dans get_notifications)'),
+      type:       z.enum(['completed', 'canceled', 'adminComment']).optional().default('completed').describe('Type de notification (ignoré si standalone)'),
+    },
+    async ({ id, standalone, type }) => {
+      if (standalone) {
+        await api.post(`/notifications/standalone/${id}/seen`);
+      } else {
+        await api.post(`/notifications/${id}/seen`, { type });
+      }
+      return { content: [{ type: 'text', text: '✅ Notification marquée comme lue.' }] };
+    }
+  );
+
+  server.tool(
+    'search_my_content',
+    'Rechercher dans mes propres demandes et ma bibliothèque de lecture',
+    { query: z.string().min(2).describe('Terme de recherche (titre ou auteur, 2 caractères minimum)') },
+    async ({ query }) => {
+      const res = await api.get('/search', { params: { q: query } });
+      const results = res.data?.results || {};
+      const sections = [];
+      if (results.demandes?.length) {
+        sections.push(`**Mes demandes :**\n${results.demandes.map(r => `• ${r.title} — ${r.author || '—'} (${r.status})`).join('\n')}`);
+      }
+      if (results.bibliotheque?.length) {
+        sections.push(`**Ma bibliothèque :**\n${results.bibliotheque.map(b => `• ${b.title} — ${b.author || '—'} (${b.status})`).join('\n')}`);
+      }
+      if (!sections.length) return { content: [{ type: 'text', text: 'Aucun résultat.' }] };
+      return { content: [{ type: 'text', text: sections.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_my_profile',
+    'Voir les informations de base de mon compte',
+    {},
+    async () => {
+      const res = await api.get('/user/me');
+      const u = res.data?.user || {};
+      const lines = [
+        `**${u.username}** (${u.role})`,
+        `Email : ${u.email}${u.emailVerified ? ' ✅' : ' (non vérifié)'}`,
+        u.kindleEmail ? `Kindle : ${u.kindleEmail}` : null,
+      ].filter(Boolean);
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_my_achievements',
+    'Voir mes succès/badges débloqués et ma série d\'activité',
+    {},
+    async () => {
+      const res = await api.get('/user/me/achievements');
+      const d = res.data;
+      const lines = [`🔥 Série actuelle : ${d.streak?.current ?? 0} jours (record : ${d.streak?.longest ?? 0})`, ''];
+      for (const cat of d.categories || []) {
+        if (cat.tiers) {
+          const unlockedCount = cat.tiers.filter(t => t.unlocked).length;
+          lines.push(`${unlockedCount > 0 ? '🏆' : '⬜'} **${cat.label}** — ${unlockedCount}/${cat.tiers.length} palier(s) (${cat.count})`);
+        } else {
+          lines.push(`${cat.unlocked ? '🏆' : '⬜'} **${cat.label}**`);
+        }
+      }
+      lines.push('', `Total débloqué : ${d.summary?.unlocked ?? '—'}/${d.summary?.total ?? '—'}`);
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_trending_releases',
+    'Voir les livres tendance du mois (bestsellers), par catégorie optionnelle',
+    { category: z.enum(['all', 'thriller', 'romance', 'sf', 'bd', 'fantasy', 'literary']).optional().default('all') },
+    async ({ category }) => {
+      const res = await api.get('/trending/monthly', { params: { category } });
+      const books = res.data?.data || [];
+      if (!books.length) return { content: [{ type: 'text', text: 'Aucun livre tendance trouvé.' }] };
+      const lines = books.map(b => `**${b.trending_rank}. ${b.title}** — ${b.author}`);
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+  );
+
+  server.tool(
+    'get_recommendations',
+    'Voir mes recommandations de lecture générées par IA (basées sur mon historique)',
+    { limit: z.number().int().min(1).max(20).optional().default(5) },
+    async ({ limit }) => {
+      const res = await api.get('/recommendations', { params: { limit } });
+      const d = res.data;
+      if (d.aiEnabled === false) return { content: [{ type: 'text', text: 'Les recommandations IA ne sont pas activées sur ce serveur.' }] };
+      const recs = d.recommendations || [];
+      if (!recs.length) return { content: [{ type: 'text', text: 'Aucune recommandation disponible.' }] };
+      const lines = recs.map(r => `• **${r.title}** — ${r.author}\n  ${r.reason || ''}`);
+      return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+    }
+  );
+
+  server.tool(
+    'regenerate_recommendations',
+    'Régénérer mes recommandations IA (limité à 3 fois par 7 jours)',
+    {},
+    async () => {
+      const res = await api.post('/recommendations/regenerate');
+      const d = res.data;
+      if (d.aiEnabled === false) return { content: [{ type: 'text', text: 'Les recommandations IA ne sont pas activées sur ce serveur.' }] };
+      if (d.success === false) return { content: [{ type: 'text', text: `⚠️ ${d.message}` }] };
+      const lines = (d.recommendations || []).map(r => `• **${r.title}** — ${r.author}\n  ${r.reason || ''}`);
+      return { content: [{ type: 'text', text: `✅ Nouvelles recommandations :\n\n${lines.join('\n\n')}` }] };
     }
   );
 

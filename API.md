@@ -835,6 +835,53 @@ curl https://app.ndd.fr/api/mcp/info \
   -H "Authorization: Bearer <token>"
 ```
 
+### OAuth 2.1 (serveur MCP, domaine `MCP_URL`)
+
+Le serveur MCP (`https://mcp.ndd.fr`, pas le domaine de l'application) expose le flux OAuth 2.1 décrit par la spec MCP Authorization (révision 2025-06-18), pour les clients qui ne permettent pas d'envoyer un header `Authorization` personnalisé (Claude web/iOS/Desktop via connecteur personnalisé). Le token Bearer statique legacy (`EBOOKREQUEST_TOKEN` / token OPDS) reste accepté en parallèle — voir [`mcp/README.md`](mcp/README.md).
+
+Nécessite les variables d'env `MCP_URL`, `MONGODB_URI`, `MCP_OAUTH_JWT_SECRET`, `MCP_LOGIN_TICKET_SECRET`, `MCP_INTERNAL_SERVICE_SECRET` sur le service `ebookrequest-mcp`. Si l'une d'elles manque, l'OAuth est simplement désactivé (pas de crash), seul le Bearer statique fonctionne.
+
+**Découverte** (RFC 9728 / RFC 8414) :
+```bash
+curl https://mcp.ndd.fr/.well-known/oauth-protected-resource/mcp
+curl https://mcp.ndd.fr/.well-known/oauth-authorization-server
+curl -i https://mcp.ndd.fr/mcp   # 401 + WWW-Authenticate: Bearer resource_metadata=...
+```
+
+**Enregistrement dynamique de client** (RFC 7591) :
+```bash
+curl -X POST https://mcp.ndd.fr/register \
+  -H "Content-Type: application/json" \
+  -d '{"client_name":"mon-client","redirect_uris":["https://mon-domaine/callback"]}'
+```
+`redirect_uris` doit être en HTTPS (`http://localhost`/`127.0.0.1` acceptés pour les tests). Rate-limité.
+
+**Autorisation** — `GET /authorize` avec PKCE S256 obligatoire (`plain` refusé) et paramètre `resource` (RFC 8707). Redirige vers la page de login EbookRequest existante (`/login?continue=...`), puis vers un écran de consentement, avant de rediriger vers le `redirect_uri` du client avec un code d'autorisation (usage unique, 60s).
+
+**Échange de token** (`POST /token`) :
+```bash
+curl -X POST https://mcp.ndd.fr/token \
+  -d grant_type=authorization_code \
+  -d code=<code> \
+  -d redirect_uri=<redirect_uri> \
+  -d client_id=<client_id> \
+  -d code_verifier=<verifier>
+```
+Access token JWT, audience = ressource MCP, ~1h. Refresh token opaque haché en base, ~30j, avec rotation (réutilisation d'un refresh token déjà consommé = révocation de toute la chaîne).
+
+**Révocation** (RFC 7009) :
+```bash
+curl -X POST https://mcp.ndd.fr/revoke -d token=<refresh_token>
+```
+⚠️ Révoquer un refresh token n'invalide pas un access token déjà émis — celui-ci reste valide jusqu'à expiration (≤ 1h).
+
+**Test rapide via MCP Inspector** :
+```bash
+npx @modelcontextprotocol/inspector
+# URL du serveur : https://mcp.ndd.fr/mcp
+# Laisser l'Inspector suivre le flux OAuth automatiquement (découverte → register → authorize → token)
+```
+
 ---
 
 ## Administration
