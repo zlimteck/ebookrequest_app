@@ -4,10 +4,20 @@ import axios from 'axios';
 import BookRequest from '../models/BookRequest.js';
 import ReadingList from '../models/ReadingList.js';
 import User from '../models/User.js';
+import UpcomingRelease from '../models/UpcomingRelease.js';
+import Recommendation from '../models/Recommendation.js';
 import { isAIConfigured } from './aiProviderService.js';
 import { findBestBookMatch, searchBooksList } from './bookSearchService.js';
-import { getOrGenerateRecommendations } from './recommendationService.js';
+import { getOrGenerateRecommendations, generateRecommendations, getUserBookRequests, getUserLibraryBooks } from './recommendationService.js';
 import { getAIProviderConfig } from './aiProviderConfig.js';
+import { searchAuthors } from './openLibraryAuthorService.js';
+import { followAuthor, unfollowAuthor, listFollowedAuthors } from './authorFollowService.js';
+import { searchProwlarr } from './prowlarrService.js';
+import { getUnseenNotifications } from '../controllers/notificationController.js';
+import { getUserAchievements } from './achievementsService.js';
+import { getTrendingBooks } from './trendingBooksService.js';
+import { recordActivity } from './streakService.js';
+import { syncReadingEntryToHardcover } from './hardcoverSyncService.js';
 
 const DAILY_LIMIT = 10;
 const dailyUsage  = new Map(); // userId → { count, date }
@@ -106,6 +116,179 @@ const USER_TOOLS = [
       name: 'recommend_books',
       description: 'Recommande des livres à l\'utilisateur en te basant sur ses demandes et sa bibliothèque de lecture (livres lus, notes). Utilise cet outil quand l\'utilisateur demande une recommandation, un conseil de lecture, ou "quoi lire ensuite".',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'regenerate_recommendations',
+      description: 'Régénère de nouvelles recommandations de lecture (limité à 3 fois par 7 jours)',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_authors',
+      description: 'Recherche un auteur sur Open Library, pour pouvoir le suivre ensuite',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'Nom de l\'auteur' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'follow_author',
+      description: 'Suit un auteur (clé Open Library obtenue via search_authors) pour être notifié de ses nouvelles sorties',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', description: 'Clé Open Library de l\'auteur' },
+          auto_request: { type: 'boolean', description: 'Créer automatiquement une demande dès qu\'une sortie est détectée' },
+        },
+        required: ['key'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unfollow_author',
+      description: 'Arrête de suivre un auteur',
+      parameters: {
+        type: 'object',
+        properties: { key: { type: 'string', description: 'Clé Open Library de l\'auteur' } },
+        required: ['key'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_followed_authors',
+      description: 'Liste les auteurs actuellement suivis par l\'utilisateur',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_upcoming_releases',
+      description: 'Liste les prochaines sorties de livres (sources BnF et/ou Hardcover)',
+      parameters: {
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Filtre par titre ou auteur' },
+          source: { type: 'string', enum: ['all', 'bnf', 'hardcover'] },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'prowlarr_search',
+      description: 'Recherche un livre via les indexeurs torrent configurés dans Prowlarr (recherche uniquement, peut être désactivé)',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'Titre, auteur ou mots-clés' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_reading_progress',
+      description: 'Met à jour le statut, la note ou la progression d\'un livre de la bibliothèque (titre suffit, recherche partielle)',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:            { type: 'string', description: 'Titre du livre (recherche partielle)' },
+          status:           { type: 'string', enum: ['to_read', 'reading', 'read'] },
+          rating:           { type: 'integer', minimum: 0, maximum: 5 },
+          reading_progress: { type: 'integer', minimum: 0, maximum: 100 },
+        },
+        required: ['title'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_to_library',
+      description: 'Ajoute manuellement un livre à la bibliothèque de lecture',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:  { type: 'string' },
+          author: { type: 'string' },
+        },
+        required: ['title', 'author'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_from_library',
+      description: 'Retire un livre de la bibliothèque (titre suffit, recherche partielle)',
+      parameters: {
+        type: 'object',
+        properties: { title: { type: 'string', description: 'Titre du livre (recherche partielle)' } },
+        required: ['title'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_notifications',
+      description: 'Liste les notifications non lues, ou l\'historique des 7 derniers jours',
+      parameters: {
+        type: 'object',
+        properties: { scope: { type: 'string', enum: ['unseen', 'history'] } },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_profile',
+      description: 'Donne les informations de base du compte de l\'utilisateur',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_achievements',
+      description: 'Donne les succès/badges débloqués et la série d\'activité de l\'utilisateur',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_trending_releases',
+      description: 'Liste les livres tendance du mois, par catégorie optionnelle',
+      parameters: {
+        type: 'object',
+        properties: { category: { type: 'string', enum: ['all', 'thriller', 'romance', 'sf', 'bd', 'fantasy', 'literary'] } },
+        additionalProperties: false,
+      },
     },
   },
 ];
@@ -269,6 +452,158 @@ async function toolRecommendBooks(userId) {
   return recommendations.map(r => ({ titre: r.title, auteur: r.author, raison: r.reason, genre: r.genre }));
 }
 
+async function toolRegenerateRecommendations(userId) {
+  const user = await User.findById(userId).select('username').lean();
+  let doc = await Recommendation.findOne({ user: userId });
+  if (!doc) doc = new Recommendation({ user: userId, recommendations: [], regenerationCount: 0, windowStart: new Date() });
+  if (!doc.canRegenerate()) {
+    const info = doc.getRateLimitInfo();
+    return { error: `Limite de régénération atteinte (${info.regenerationsMax} par 7 jours).` };
+  }
+  const [bookRequests, libraryBooks] = await Promise.all([getUserBookRequests(userId), getUserLibraryBooks(userId)]);
+  const result = await generateRecommendations(bookRequests, 5, userId, user?.username || 'anonymous', libraryBooks);
+  doc.recommendations = result.recommendations;
+  doc.generatedAt = new Date();
+  doc.regenerationCount += 1;
+  await doc.save();
+  if (!result.recommendations.length) return { message: result.message || 'Pas assez de données pour régénérer des recommandations.' };
+  return result.recommendations.map(r => ({ titre: r.title, auteur: r.author, raison: r.reason }));
+}
+
+async function toolSearchAuthors(query) {
+  const authors = await searchAuthors(query);
+  if (!authors.length) return { message: 'Aucun auteur trouvé.' };
+  return authors.slice(0, 10).map(a => ({ nom: a.name, key: a.key, connu_pour: a.topWork || null }));
+}
+
+async function toolFollowAuthor(userId, { key, auto_request = false } = {}) {
+  const author = await followAuthor(userId, key, auto_request);
+  return { succès: true, message: `Vous suivez maintenant ${author.name}${auto_request ? ' (demande automatique activée)' : ''}.` };
+}
+
+async function toolUnfollowAuthor(userId, { key } = {}) {
+  await unfollowAuthor(userId, key);
+  return { succès: true, message: 'Vous ne suivez plus cet auteur.' };
+}
+
+async function toolGetMyFollowedAuthors(userId) {
+  const authors = await listFollowedAuthors(userId);
+  if (!authors.length) return { message: 'Aucun auteur suivi.' };
+  return authors.map(a => ({ nom: a.name, key: a.openLibraryKey, demande_auto: !!a.autoRequest }));
+}
+
+async function toolGetUpcomingReleases({ search, source } = {}) {
+  const filter = {};
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ title: regex }, { author: regex }];
+  }
+  if (source && source !== 'all') filter.source = source;
+  const items = await UpcomingRelease.find(filter).sort({ releaseDate: 1 }).limit(20).lean();
+  if (!items.length) return { message: 'Aucune sortie à venir trouvée.' };
+  return items.map(it => ({
+    titre: it.title,
+    auteur: it.author,
+    sortie_le: it.releaseDate?.toLocaleDateString('fr-FR') || null,
+    source: it.source,
+  }));
+}
+
+async function toolProwlarrSearch(query) {
+  try {
+    const { results } = await searchProwlarr(query);
+    const torrents = (results || []).filter(r => r.protocol === 'torrent');
+    if (!torrents.length) return { message: 'Aucun résultat Prowlarr.' };
+    return torrents.slice(0, 10).map(r => ({ titre: r.title, indexeur: r.indexer, seeders: r.seeders }));
+  } catch (err) {
+    return { error: `Recherche Prowlarr indisponible : ${err.message}` };
+  }
+}
+
+async function findLibraryBookByTitle(userId, title) {
+  const regex = new RegExp(title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  return ReadingList.findOne({ userId, title: regex });
+}
+
+async function toolUpdateReadingProgress(userId, { title, status, rating, reading_progress } = {}) {
+  const book = await findLibraryBookByTitle(userId, title);
+  if (!book) return { error: `Aucun livre trouvé pour "${title}" dans la bibliothèque.` };
+  const wasUnstarted = book.readingProgress === 0;
+  if (status !== undefined) { book.status = status; book.readAt = status === 'read' ? new Date() : null; }
+  if (rating !== undefined) book.rating = Math.min(5, Math.max(0, Number(rating)));
+  if (reading_progress !== undefined) book.readingProgress = Math.min(100, Math.max(0, Number(reading_progress)));
+  await book.save();
+  if (status !== undefined || reading_progress !== undefined) {
+    recordActivity(userId).catch(() => {});
+    getUserAchievements(userId).catch(() => {});
+  }
+  const justStartedReading = wasUnstarted && book.readingProgress > 0;
+  if (status !== undefined || rating !== undefined || justStartedReading) {
+    syncReadingEntryToHardcover(userId, book).catch(() => {});
+  }
+  return { succès: true, message: `"${book.title}" mis à jour.` };
+}
+
+async function toolAddToLibrary(userId, { title, author } = {}) {
+  const existing = await findLibraryBookByTitle(userId, title);
+  if (existing) return { error: `"${title}" est déjà dans la bibliothèque.` };
+  const user = await User.findById(userId).select('username').lean();
+  const book = await ReadingList.create({ userId, title: title.trim(), author: author.trim(), source: 'manual' });
+  syncReadingEntryToHardcover(userId, book).catch(() => {});
+  recordActivity(userId).catch(() => {});
+  getUserAchievements(userId).catch(() => {});
+  return { succès: true, message: `"${title}" ajouté à la bibliothèque de ${user?.username || ''}.` };
+}
+
+async function toolRemoveFromLibrary(userId, { title } = {}) {
+  const book = await findLibraryBookByTitle(userId, title);
+  if (!book) return { error: `Aucun livre trouvé pour "${title}" dans la bibliothèque.` };
+  await ReadingList.deleteOne({ _id: book._id });
+  return { succès: true, message: `"${book.title}" retiré de la bibliothèque.` };
+}
+
+async function toolGetNotifications(userId, { scope = 'unseen' } = {}) {
+  let notifications;
+  if (scope === 'history') {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const completed = await BookRequest.find({ user: userId, status: 'completed', updatedAt: { $gte: since } }).select('title author').lean();
+    const canceled = await BookRequest.find({ user: userId, status: 'canceled', updatedAt: { $gte: since } }).select('title author').lean();
+    notifications = [
+      ...completed.map(r => ({ type: 'completed', request: r })),
+      ...canceled.map(r => ({ type: 'canceled', request: r })),
+    ];
+  } else {
+    notifications = await getUnseenNotifications(userId);
+  }
+  if (!notifications.length) return { message: scope === 'history' ? 'Aucune notification sur les 7 derniers jours.' : 'Aucune notification non lue.' };
+  return notifications.map(n => n.standalone
+    ? { type: n.notification.type, message: n.notification.message || '' }
+    : { type: n.type, titre: n.request.title, auteur: n.request.author }
+  );
+}
+
+async function toolGetMyProfile(userId) {
+  const user = await User.findById(userId).select('username email role emailVerified').lean();
+  if (!user) return { error: 'Utilisateur introuvable.' };
+  return { nom_utilisateur: user.username, email: user.email, rôle: user.role, email_vérifié: !!user.emailVerified };
+}
+
+async function toolGetMyAchievements(userId) {
+  const d = await getUserAchievements(userId);
+  if (!d) return { error: 'Utilisateur introuvable.' };
+  return {
+    série_actuelle: d.streak?.current || 0,
+    record_série: d.streak?.longest || 0,
+    débloqués: `${d.summary?.unlocked ?? 0}/${d.summary?.total ?? 0}`,
+  };
+}
+
+async function toolGetTrendingReleases({ category = 'all' } = {}) {
+  const books = await getTrendingBooks(category);
+  if (!books.length) return { message: 'Aucun livre tendance trouvé.' };
+  return books.map(b => ({ titre: b.title, auteur: b.author, rang: b.trending_rank }));
+}
+
 async function toolGetPendingRequests() {
   const requests = await BookRequest.find({ status: 'pending' })
     .select('title author username createdAt format')
@@ -300,6 +635,20 @@ async function executeTool(name, args, userId, isAdmin) {
     case 'search_books':       return toolSearchBooks(args.query);
     case 'submit_request':     return toolSubmitRequest(userId, args);
     case 'recommend_books':    return toolRecommendBooks(userId);
+    case 'regenerate_recommendations': return toolRegenerateRecommendations(userId);
+    case 'search_authors':             return toolSearchAuthors(args.query);
+    case 'follow_author':              return toolFollowAuthor(userId, args);
+    case 'unfollow_author':            return toolUnfollowAuthor(userId, args);
+    case 'get_my_followed_authors':    return toolGetMyFollowedAuthors(userId);
+    case 'get_upcoming_releases':      return toolGetUpcomingReleases(args);
+    case 'prowlarr_search':            return toolProwlarrSearch(args.query);
+    case 'update_reading_progress':    return toolUpdateReadingProgress(userId, args);
+    case 'add_to_library':             return toolAddToLibrary(userId, args);
+    case 'remove_from_library':        return toolRemoveFromLibrary(userId, args);
+    case 'get_notifications':          return toolGetNotifications(userId, args);
+    case 'get_my_profile':             return toolGetMyProfile(userId);
+    case 'get_my_achievements':        return toolGetMyAchievements(userId);
+    case 'get_trending_releases':      return toolGetTrendingReleases(args);
     case 'get_pending_requests': return isAdmin ? toolGetPendingRequests() : { error: 'Accès refusé.' };
     case 'get_admin_stats':      return isAdmin ? toolGetAdminStats()      : { error: 'Accès refusé.' };
     default: return { error: `Outil inconnu: ${name}` };

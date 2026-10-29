@@ -17,6 +17,23 @@ const TOOLS_USER = [
   { name: 'direct_search_books', description: 'Lister les livres d\'une fiche auteur ou série trouvée par direct_search' },
   { name: 'direct_download',     description: 'Télécharger immédiatement un résultat de recherche directe' },
   { name: 'get_my_shelves',      description: 'Lister mes étagères Calibre-Web configurées' },
+  { name: 'search_authors',            description: 'Rechercher un auteur sur Open Library' },
+  { name: 'follow_author',             description: 'Suivre un auteur' },
+  { name: 'unfollow_author',           description: 'Arrêter de suivre un auteur' },
+  { name: 'get_my_followed_authors',   description: 'Lister les auteurs que je suis' },
+  { name: 'get_upcoming_releases',     description: 'Prochaines sorties (BnF, Hardcover)' },
+  { name: 'prowlarr_search',           description: 'Recherche via les indexeurs torrent Prowlarr' },
+  { name: 'update_reading_progress',   description: 'Mettre à jour statut/note/progression d\'un livre' },
+  { name: 'add_to_library',            description: 'Ajouter manuellement un livre à ma bibliothèque' },
+  { name: 'remove_from_library',       description: 'Retirer un livre de ma bibliothèque' },
+  { name: 'get_notifications',         description: 'Mes notifications non lues ou historique 7 jours' },
+  { name: 'mark_notification_seen',    description: 'Marquer une notification comme lue' },
+  { name: 'search_my_content',         description: 'Rechercher dans mes demandes et ma bibliothèque' },
+  { name: 'get_my_profile',            description: 'Mes informations de compte' },
+  { name: 'get_my_achievements',       description: 'Mes succès/badges et ma série d\'activité' },
+  { name: 'get_trending_releases',     description: 'Livres tendance du mois par catégorie' },
+  { name: 'get_recommendations',       description: 'Mes recommandations de lecture par IA' },
+  { name: 'regenerate_recommendations',description: 'Régénérer mes recommandations IA (3 max/7j)' },
 ];
 
 const TOOLS_ADMIN = [

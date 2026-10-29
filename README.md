@@ -189,11 +189,14 @@ Gérez les demandes de livres numériques de vos proches, de la soumission jusqu
 
 **Intégration (MCP)**
 - Serveur MCP pour gérer ses demandes directement depuis un assistant IA
-- Outils utilisateur : rechercher un livre, créer une demande (couverture auto via Google Books/Hardcover/Open Library), consulter ses demandes, vérifier la disponibilité, annuler une demande, consulter stats et bibliothèque
+- Authentification OAuth 2.1 (spec MCP Authorization) pour les connecteurs personnalisés Claude (web/iOS/Desktop), en plus du token Bearer statique legacy (OpenWebUI, ChatMCP, Claude Desktop en config manuelle)
+- Outils utilisateur : rechercher un livre, créer une demande (couverture auto via Google Books/Hardcover/Open Library), consulter ses demandes, vérifier la disponibilité, annuler une demande, consulter stats et bibliothèque (mise à jour statut/note/progression, ajout/suppression manuelle)
+- Suivi d'auteurs (recherche, suivre/ne plus suivre, liste), prochaines sorties (BnF, Hardcover), recherche torrent via Prowlarr (si configuré)
+- Notifications, recherche personnelle (demandes + bibliothèque), profil, succès/badges, tendances du mois, recommandations IA
 - Outils de recherche/téléchargement direct sur V (bypass du workflow demande/attente, désactivable par un admin) : `direct_search`, `direct_search_books`, `direct_download` (avec choix d'étagères Calibre-Web), `get_my_shelves`
 - Outils admin : demandes en attente, statistiques globales, changer le statut d'une demande, lister les utilisateurs
-- Compatible avec tous les clients MCP : [ChatMCP](https://apps.apple.com/fr/app/chatmcp/id6745196560) (iOS/iPadOS), Claude Desktop (Mac/Windows), Claude Web
-- Deux modes de déploiement : **HTTP** (hébergé sur VPS, accessible depuis n'importe où) ou **stdio** (local, pour Claude Desktop)
+- Compatible avec tous les clients MCP : Claude (web/iOS/Desktop, connecteur personnalisé OAuth), [ChatMCP](https://apps.apple.com/fr/app/chatmcp/id6745196560) (iOS/iPadOS), OpenWebUI
+- Deux modes de déploiement : **HTTP** (hébergé sur VPS, accessible depuis n'importe où) ou **stdio** (local, pour Claude Desktop en config manuelle)
 - Voir [`mcp/README.md`](mcp/README.md) pour la configuration
 
 ## App iOS
@@ -277,7 +280,7 @@ cp .env.example .env
 |---|---|
 | `NODE_ENV` | `production` ou `development` |
 | `PORT` | Port du backend (défaut : `5001`) |
-| `MONGODB_URI` | URI de connexion MongoDB (Atlas ou local) |
+| `MONGODB_URI` | URI de connexion MongoDB (Atlas ou local). Doit aussi être renseignée sur le service `ebookrequest-mcp` si l'OAuth MCP est activé (voir plus bas). |
 | `JWT_SECRET` | Clé secrète pour signer les tokens JWT, choisir une valeur longue et aléatoire |
 | `UPLOADS_PATH` | Chemin absolu du dossier de stockage des fichiers uploadés |
 
@@ -285,7 +288,7 @@ cp .env.example .env
 
 | Variable | Description |
 |---|---|
-| `FRONTEND_URL` | URL publique de l'application (ex : `https://ebook.tondomaine.fr`). Utilisée pour les liens dans les emails (vérification, reset mot de passe, invitations) et la configuration CORS en production. **Obligatoire en production.** |
+| `FRONTEND_URL` | URL publique de l'application (ex : `https://ebook.tondomaine.fr`). Utilisée pour les liens dans les emails (vérification, reset mot de passe, invitations) et la configuration CORS en production. **Obligatoire en production.** Doit aussi être renseignée sur le service `ebookrequest-mcp` si l'OAuth MCP est activé, pour rediriger vers la page de login lors du flux OAuth. |
 | `VITE_API_URL` | URL du backend injectée dynamiquement au runtime via `/env.js` (ex : `https://api.tondomaine.fr`). Nécessaire uniquement si le frontend et le backend sont sur des domaines différents. En configuration standard (frontend servi par le backend sur le même domaine), laisser vide les requêtes sont alors relatives (`/api/...`). **Note (migration depuis une version < 1.5.0) :** si vous buildiez manuellement sans Docker, renommez `REACT_APP_API_URL` en `VITE_API_URL` dans votre `frontend/.env`. |
 
 #### Email
@@ -357,6 +360,9 @@ Le mode **Relais** existe pour les instances qui n'ont pas de compte Apple Devel
 | `MCP_PORT` | Port du serveur MCP (défaut : `3035`) |
 | `MCP_URL` | URL publique du serveur MCP (ex : `https://mcp.ndd.fr`). Affichée aux utilisateurs dans les paramètres. Optionnel et si absent, la section MCP est masquée. |
 | `MCP_INTERNAL_URL` | URL interne du serveur MCP pour le health check depuis le backend (défaut : `http://ebookrequest-mcp:3035`). Utile quand le backend et le MCP sont sur le même réseau Docker, évite de passer par l'URL publique. |
+| `MCP_OAUTH_JWT_SECRET` | Secret de signature des access tokens OAuth du serveur MCP (`openssl rand -hex 32`). Optionnel : avec les 4 variables suivantes, active l'authentification OAuth 2.1 pour les connecteurs Claude web/iOS/Desktop (en plus du Bearer statique). Sans elles, seul le Bearer statique fonctionne. |
+| `MCP_LOGIN_TICKET_SECRET` | Secret de signature du ticket de connexion signé transmis entre le backend et le serveur MCP (`openssl rand -hex 32`), distinct de `JWT_SECRET`. |
+| `MCP_INTERNAL_SERVICE_SECRET` | Secret partagé entre le backend et le serveur MCP pour l'appel interne de résolution `userId → token OPDS` (`openssl rand -hex 32`). |
 
 Le service `apprise` inclus dans le `docker-compose.yml` utilise une configuration de base. Voici les variables d'environnement utiles à ajouter directement sur le service `apprise` selon vos besoins :
 

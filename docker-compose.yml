@@ -39,6 +39,8 @@ services:
       - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
       - MCP_URL=${MCP_URL}
       - MCP_INTERNAL_URL=${MCP_INTERNAL_URL:-http://ebookrequest-mcp:3035}
+      - MCP_LOGIN_TICKET_SECRET=${MCP_LOGIN_TICKET_SECRET}
+      - MCP_INTERNAL_SERVICE_SECRET=${MCP_INTERNAL_SERVICE_SECRET}
     extra_hosts:
       - "host.docker.internal:host-gateway"
   ebookrequest-mcp:
@@ -51,6 +53,12 @@ services:
       - EBOOKREQUEST_URL=http://ebookrequest:5001
       - MCP_MODE=http
       - MCP_PORT=3035
+      - MCP_URL=${MCP_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - MONGODB_URI=${MONGODB_URI}
+      - MCP_OAUTH_JWT_SECRET=${MCP_OAUTH_JWT_SECRET}
+      - MCP_LOGIN_TICKET_SECRET=${MCP_LOGIN_TICKET_SECRET}
+      - MCP_INTERNAL_SERVICE_SECRET=${MCP_INTERNAL_SERVICE_SECRET}
     depends_on:
       - ebookrequest
 

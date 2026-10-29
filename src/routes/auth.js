@@ -20,9 +20,19 @@ router.get('/setup-status', async (req, res) => {
   try {
     const adminExists = await User.findOne({ role: 'admin' });
     const { cfg: emailCfg } = await getEmailContext();
+    // mcpOrigin : instance self-hosted, le domaine du serveur MCP n'est
+    // jamais le même d'une installation à l'autre — dérivé de MCP_URL (déjà
+    // configurable, voir .env.example) plutôt que codé en dur, pour que
+    // Login.jsx puisse valider le paramètre ?continue= du flux OAuth MCP
+    // sans connaître ce domaine à l'avance.
+    let mcpOrigin = null;
+    try {
+      if (process.env.MCP_URL) mcpOrigin = new URL(process.env.MCP_URL).origin;
+    } catch { /* MCP_URL mal formée : mcpOrigin reste null */ }
     res.json({
       setupRequired: !adminExists,
       fromEmail: emailCfg.fromAddress || null,
+      mcpOrigin,
     });
   } catch {
     res.status(500).json({ error: 'Erreur serveur.' });
@@ -114,6 +124,54 @@ router.get('/check-token', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la vérification du token:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la vérification du token' });
+  }
+});
+
+// ── Pont d'identité pour le flux OAuth MCP (feat/mcp-oauth) ────────────────
+// Le serveur MCP (mcp.ebookrequest.fr, service séparé, sans accès aux
+// identifiants) redirige vers /login?continue=<url /oauth-continue>
+// pour authentifier l'utilisateur avec le compte EbookRequest existant.
+// Une fois connecté ici (session déjà valide ou via handleLoginSuccess),
+// le frontend échange cette session contre un "ticket" signé de courte durée
+// (60s, usage unique via jti, consommé côté mcp/) prouvant l'identité de
+// l'utilisateur sans jamais transmettre de mot de passe ni de token
+// permanent (opdsToken) au serveur MCP.
+const MCP_LOGIN_TICKET_SECRET = process.env.MCP_LOGIN_TICKET_SECRET;
+const MCP_CONTINUE_PATH = '/oauth-continue';
+
+router.post('/mcp-login-ticket', requireAuth, (req, res) => {
+  if (!MCP_LOGIN_TICKET_SECRET || !process.env.MCP_URL) {
+    return res.status(503).json({ error: 'Flux OAuth MCP non configuré sur ce serveur.' });
+  }
+  try {
+    const { continueUrl } = req.body;
+    if (!continueUrl) return res.status(400).json({ error: 'continueUrl requis.' });
+
+    // Vérification stricte côté serveur, en plus de celle déjà faite côté
+    // frontend (Login.jsx) : comparaison exacte origin + pathname contre
+    // MCP_URL (configurable, jamais codé en dur — self-hosted), jamais de
+    // startsWith/includes, pour ne jamais devenir une redirection ouverte.
+    let parsed;
+    let expectedOrigin;
+    try {
+      parsed = new URL(continueUrl);
+      expectedOrigin = new URL(process.env.MCP_URL).origin;
+    } catch {
+      return res.status(400).json({ error: 'continueUrl invalide.' });
+    }
+    if (parsed.origin !== expectedOrigin || parsed.pathname !== MCP_CONTINUE_PATH) {
+      return res.status(400).json({ error: 'continueUrl non autorisée.' });
+    }
+
+    const ticket = jwt.sign(
+      { sub: req.user.id, jti: crypto.randomUUID() },
+      MCP_LOGIN_TICKET_SECRET,
+      { algorithm: 'HS256', expiresIn: '60s' }
+    );
+    res.json({ ticket });
+  } catch (error) {
+    console.error('Erreur lors de la génération du ticket MCP:', error.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 

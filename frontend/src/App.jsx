@@ -105,7 +105,9 @@ function App() {
 
           const hasVerifyToken = path.includes('verify=') ||
             localStorage.getItem('pendingEmailVerification');
-          if (path === '/login' && !hasVerifyToken) {
+          const hasMcpContinue = path === '/login' &&
+            new URLSearchParams(window.location.search).has('continue');
+          if (path === '/login' && !hasVerifyToken && !hasMcpContinue) {
             nav(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
           }
         } else if (!isPublicPath) {
@@ -209,7 +211,15 @@ function App() {
       return <Navigate to="/login" replace state={{ from: location }} />;
     }
     const hasPendingVerification = localStorage.getItem('pendingEmailVerification');
-    if (isAuthenticated && isAuthPage && !hasPendingVerification) {
+    // Flux OAuth MCP (feat/mcp-oauth) : un ?continue=... sur /login doit
+    // laisser le composant Login s'afficher même déjà authentifié, pour
+    // qu'il puisse faire son propre aller-retour ticket signé vers
+    // /oauth-continue — sinon cette garde redirige systématiquement vers le
+    // dashboard avant que Login.jsx n'ait eu la moindre chance de regarder
+    // ce paramètre. Validation stricte faite dans Login.jsx lui-même (origin
+    // + pathname exacts), ici on ne fait que laisser passer, pas valider.
+    const hasMcpContinue = isAuthPage && new URLSearchParams(location.search).has('continue');
+    if (isAuthenticated && isAuthPage && !hasPendingVerification && !hasMcpContinue) {
       const role = localStorage.getItem('role');
       return <Navigate to={role === 'admin' ? '/admin' : '/dashboard'} replace />;
     }

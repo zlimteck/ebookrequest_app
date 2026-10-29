@@ -19,6 +19,7 @@ import ReadingList from './models/ReadingList.js';
 import { renderLibraryOgImage } from './services/ogImageService.js';
 import bookRequestRoutes from './routes/bookRequest.js';
 import authRoutes from './routes/auth.js';
+import internalMcpRoutes from './routes/internalMcp.js';
 import twoFactorRoutes from './routes/twoFactor.js';
 import googleBooksRoutes from './routes/googleBooks.js';
 import appriseRoutes from './routes/apprise.js';
@@ -185,6 +186,18 @@ const opdsLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api/opds', opdsLimiter, opdsRoutes);
+
+// Interne uniquement (secret partagé, pas de cookie/session) — mué avant le
+// generalLimiter pour ne pas partager le budget de requêtes des vrais
+// utilisateurs avec le serveur MCP, protégé par son propre secret de toute
+// façon.
+const internalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/internal/mcp', internalLimiter, internalMcpRoutes);
 
 app.use('/api/auth/2fa', twoFactorLimiter, twoFactorRoutes);
 app.use('/api/auth', authLimiter);
