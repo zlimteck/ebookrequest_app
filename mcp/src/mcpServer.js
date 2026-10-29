@@ -13,7 +13,12 @@ export function createApi(token) {
 }
 
 export function buildServer(api) {
-  const server = new McpServer({ name: 'ebookrequest', version: '1.0.0' });
+  const server = new McpServer({
+    name: 'ebookrequest',
+    version: '1.0.0',
+    websiteUrl: BASE_URL || undefined,
+    icons: BASE_URL ? [{ src: `${BASE_URL}/img/logo.png`, mimeType: 'image/png' }] : undefined,
+  });
 
 
   server.tool(

@@ -42,3 +42,4 @@ dev-build-frontend.sh
 docker-compose.test.yml
 test-uploads/
 test-shelf.mjs
+dev-build-mcp.sh

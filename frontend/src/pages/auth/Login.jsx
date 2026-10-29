@@ -127,7 +127,7 @@ function Login() {
       return;
     }
     const redirectPath = userData.role === 'admin' ? '/admin' : '/dashboard';
-    setTimeout(() => { window.location.href = redirectPath; }, 50);
+    window.location.href = redirectPath;
   };
 
   // ── Connexion via Passkey ──
