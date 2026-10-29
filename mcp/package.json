@@ -7,12 +7,19 @@
     "ebookrequest-mcp": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "axios": "^1.7.0",
+    "cors": "^2.8.5",
     "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.8.9",
     "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
   }
 }

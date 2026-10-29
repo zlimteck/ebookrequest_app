@@ -59,7 +59,6 @@ services:
       - MCP_OAUTH_JWT_SECRET=${MCP_OAUTH_JWT_SECRET}
       - MCP_LOGIN_TICKET_SECRET=${MCP_LOGIN_TICKET_SECRET}
       - MCP_INTERNAL_SERVICE_SECRET=${MCP_INTERNAL_SERVICE_SECRET}
-      - EBOOKREQUEST_INTERNAL_URL=http://ebookrequest:5001
     depends_on:
       - ebookrequest
 
