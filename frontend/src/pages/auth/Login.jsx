@@ -1,15 +1,87 @@
 import React, { useState, useEffect } from 'react';
 import axiosAdmin from '../../axiosAdmin';
+import { checkAuth } from '../../services/authService';
 import styles from '../user/UserForm.module.css';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { startAuthentication } from '@simplewebauthn/browser';
+
+// Flux OAuth MCP (feat/mcp-oauth) : le serveur MCP redirige ici avec
+// ?continue=<url /authorize/continue> pour authentifier l'utilisateur avec
+// son compte EbookRequest existant. Instance self-hosted : le domaine du
+// serveur MCP n'est jamais le même d'une installation à l'autre, jamais
+// codé en dur ici — récupéré dynamiquement via GET /api/auth/setup-status
+// (mcpOrigin, dérivé de MCP_URL côté serveur). Validation stricte (origin +
+// pathname exacts via new URL(), jamais startsWith/includes) pour ne jamais
+// devenir une redirection ouverte.
+const MCP_CONTINUE_PATH = '/authorize/continue';
+
+function getValidContinueUrl(raw, mcpOrigin) {
+  if (!raw || !mcpOrigin) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.origin === mcpOrigin && parsed.pathname === MCP_CONTINUE_PATH) {
+      return parsed.href;
+    }
+  } catch {
+    // URL invalide, ignorée
+  }
+  return null;
+}
 
 function Login() {
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ username: '', password: '' });
   const [message, setMessage] = useState('');
   const verifyToken = searchParams.get('verify');
+  const rawContinue = searchParams.get('continue');
+  const [continueUrl, setContinueUrl] = useState(null);
+  const [checkingExistingSession, setCheckingExistingSession] = useState(!!rawContinue);
+
+  // Redirige vers le flux OAuth MCP sans redemander les identifiants si une
+  // session EbookRequest valide existe déjà (cookie encore présent).
+  const redirectToMcpContinue = async (url) => {
+    try {
+      const { data } = await axiosAdmin.post('/api/auth/mcp-login-ticket', { continueUrl: url });
+      const target = new URL(url);
+      target.searchParams.set('ticket', data.ticket);
+      window.location.href = target.href;
+    } catch {
+      // Génération du ticket impossible (service non configuré, session
+      // finalement invalide...) : on laisse l'utilisateur sur le formulaire
+      // de connexion classique plutôt que de bloquer silencieusement.
+      setCheckingExistingSession(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!rawContinue) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await axiosAdmin.get('/api/auth/setup-status');
+        const validUrl = getValidContinueUrl(rawContinue, data.mcpOrigin);
+        if (!validUrl) {
+          if (!cancelled) setCheckingExistingSession(false);
+          return;
+        }
+        if (cancelled) return;
+        setContinueUrl(validUrl);
+
+        const { isAuthenticated } = await checkAuth();
+        if (cancelled) return;
+        if (isAuthenticated) {
+          await redirectToMcpContinue(validUrl);
+        } else {
+          setCheckingExistingSession(false);
+        }
+      } catch {
+        if (!cancelled) setCheckingExistingSession(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawContinue]);
 
   // ── État 2FA ──
   const [step, setStep] = useState('credentials'); // 'credentials' | '2fa'
@@ -38,6 +110,15 @@ function Login() {
     const userData = data.user || {};
     if (userData.role) localStorage.setItem('role', userData.role);
     if (userData.username) localStorage.setItem('username', userData.username);
+
+    // Flux OAuth MCP en cours : priorité sur la vérification email et le
+    // dashboard habituels, l'utilisateur doit retourner sur l'écran de
+    // consentement du serveur MCP.
+    if (continueUrl) {
+      redirectToMcpContinue(continueUrl);
+      return;
+    }
+
     const pendingVerification = localStorage.getItem('pendingEmailVerification');
     if (pendingVerification) {
       const verifyUrl = `/verify-email/${pendingVerification}`;
@@ -188,6 +269,18 @@ function Login() {
       setIs2FALoading(false);
     }
   };
+
+  // ── Vue : vérification d'une session existante avant le flux OAuth MCP ──
+  if (checkingExistingSession) {
+    return (
+      <div className={`${styles.formContainer} ${styles.loginFormContainer}`}>
+        <div className={styles.logoContainer}>
+          <img src="/img/logo.png" alt="Logo" className={styles.logo} />
+        </div>
+        <p style={{ textAlign: 'center' }}>Connexion en cours…</p>
+      </div>
+    );
+  }
 
   // ── Vue : Étape 2FA ──
   if (step === '2fa') {
