@@ -225,19 +225,30 @@ async function generateWithClaude(cfg, prompt, options = {}) {
     timeout     = 60000,
   } = options;
 
+  const basePayload = {
+    model:      cfg.claudeModel,
+    max_tokens,
+    system:     'Tu es un expert en littérature qui recommande des livres de manière précise et pertinente.',
+    messages:   [{ role: 'user', content: prompt }],
+  };
+
+  // `temperature` est déprécié sur certains modèles récents (ex. la famille
+  // Claude 5) — on retente sans ce paramètre plutôt que de deviner à l'avance
+  // quels noms de modèle le supportent encore (le modèle est configurable
+  // librement par l'admin, cf. aiProviderConfig.js).
+  const isTemperatureDeprecated = (err) =>
+    err?.status === 400 && /temperature.*deprecated/i.test(err?.message || '');
+
   try {
     console.log('Sending request to Claude...', { model: cfg.claudeModel });
 
-    const message = await anthropicClient.messages.create(
-      {
-        model:      cfg.claudeModel,
-        max_tokens,
-        system:     'Tu es un expert en littérature qui recommande des livres de manière précise et pertinente.',
-        messages:   [{ role: 'user', content: prompt }],
-        temperature,
-      },
-      { timeout }
-    );
+    let message;
+    try {
+      message = await anthropicClient.messages.create({ ...basePayload, temperature }, { timeout });
+    } catch (err) {
+      if (!isTemperatureDeprecated(err)) throw err;
+      message = await anthropicClient.messages.create(basePayload, { timeout });
+    }
 
     const text       = message.content[0].text;
     const tokensUsed = (message.usage.input_tokens || 0) + (message.usage.output_tokens || 0);
