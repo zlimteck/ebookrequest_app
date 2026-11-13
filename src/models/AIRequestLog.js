@@ -17,7 +17,7 @@ const aiRequestLogSchema = new mongoose.Schema({
   },
   provider: {
     type: String,
-    enum: ['openai', 'ollama', 'other'],
+    enum: ['openai', 'claude', 'ollama', 'other'],
     required: true,
     default: 'ollama' // Default for existing documents
   },
