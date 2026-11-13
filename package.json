@@ -32,7 +32,7 @@
     "https-proxy-agent": "^9.1.0",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
-    "mongoose": "^7.8.9",
+    "mongoose": "^7.8.13",
     "multer": "^2.1.1",
     "node-fetch": "^3.3.2",
     "node-pushover": "^1.0.0",
